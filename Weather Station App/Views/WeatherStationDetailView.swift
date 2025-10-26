@@ -182,8 +182,8 @@ struct WeatherStationDetailView: View {
                             }
                         }
                         
-                        // Air Quality Ch2 Card (if available and enabled)
-                        if station.sensorPreferences.showAirQualityCh2, let pm25Ch2 = data.pm25Ch2 {
+                        // Air Quality Ch2 Card (if enabled)
+                        if station.sensorPreferences.showAirQualityCh2 {
                             EditableWeatherCard(
                                 title: .constant(station.customLabels.airQualityCh2),
                                 systemImage: "aqi.medium",
@@ -192,14 +192,58 @@ struct WeatherStationDetailView: View {
                                     saveStation()
                                 }
                             ) {
-                                VStack(spacing: 8) {
-                                    Text(pm25Ch2.pm25.value)
-                                        .font(.system(size: 24, weight: .bold, design: .rounded))
-                                    + Text(" \(pm25Ch2.pm25.unit)")
-                                        .font(.subheadline)
-                                    Text("AQI: \(pm25Ch2.realTimeAqi.value)")
-                                        .font(.subheadline)
-                                        .foregroundColor(aqiColor(for: pm25Ch2.realTimeAqi.value))
+                                if let pm25Ch2 = data.pm25Ch2 {
+                                    VStack(spacing: 8) {
+                                        Text(pm25Ch2.pm25.value)
+                                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                                        + Text(" \(pm25Ch2.pm25.unit)")
+                                            .font(.subheadline)
+                                        Text("AQI: \(pm25Ch2.realTimeAqi.value)")
+                                            .font(.subheadline)
+                                            .foregroundColor(aqiColor(for: pm25Ch2.realTimeAqi.value))
+                                    }
+                                } else {
+                                    VStack(spacing: 8) {
+                                        Text("No Data")
+                                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                                            .foregroundColor(.secondary)
+                                        Text("Sensor not available or offline")
+                                            .font(.subheadline)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Air Quality Ch3 Card (if enabled)
+                        if station.sensorPreferences.showAirQualityCh3 {
+                            EditableWeatherCard(
+                                title: .constant(station.customLabels.airQualityCh3),
+                                systemImage: "aqi.medium",
+                                onTitleChange: { newTitle in
+                                    station.customLabels.airQualityCh3 = newTitle
+                                    saveStation()
+                                }
+                            ) {
+                                if let pm25Ch3 = data.pm25Ch3 {
+                                    VStack(spacing: 8) {
+                                        Text(pm25Ch3.pm25.value)
+                                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                                        + Text(" \(pm25Ch3.pm25.unit)")
+                                            .font(.subheadline)
+                                        Text("AQI: \(pm25Ch3.realTimeAqi.value)")
+                                            .font(.subheadline)
+                                            .foregroundColor(aqiColor(for: pm25Ch3.realTimeAqi.value))
+                                    }
+                                } else {
+                                    VStack(spacing: 8) {
+                                        Text("No Data")
+                                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                                            .foregroundColor(.secondary)
+                                        Text("Sensor not available or offline")
+                                            .font(.subheadline)
+                                            .foregroundColor(.secondary)
+                                    }
                                 }
                             }
                         }

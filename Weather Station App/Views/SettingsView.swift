@@ -619,6 +619,7 @@ struct EditWeatherStationView: View {
                                 VStack(spacing: 4) {
                                     SensorToggleRow("🌫️ Air Quality Ch1 (PM2.5)", isOn: $sensorPreferences.showAirQualityCh1)
                                     SensorToggleRow("🌫️ Air Quality Ch2 (PM2.5)", isOn: $sensorPreferences.showAirQualityCh2)
+                                    SensorToggleRow("🌫️ Air Quality Ch3 (PM2.5)", isOn: $sensorPreferences.showAirQualityCh3)
                                 }
                             }
                             
@@ -745,6 +746,7 @@ struct EditWeatherStationView: View {
         sensorPreferences.showRainfall = value
         sensorPreferences.showAirQualityCh1 = value
         sensorPreferences.showAirQualityCh2 = value
+        sensorPreferences.showAirQualityCh3 = value
         sensorPreferences.showUVIndex = value
         sensorPreferences.showLightning = value
         sensorPreferences.showTempHumidityCh1 = value
