@@ -119,8 +119,7 @@ struct CameraTileView: View {
             if let imageURL = cameraImageURL {
                 FullScreenCameraView(
                     imageURL: imageURL, 
-                    stationName: station.name,
-                    imageTimestamp: imageTimestamp
+                    stationName: station.name
                 )
             }
         }
@@ -157,7 +156,6 @@ struct CameraTileView: View {
 struct FullScreenCameraView: View {
     let imageURL: String
     let stationName: String
-    let imageTimestamp: String?
     
     @Environment(\.dismiss) private var dismiss
     @State private var displaySize: CGSize = CGSize(width: 600, height: 400)
@@ -217,32 +215,6 @@ struct FullScreenCameraView: View {
                         EmptyView()
                     }
                 }
-                
-                // Image info overlay
-                VStack {
-                    Spacer()
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(stationName)
-                                .font(.caption)
-                                .foregroundColor(.white.opacity(0.8))
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color.black.opacity(0.5))
-                                .cornerRadius(4)
-                            
-                            Text(imageTimestamp ?? formatCurrentTimestamp())
-                                .font(.caption)
-                                .foregroundColor(.white.opacity(0.8))
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color.black.opacity(0.5))
-                                .cornerRadius(4)
-                        }
-                        Spacer()
-                    }
-                    .padding()
-                }
             }
             .navigationTitle("Camera - \(stationName)")
             .toolbar {
@@ -287,12 +259,6 @@ struct FullScreenCameraView: View {
         if abs(newSize.width - displaySize.width) > 20 || abs(newSize.height - displaySize.height) > 20 {
             displaySize = newSize
         }
-    }
-    
-    private func formatCurrentTimestamp() -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        return formatter.string(from: Date())
     }
     
     private func saveImage() {
