@@ -160,67 +160,88 @@ struct FullScreenCameraView: View {
     let imageTimestamp: String?
     
     @Environment(\.dismiss) private var dismiss
-    @State private var imageSize: CGSize = .zero
+    @State private var displaySize: CGSize = CGSize(width: 600, height: 400)
+    @State private var hasCalculatedSize = false
     
     var body: some View {
         NavigationView {
-            GeometryReader { geometry in
-                ZStack {
-                    Color.black.ignoresSafeArea()
-                    
-                    ScrollView([.horizontal, .vertical]) {
-                        AsyncImage(url: URL(string: imageURL)) { image in
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(maxWidth: geometry.size.width - 40, maxHeight: geometry.size.height - 120) // Account for navigation and padding
-                                .background(
-                                    GeometryReader { imageGeometry in
-                                        Color.clear.onAppear {
-                                            imageSize = imageGeometry.size
+            ZStack {
+                Color.black.ignoresSafeArea()
+                
+                AsyncImage(url: URL(string: imageURL)) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .background(
+                                GeometryReader { geometry in
+                                    Color.clear
+                                        .onAppear {
+                                            if !hasCalculatedSize {
+                                                updateDisplaySize(for: geometry.size)
+                                                hasCalculatedSize = true
+                                            }
                                         }
-                                    }
-                                )
-                        } placeholder: {
-                            VStack(spacing: 16) {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                    .scaleEffect(1.5)
-                                
-                                Text("Loading camera image...")
-                                    .foregroundColor(.white)
-                                    .font(.headline)
-                            }
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                        .onChange(of: geometry.size) { _, newSize in
+                                            updateDisplaySize(for: newSize)
+                                        }
+                                }
+                            )
+                            
+                    case .failure(_):
+                        VStack(spacing: 16) {
+                            Image(systemName: "exclamationmark.triangle")
+                                .font(.system(size: 48))
+                                .foregroundColor(.white)
+                            
+                            Text("Failed to load image")
+                                .foregroundColor(.white)
+                                .font(.headline)
                         }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        
+                    case .empty:
+                        VStack(spacing: 16) {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .scaleEffect(1.5)
+                            
+                            Text("Loading camera image...")
+                                .foregroundColor(.white)
+                                .font(.headline)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        
+                    @unknown default:
+                        EmptyView()
                     }
-                    .scrollIndicators(.hidden)
-                    
-                    // Image info overlay
-                    VStack {
+                }
+                
+                // Image info overlay
+                VStack {
+                    Spacer()
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(stationName)
+                                .font(.caption)
+                                .foregroundColor(.white.opacity(0.8))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.black.opacity(0.5))
+                                .cornerRadius(4)
+                            
+                            Text(imageTimestamp ?? formatCurrentTimestamp())
+                                .font(.caption)
+                                .foregroundColor(.white.opacity(0.8))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.black.opacity(0.5))
+                                .cornerRadius(4)
+                        }
                         Spacer()
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(stationName)
-                                    .font(.caption)
-                                    .foregroundColor(.white.opacity(0.8))
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(Color.black.opacity(0.5))
-                                    .cornerRadius(4)
-                                
-                                Text(imageTimestamp ?? formatCurrentTimestamp())
-                                    .font(.caption)
-                                    .foregroundColor(.white.opacity(0.8))
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(Color.black.opacity(0.5))
-                                    .cornerRadius(4)
-                            }
-                            Spacer()
-                        }
-                        .padding()
                     }
+                    .padding()
                 }
             }
             .navigationTitle("Camera - \(stationName)")
@@ -240,8 +261,32 @@ struct FullScreenCameraView: View {
                 }
             }
         }
-        .frame(minWidth: 600, minHeight: 400) // Reasonable minimum size for macOS
+        .frame(width: displaySize.width, height: displaySize.height)
         .background(Color.black)
+        .animation(.easeInOut(duration: 0.3), value: displaySize)
+    }
+    
+    private func updateDisplaySize(for imageSize: CGSize) {
+        // Only update if we have a meaningful image size
+        guard imageSize.width > 50 && imageSize.height > 50 else { return }
+        
+        let navigationHeight: CGFloat = 100
+        let padding: CGFloat = 40
+        let maxWidth: CGFloat = NSScreen.main?.frame.width ?? 1200
+        let maxHeight: CGFloat = NSScreen.main?.frame.height ?? 800
+        let minWidth: CGFloat = 500
+        let minHeight: CGFloat = 350
+        
+        // Calculate proposed size with padding for UI elements
+        let proposedWidth = min(max(imageSize.width + padding, minWidth), maxWidth * 0.9)
+        let proposedHeight = min(max(imageSize.height + navigationHeight, minHeight), maxHeight * 0.9)
+        
+        let newSize = CGSize(width: proposedWidth, height: proposedHeight)
+        
+        // Only update if the size changed significantly
+        if abs(newSize.width - displaySize.width) > 20 || abs(newSize.height - displaySize.height) > 20 {
+            displaySize = newSize
+        }
     }
     
     private func formatCurrentTimestamp() -> String {
@@ -251,8 +296,6 @@ struct FullScreenCameraView: View {
     }
     
     private func saveImage() {
-        // Implementation to save image to Photos library
-        // Would need to request photo library permissions first
         print("Save image functionality would be implemented here")
     }
 }
