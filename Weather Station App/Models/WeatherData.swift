@@ -222,3 +222,155 @@ struct PhotoInfo: Codable {
     let time: String
     let url: String
 }
+
+// MARK: - Extensions for Safe Parsing
+
+extension WeatherStationResponse {
+    init(code: Int, msg: String, data: WeatherStationData) {
+        self.code = code
+        self.msg = msg
+        self.time = ISO8601DateFormatter().string(from: Date()) // Use current time if missing
+        self.data = data
+    }
+}
+
+extension WeatherStationData {
+    static func empty() -> WeatherStationData {
+        let emptyMeasurement = MeasurementData(time: "0", unit: "", value: "0")
+        
+        return WeatherStationData(
+            outdoor: OutdoorData(
+                temperature: emptyMeasurement,
+                feelsLike: emptyMeasurement,
+                appTemp: emptyMeasurement,
+                dewPoint: emptyMeasurement,
+                vpd: emptyMeasurement,
+                humidity: emptyMeasurement
+            ),
+            indoor: IndoorData(
+                temperature: emptyMeasurement,
+                humidity: emptyMeasurement,
+                dewPoint: emptyMeasurement,
+                feelsLike: emptyMeasurement,
+                appTempIn: emptyMeasurement
+            ),
+            solarAndUvi: SolarAndUVIData(
+                solar: emptyMeasurement,
+                uvi: emptyMeasurement
+            ),
+            rainfall: nil, // Optional
+            rainfallPiezo: RainfallPiezoData(
+                rainRate: emptyMeasurement,
+                daily: emptyMeasurement,
+                state: emptyMeasurement,
+                event: emptyMeasurement,
+                oneHour: emptyMeasurement,
+                twentyFourHours: emptyMeasurement,
+                weekly: emptyMeasurement,
+                monthly: emptyMeasurement,
+                yearly: emptyMeasurement
+            ),
+            wind: WindData(
+                windSpeed: emptyMeasurement,
+                windGust: emptyMeasurement,
+                windDirection: emptyMeasurement,
+                tenMinuteAverageWindDirection: emptyMeasurement
+            ),
+            pressure: PressureData(
+                relative: emptyMeasurement,
+                absolute: emptyMeasurement
+            ),
+            lightning: LightningData(
+                distance: emptyMeasurement,
+                count: emptyMeasurement
+            ),
+            pm25Ch1: PM25Data(
+                realTimeAqi: emptyMeasurement,
+                pm25: emptyMeasurement,
+                twentyFourHoursAqi: emptyMeasurement
+            ),
+            pm25Ch2: nil, // Optional
+            pm25Ch3: nil, // Optional
+            tempAndHumidityCh1: TempHumidityData(
+                temperature: emptyMeasurement,
+                humidity: emptyMeasurement
+            ),
+            tempAndHumidityCh2: TempHumidityData(
+                temperature: emptyMeasurement,
+                humidity: emptyMeasurement
+            ),
+            tempAndHumidityCh3: nil, // Optional
+            battery: BatteryData(
+                console: nil,
+                hapticArrayBattery: nil,
+                hapticArrayCapacitor: nil,
+                rainfallSensor: nil,
+                lightningSensor: nil,
+                pm25SensorCh1: nil,
+                pm25SensorCh2: nil,
+                tempHumiditySensorCh1: nil,
+                tempHumiditySensorCh2: nil,
+                tempHumiditySensorCh3: nil
+            ),
+            camera: nil // Optional
+        )
+    }
+    
+    static func fromPartialData(_ dict: [String: Any]) -> WeatherStationData {
+        // Start with empty data
+        var data = WeatherStationData.empty()
+        
+        // Fill in available data
+        if let outdoorDict = dict["outdoor"] as? [String: Any] {
+            if let outdoor = try? OutdoorData.from(dict: outdoorDict) {
+                data = WeatherStationData(
+                    outdoor: outdoor,
+                    indoor: data.indoor,
+                    solarAndUvi: data.solarAndUvi,
+                    rainfall: data.rainfall,
+                    rainfallPiezo: data.rainfallPiezo,
+                    wind: data.wind,
+                    pressure: data.pressure,
+                    lightning: data.lightning,
+                    pm25Ch1: data.pm25Ch1,
+                    pm25Ch2: data.pm25Ch2,
+                    pm25Ch3: data.pm25Ch3,
+                    tempAndHumidityCh1: data.tempAndHumidityCh1,
+                    tempAndHumidityCh2: data.tempAndHumidityCh2,
+                    tempAndHumidityCh3: data.tempAndHumidityCh3,
+                    battery: data.battery,
+                    camera: data.camera
+                )
+            }
+        }
+        
+        // Add other sensor data extraction as needed
+        
+        return data
+    }
+}
+
+extension OutdoorData {
+    static func from(dict: [String: Any]) throws -> OutdoorData {
+        func extractMeasurement(_ key: String, from dict: [String: Any]) -> MeasurementData? {
+            guard let measurementDict = dict[key] as? [String: Any],
+                  let time = measurementDict["time"] as? String,
+                  let unit = measurementDict["unit"] as? String,
+                  let value = measurementDict["value"] as? String else {
+                return nil
+            }
+            return MeasurementData(time: time, unit: unit, value: value)
+        }
+        
+        let empty = MeasurementData(time: "0", unit: "", value: "0")
+        
+        return OutdoorData(
+            temperature: extractMeasurement("temperature", from: dict) ?? empty,
+            feelsLike: extractMeasurement("feels_like", from: dict) ?? empty,
+            appTemp: extractMeasurement("app_temp", from: dict) ?? empty,
+            dewPoint: extractMeasurement("dew_point", from: dict) ?? empty,
+            vpd: extractMeasurement("vpd", from: dict) ?? empty,
+            humidity: extractMeasurement("humidity", from: dict) ?? empty
+        )
+    }
+}

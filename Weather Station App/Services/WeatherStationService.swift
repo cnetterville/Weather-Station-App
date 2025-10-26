@@ -15,7 +15,17 @@ class WeatherStationService: ObservableObject {
     private let realTimeURL = "https://cdnapi.ecowitt.net/api/v3/device/real_time"
     private let historyURL = "https://api.ecowitt.net/api/v3/device/history"
     private let deviceListURL = "https://api.ecowitt.net/api/v3/device/list"
-    private let session = URLSession.shared
+    
+    // Optimized URLSession with connection pooling and caching
+    private let session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.httpMaximumConnectionsPerHost = 6
+        config.timeoutIntervalForRequest = 15.0
+        config.timeoutIntervalForResource = 30.0
+        config.requestCachePolicy = .useProtocolCachePolicy // Allow intelligent caching
+        config.urlCache = URLCache(memoryCapacity: 50 * 1024 * 1024, diskCapacity: 100 * 1024 * 1024)
+        return URLSession(configuration: config)
+    }()
     
     @Published var credentials: APICredentials = APICredentials(applicationKey: "", apiKey: "")
     @Published var weatherStations: [WeatherStation] = []
@@ -26,14 +36,96 @@ class WeatherStationService: ObservableObject {
     @Published var isLoadingHistory = false
     @Published var isDiscoveringStations = false
     @Published var errorMessage: String?
-    @Published var lastRefreshTime: Date = Date() // Add global refresh timestamp
+    @Published var lastRefreshTime: Date = Date()
+    
+    // Caching and rate limiting
+    private var dataFreshnessDuration: TimeInterval = 120 // 2 minutes freshness
+    private var lastRequestTimes: [String: Date] = [:]
+    private var pendingRequests: Set<String> = []
+    private let requestQueue = DispatchQueue(label: "weatherstation.requests", qos: .userInitiated)
+    private var maxConcurrentRequests = 3
     
     private init() {
         loadCredentials()
         loadWeatherStations()
     }
     
-    func fetchWeatherData(for station: WeatherStation) async {
+    // MARK: - Optimized Data Fetching
+    
+    func fetchAllWeatherData(forceRefresh: Bool = false) async {
+        await MainActor.run {
+            isLoading = true
+            errorMessage = nil
+        }
+        
+        let activeStations = weatherStations.filter { $0.isActive }
+        print("📊 Fetching data for \(activeStations.count) active stations (concurrent: \(maxConcurrentRequests))")
+        
+        // Filter stations that actually need fresh data
+        let stationsToFetch: [WeatherStation]
+        if forceRefresh {
+            stationsToFetch = activeStations
+        } else {
+            stationsToFetch = activeStations.filter { station in
+                shouldFetchFreshData(for: station)
+            }
+        }
+        
+        if stationsToFetch.isEmpty {
+            await MainActor.run {
+                isLoading = false
+                print("✅ All station data is still fresh, no API calls needed")
+            }
+            return
+        }
+        
+        print("📊 \(stationsToFetch.count) stations need fresh data")
+        
+        // Use TaskGroup for concurrent requests with rate limiting
+        await withTaskGroup(of: Void.self) { group in
+            let semaphore = AsyncSemaphore(value: maxConcurrentRequests)
+            
+            for station in stationsToFetch {
+                group.addTask {
+                    await semaphore.wait()
+                    defer { 
+                        Task { await semaphore.signal() }
+                    }
+                    
+                    await self.fetchWeatherDataOptimized(for: station)
+                    
+                    // Small delay to be respectful to the API
+                    try? await Task.sleep(nanoseconds: 250_000_000) // 0.25 seconds
+                }
+            }
+        }
+        
+        await MainActor.run {
+            isLoading = false
+            lastRefreshTime = Date()
+            print("✅ Concurrent fetch completed for \(stationsToFetch.count) stations")
+        }
+    }
+    
+    private func shouldFetchFreshData(for station: WeatherStation) -> Bool {
+        // Check if we have data and it's still fresh
+        if let lastData = weatherData[station.macAddress],
+           let lastUpdated = station.lastUpdated,
+           Date().timeIntervalSince(lastUpdated) < dataFreshnessDuration {
+            print("📊 Station \(station.name) has fresh data (age: \(Int(Date().timeIntervalSince(lastUpdated)))s)")
+            return false
+        }
+        
+        // Check if we're already fetching this station
+        if pendingRequests.contains(station.macAddress) {
+            print("📊 Station \(station.name) fetch already in progress")
+            return false
+        }
+        
+        return true
+    }
+    
+    private func fetchWeatherDataOptimized(for station: WeatherStation) async {
         guard credentials.isValid else {
             await MainActor.run {
                 print("❌ Credentials invalid for \(station.name)")
@@ -42,7 +134,21 @@ class WeatherStationService: ObservableObject {
             return
         }
         
-        // Build URL exactly like your working example
+        // Request deduplication
+        await requestQueue.run {
+            self.pendingRequests.insert(station.macAddress)
+        }
+        
+        defer {
+            Task {
+                await requestQueue.run {
+                    self.pendingRequests.remove(station.macAddress)
+                }
+            }
+        }
+        
+        // Use the working "all" parameter for now to avoid parsing issues
+        // We can optimize the callback parameter later once parsing is more robust
         let urlString = "\(realTimeURL)?application_key=\(credentials.applicationKey)&api_key=\(credentials.apiKey)&mac=\(station.macAddress)&call_back=all"
         
         guard let url = URL(string: urlString) else {
@@ -52,24 +158,43 @@ class WeatherStationService: ObservableObject {
             return
         }
         
-        print("🌐 [Station: \(station.name)] Requesting: \(url.absoluteString)")
+        print("🌐 [Station: \(station.name)] Requesting data")
         
         do {
             var request = URLRequest(url: url)
             request.httpMethod = "GET"
-            request.cachePolicy = .reloadIgnoringLocalCacheData
-            request.timeoutInterval = 30.0
-            request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+            request.timeoutInterval = 15.0 // Shorter timeout for responsiveness
             request.setValue("application/json", forHTTPHeaderField: "Accept")
+            request.setValue("gzip", forHTTPHeaderField: "Accept-Encoding") // Enable compression
             
+            // Allow caching for recent requests
+            if let lastRequest = lastRequestTimes[station.macAddress],
+               Date().timeIntervalSince(lastRequest) < 60 {
+                request.cachePolicy = .returnCacheDataElseLoad
+            } else {
+                request.cachePolicy = .useProtocolCachePolicy
+            }
+            
+            let startTime = Date()
             let (data, response) = try await session.data(for: request)
+            let requestDuration = Date().timeIntervalSince(startTime)
             
-            print("📡 [Station: \(station.name)] Response received: \(data.count) bytes")
+            await requestQueue.run {
+                self.lastRequestTimes[station.macAddress] = Date()
+            }
+            
+            print("📡 [Station: \(station.name)] Response: \(data.count) bytes in \(String(format: "%.2f", requestDuration))s")
             
             if let httpResponse = response as? HTTPURLResponse {
-                print("📡 [Station: \(station.name)] HTTP Status: \(httpResponse.statusCode)")
-                
-                if httpResponse.statusCode != 200 {
+                if httpResponse.statusCode == 429 {
+                    // Rate limited - back off
+                    print("⚠️ Rate limited, reducing concurrent requests")
+                    maxConcurrentRequests = max(1, maxConcurrentRequests - 1)
+                    await MainActor.run {
+                        errorMessage = "API rate limited, reducing request speed"
+                    }
+                    return
+                } else if httpResponse.statusCode != 200 {
                     await MainActor.run {
                         errorMessage = "HTTP \(httpResponse.statusCode) for \(station.name)"
                     }
@@ -77,111 +202,114 @@ class WeatherStationService: ObservableObject {
                 }
             }
             
-            // Try to parse as basic JSON first to see the structure
+            // Parse response efficiently
             do {
-                if let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                    print("📊 [Station: \(station.name)] JSON structure:")
-                    print("📊 Root keys: \(Array(jsonObject.keys))")
-                    
-                    if let code = jsonObject["code"] as? Int {
-                        print("📊 API code: \(code)")
-                        
-                        if code != 0 {
-                            let msg = jsonObject["msg"] as? String ?? "Unknown error"
-                            await MainActor.run {
-                                errorMessage = "API Error for \(station.name): \(msg) (Code: \(code))"
-                            }
-                            return
-                        }
-                    }
-                    
-                    // Check what's in the data field
-                    if let dataField = jsonObject["data"] as? [String: Any] {
-                        print("📊 Data field keys: \(Array(dataField.keys))")
-                        
-                        // Log the first few keys from each main section to compare
-                        if let outdoor = dataField["outdoor"] as? [String: Any] {
-                            print("📊 Outdoor keys: \(Array(outdoor.keys))")
-                        }
-                        if let indoor = dataField["indoor"] as? [String: Any] {
-                            print("📊 Indoor keys: \(Array(indoor.keys))")
-                        }
-                    } else {
-                        print("📊 No 'data' field found or it's not a dictionary")
-                        await MainActor.run {
-                            errorMessage = "Invalid response structure for \(station.name): missing 'data' field"
-                        }
-                        return
-                    }
-                }
-                
-                // Now try our strict model parsing
-                print("📊 [Station: \(station.name)] Attempting to parse with WeatherStationResponse model...")
-                
                 let decoder = JSONDecoder()
                 let decodedResponse = try decoder.decode(WeatherStationResponse.self, from: data)
                 
-                await MainActor.run {
-                    weatherData[station.macAddress] = decodedResponse.data
-                    updateStationLastUpdated(station, weatherData: decodedResponse.data)
-                    lastRefreshTime = Date() // Update global refresh time
-                    print("✅ [Station: \(station.name)] Successfully parsed and stored data at \(Date())")
+                if decodedResponse.code == 0 {
+                    await MainActor.run {
+                        weatherData[station.macAddress] = decodedResponse.data
+                        updateStationLastUpdated(station, weatherData: decodedResponse.data)
+                        print("✅ [Station: \(station.name)] Data updated successfully")
+                        
+                        // Clear any error for this station
+                        if let currentError = errorMessage, currentError.contains(station.name) {
+                            errorMessage = nil
+                        }
+                    }
                     
-                    // Clear error if successful
-                    if let currentError = errorMessage, currentError.contains(station.name) {
-                        errorMessage = nil
+                    // Increase concurrent requests if we're successful
+                    if maxConcurrentRequests < 6 {
+                        maxConcurrentRequests += 1
+                    }
+                } else {
+                    await MainActor.run {
+                        errorMessage = "API Error for \(station.name): \(decodedResponse.msg) (Code: \(decodedResponse.code))"
                     }
                 }
                 
-            } catch let jsonError {
-                print("❌ [Station: \(station.name)] JSON parsing failed: \(jsonError)")
+            } catch let parseError {
+                print("❌ [Station: \(station.name)] JSON parsing failed: \(parseError.localizedDescription)")
                 
-                // Let's see the raw response when parsing fails
-                let responseString = String(data: data, encoding: .utf8) ?? "Unable to decode response"
-                print("📄 [Station: \(station.name)] Raw response that failed to parse:")
-                print("--- START RESPONSE ---")
-                print(responseString.prefix(1000)) // First 1000 characters
-                print("--- END RESPONSE ---")
+                // Log the raw response for debugging
+                if let responseString = String(data: data, encoding: .utf8) {
+                    print("📄 [Station: \(station.name)] Raw response that failed to parse:")
+                    print("--- START RESPONSE ---")
+                    print(String(responseString.prefix(1000))) // First 1000 characters
+                    print("--- END RESPONSE ---")
+                }
                 
                 await MainActor.run {
-                    errorMessage = "JSON parsing failed for \(station.name): \(jsonError.localizedDescription)"
+                    errorMessage = "Parsing failed for \(station.name): \(parseError.localizedDescription)"
                 }
             }
             
-        } catch {
+        } catch let networkError {
             await MainActor.run {
-                let detailedError = "Network Error for \(station.name): \(error.localizedDescription)"
+                let detailedError = "Network Error for \(station.name): \(networkError.localizedDescription)"
                 print("❌ \(detailedError)")
                 errorMessage = detailedError
             }
         }
     }
     
-    func fetchAllWeatherData() async {
-        await MainActor.run {
-            isLoading = true
-            errorMessage = nil  // Clear previous errors
+    // Legacy method for backward compatibility
+    func fetchWeatherData(for station: WeatherStation) async {
+        await fetchWeatherDataOptimized(for: station)
+    }
+    
+    // MARK: - Data Freshness Management
+    
+    func isDataFresh(for station: WeatherStation) -> Bool {
+        guard let lastUpdated = station.lastUpdated else { return false }
+        return Date().timeIntervalSince(lastUpdated) < dataFreshnessDuration
+    }
+    
+    func getDataAge(for station: WeatherStation) -> String {
+        guard let lastUpdated = station.lastUpdated else { return "Never" }
+        
+        let age = Date().timeIntervalSince(lastUpdated)
+        if age < 60 {
+            return "\(Int(age))s ago"
+        } else if age < 3600 {
+            return "\(Int(age/60))m ago"
+        } else {
+            return "\(Int(age/3600))h ago"
+        }
+    }
+    
+    func setDataFreshnessDuration(_ duration: TimeInterval) {
+        dataFreshnessDuration = duration
+        print("📊 Data freshness duration set to \(Int(duration)) seconds")
+    }
+    
+    // MARK: - Background Refresh Management
+    
+    func refreshStaleData() async {
+        let staleStations = weatherStations.filter { station in
+            station.isActive && !isDataFresh(for: station)
         }
         
-        let activeStations = weatherStations.filter({ $0.isActive })
-        print("📊 Fetching data for \(activeStations.count) active stations")
+        if staleStations.isEmpty {
+            print("📊 No stale data to refresh")
+            return
+        }
         
-        // Process stations one by one with proper delays
-        for (index, station) in activeStations.enumerated() {
-            print("🔄 Processing station \(index + 1)/\(activeStations.count): \(station.name)")
+        print("📊 Refreshing \(staleStations.count) stations with stale data")
+        
+        await withTaskGroup(of: Void.self) { group in
+            let semaphore = AsyncSemaphore(value: 2) // More conservative for background refresh
             
-            // Add delay before each request (except the first one)
-            if index > 0 {
-                print("⏳ Waiting 2 seconds before next request...")
-                try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+            for station in staleStations {
+                group.addTask {
+                    await semaphore.wait()
+                    defer { 
+                        Task { await semaphore.signal() }
+                    }
+                    await self.fetchWeatherDataOptimized(for: station)
+                }
             }
-            
-            await fetchWeatherData(for: station)
-        }
-        
-        await MainActor.run {
-            isLoading = false
-            print("✅ Finished processing all stations")
         }
     }
     
@@ -1009,6 +1137,110 @@ class WeatherStationService: ObservableObject {
         case 1: return "Weather Station Gateway"
         case 2: return "Weather Camera"
         default: return "Device Type \(type)"
+        }
+    }
+    
+    // MARK: - Model Validation and Recovery
+    
+    private func parseWeatherResponseSafely(from data: Data, for station: WeatherStation) -> WeatherStationResponse? {
+        let decoder = JSONDecoder()
+        
+        // First, try standard parsing
+        do {
+            return try decoder.decode(WeatherStationResponse.self, from: data)
+        } catch {
+            print("❌ Standard parsing failed for \(station.name): \(error)")
+        }
+        
+        // If standard parsing fails, try to parse as generic JSON and extract what we can
+        do {
+            if let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let code = jsonObject["code"] as? Int,
+               let msg = jsonObject["msg"] as? String {
+                
+                print("📊 [Station: \(station.name)] API Response - Code: \(code), Message: \(msg)")
+                
+                if code != 0 {
+                    return WeatherStationResponse(code: code, msg: msg, data: WeatherStationData.empty())
+                }
+                
+                // Try to extract basic weather data even if some fields are missing
+                if let dataField = jsonObject["data"] as? [String: Any] {
+                    let extractedData = extractWeatherDataSafely(from: dataField, for: station)
+                    return WeatherStationResponse(code: code, msg: msg, data: extractedData)
+                }
+            }
+        } catch {
+            print("❌ Even generic JSON parsing failed for \(station.name): \(error)")
+        }
+        
+        return nil
+    }
+    
+    private func extractWeatherDataSafely(from dataDict: [String: Any], for station: WeatherStation) -> WeatherStationData {
+        print("📊 [Station: \(station.name)] Attempting safe data extraction from available fields")
+        
+        // Create empty data structure and fill what we can
+        var extractedData = WeatherStationData.empty()
+        
+        // Extract outdoor data if available
+        if let outdoorDict = dataDict["outdoor"] as? [String: Any] {
+            print("📊 Found outdoor data for \(station.name)")
+            // Try to extract basic outdoor measurements
+            // This would need implementation based on your WeatherStationData model
+        }
+        
+        // Extract indoor data if available
+        if let indoorDict = dataDict["indoor"] as? [String: Any] {
+            print("📊 Found indoor data for \(station.name)")
+            // Try to extract basic indoor measurements
+        }
+        
+        // Extract other sensor data
+        for (key, value) in dataDict {
+            print("📊 Available data field: \(key) (\(type(of: value)))")
+        }
+        
+        return extractedData
+    }
+}
+
+// MARK: - Utility Classes
+
+actor AsyncSemaphore {
+    private var value: Int
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    
+    init(value: Int) {
+        self.value = value
+    }
+    
+    func wait() async {
+        value -= 1
+        if value >= 0 {
+            return
+        }
+        await withCheckedContinuation { continuation in
+            waiters.append(continuation)
+        }
+    }
+    
+    func signal() {
+        value += 1
+        if !waiters.isEmpty {
+            let waiter = waiters.removeFirst()
+            waiter.resume()
+        }
+    }
+}
+
+extension DispatchQueue {
+    func run<T>(_ block: @escaping () -> T) async -> T {
+        await withCheckedContinuation { continuation in
+            self.async {
+                let result = block()
+                continuation.resume(returning: result)
+            }
         }
     }
 }

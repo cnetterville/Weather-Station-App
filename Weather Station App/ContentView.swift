@@ -75,7 +75,7 @@ struct ContentView: View {
                     
                     Button("Refresh Now") {
                         Task {
-                            await weatherService.fetchAllWeatherData()
+                            await weatherService.fetchAllWeatherData(forceRefresh: true) // Force refresh when manual
                         }
                     }
                     .disabled(weatherService.isLoading || weatherService.weatherStations.isEmpty)
@@ -128,7 +128,7 @@ struct ContentView: View {
         .task {
             loadAutoRefreshSettings()
             if !weatherService.weatherStations.isEmpty {
-                await weatherService.fetchAllWeatherData()
+                await weatherService.fetchAllWeatherData(forceRefresh: false) // Smart initial load
                 if autoRefreshEnabled {
                     startAutoRefresh()
                 }
@@ -170,9 +170,19 @@ struct ContentView: View {
             
             if !weatherService.isLoading {
                 Task { @MainActor in
-                    print("🔄 Starting auto-refresh for \(weatherService.weatherStations.count) stations")
-                    await weatherService.fetchAllWeatherData()
-                    print("🔄 Auto-refresh completed at \(Date())")
+                    print("🔄 Starting smart auto-refresh for \(weatherService.weatherStations.count) stations")
+                    
+                    // Use smart refresh that only fetches stale data
+                    let hasStaleData = weatherService.weatherStations.contains { station in
+                        !weatherService.isDataFresh(for: station) && station.isActive
+                    }
+                    
+                    if hasStaleData {
+                        await weatherService.fetchAllWeatherData(forceRefresh: false)
+                        print("🔄 Smart auto-refresh completed at \(Date())")
+                    } else {
+                        print("🔄 All data is fresh, skipping refresh")
+                    }
                 }
             } else {
                 print("⚠️ Skipping auto-refresh - previous refresh still in progress")
@@ -182,9 +192,9 @@ struct ContentView: View {
         let minutes = Int(refreshInterval / 60)
         let seconds = Int(refreshInterval.truncatingRemainder(dividingBy: 60))
         if minutes > 0 {
-            print("🔄 Auto-refresh started: every \(minutes) minute\(minutes == 1 ? "" : "s") at \(Date())")
+            print("🔄 Smart auto-refresh started: every \(minutes) minute\(minutes == 1 ? "" : "s") at \(Date())")
         } else {
-            print("🔄 Auto-refresh started: every \(seconds) second\(seconds == 1 ? "" : "s") at \(Date())")
+            print("🔄 Smart auto-refresh started: every \(seconds) second\(seconds == 1 ? "" : "s") at \(Date())")
         }
         
         // Add timer validation
@@ -220,18 +230,24 @@ struct ContentView: View {
 struct StationListItem: View {
     let station: WeatherStation
     let refreshInterval: TimeInterval
+    @StateObject private var weatherService = WeatherStationService.shared
     
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Circle()
-                    .fill(station.isActive ? Color.green : Color.red)
+                    .fill(station.isActive ? (weatherService.isDataFresh(for: station) ? Color.green : Color.orange) : Color.red)
                     .frame(width: 8, height: 8)
                 
                 Text(station.name)
                     .font(.headline)
                 
                 Spacer()
+                
+                // Data age indicator
+                Text(weatherService.getDataAge(for: station))
+                    .font(.caption2)
+                    .foregroundColor(weatherService.isDataFresh(for: station) ? .green : .orange)
                 
                 // Device type badge
                 if let deviceType = station.deviceType {
