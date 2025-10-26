@@ -8,8 +8,9 @@
 import SwiftUI
 
 struct WeatherStationDetailView: View {
-    let station: WeatherStation
+    @Binding var station: WeatherStation
     let weatherData: WeatherStationData?
+    @StateObject private var weatherService = WeatherStationService.shared
     
     @State private var showingHistory = false
     
@@ -24,7 +25,14 @@ struct WeatherStationDetailView: View {
                         
                         // Outdoor Temperature Card
                         if station.sensorPreferences.showOutdoorTemp {
-                            WeatherCard(title: "Outdoor Temperature", systemImage: "thermometer") {
+                            EditableWeatherCard(
+                                title: .constant(station.customLabels.outdoorTemp),
+                                systemImage: "thermometer",
+                                onTitleChange: { newTitle in
+                                    station.customLabels.outdoorTemp = newTitle
+                                    saveStation()
+                                }
+                            ) {
                                 VStack(spacing: 8) {
                                     Text(data.outdoor.temperature.value + data.outdoor.temperature.unit)
                                         .font(.system(size: 32, weight: .bold, design: .rounded))
@@ -37,7 +45,14 @@ struct WeatherStationDetailView: View {
                         
                         // Indoor Temperature Card
                         if station.sensorPreferences.showIndoorTemp {
-                            WeatherCard(title: "Indoor Temperature", systemImage: "house.fill") {
+                            EditableWeatherCard(
+                                title: .constant(station.customLabels.indoorTemp),
+                                systemImage: "house.fill",
+                                onTitleChange: { newTitle in
+                                    station.customLabels.indoorTemp = newTitle
+                                    saveStation()
+                                }
+                            ) {
                                 VStack(spacing: 8) {
                                     Text(data.indoor.temperature.value + data.indoor.temperature.unit)
                                         .font(.system(size: 32, weight: .bold, design: .rounded))
@@ -50,7 +65,14 @@ struct WeatherStationDetailView: View {
                         
                         // Wind Card
                         if station.sensorPreferences.showWind {
-                            WeatherCard(title: "Wind", systemImage: "wind") {
+                            EditableWeatherCard(
+                                title: .constant(station.customLabels.wind),
+                                systemImage: "wind",
+                                onTitleChange: { newTitle in
+                                    station.customLabels.wind = newTitle
+                                    saveStation()
+                                }
+                            ) {
                                 VStack(spacing: 8) {
                                     Text("\(data.wind.windSpeed.value) \(data.wind.windSpeed.unit)")
                                         .font(.system(size: 24, weight: .bold, design: .rounded))
@@ -66,7 +88,14 @@ struct WeatherStationDetailView: View {
                         
                         // Pressure Card
                         if station.sensorPreferences.showPressure {
-                            WeatherCard(title: "Pressure", systemImage: "barometer") {
+                            EditableWeatherCard(
+                                title: .constant(station.customLabels.pressure),
+                                systemImage: "barometer",
+                                onTitleChange: { newTitle in
+                                    station.customLabels.pressure = newTitle
+                                    saveStation()
+                                }
+                            ) {
                                 VStack(spacing: 8) {
                                     Text("\(data.pressure.relative.value) \(data.pressure.relative.unit)")
                                         .font(.system(size: 24, weight: .bold, design: .rounded))
@@ -79,7 +108,14 @@ struct WeatherStationDetailView: View {
                         
                         // Rainfall Card (always use piezo data)
                         if station.sensorPreferences.showRainfall {
-                            WeatherCard(title: "Rainfall (Piezo)", systemImage: "cloud.rain.fill") {
+                            EditableWeatherCard(
+                                title: .constant(station.customLabels.rainfall),
+                                systemImage: "cloud.rain.fill",
+                                onTitleChange: { newTitle in
+                                    station.customLabels.rainfall = newTitle
+                                    saveStation()
+                                }
+                            ) {
                                 let rainfallData = data.rainfallPiezo
                                 VStack(alignment: .leading, spacing: 4) {
                                     HStack {
@@ -115,7 +151,14 @@ struct WeatherStationDetailView: View {
                         
                         // Air Quality Ch1 Card
                         if station.sensorPreferences.showAirQualityCh1 {
-                            WeatherCard(title: "Air Quality Ch1 (PM2.5)", systemImage: "aqi.medium") {
+                            EditableWeatherCard(
+                                title: .constant(station.customLabels.airQualityCh1),
+                                systemImage: "aqi.medium",
+                                onTitleChange: { newTitle in
+                                    station.customLabels.airQualityCh1 = newTitle
+                                    saveStation()
+                                }
+                            ) {
                                 VStack(spacing: 8) {
                                     Text(data.pm25Ch1.pm25.value)
                                         .font(.system(size: 24, weight: .bold, design: .rounded))
@@ -130,7 +173,14 @@ struct WeatherStationDetailView: View {
                         
                         // Air Quality Ch2 Card (if available and enabled)
                         if station.sensorPreferences.showAirQualityCh2, let pm25Ch2 = data.pm25Ch2 {
-                            WeatherCard(title: "Air Quality Ch2 (PM2.5)", systemImage: "aqi.medium") {
+                            EditableWeatherCard(
+                                title: .constant(station.customLabels.airQualityCh2),
+                                systemImage: "aqi.medium",
+                                onTitleChange: { newTitle in
+                                    station.customLabels.airQualityCh2 = newTitle
+                                    saveStation()
+                                }
+                            ) {
                                 VStack(spacing: 8) {
                                     Text(pm25Ch2.pm25.value)
                                         .font(.system(size: 24, weight: .bold, design: .rounded))
@@ -145,7 +195,14 @@ struct WeatherStationDetailView: View {
                         
                         // UV Index Card
                         if station.sensorPreferences.showUVIndex {
-                            WeatherCard(title: "UV Index", systemImage: "sun.max.fill") {
+                            EditableWeatherCard(
+                                title: .constant(station.customLabels.uvIndex),
+                                systemImage: "sun.max.fill",
+                                onTitleChange: { newTitle in
+                                    station.customLabels.uvIndex = newTitle
+                                    saveStation()
+                                }
+                            ) {
                                 VStack(spacing: 8) {
                                     Text(data.solarAndUvi.uvi.value)
                                         .font(.system(size: 32, weight: .bold, design: .rounded))
@@ -158,7 +215,14 @@ struct WeatherStationDetailView: View {
                         
                         // Lightning Card
                         if station.sensorPreferences.showLightning {
-                            WeatherCard(title: "Lightning", systemImage: "cloud.bolt.fill") {
+                            EditableWeatherCard(
+                                title: .constant(station.customLabels.lightning),
+                                systemImage: "cloud.bolt.fill",
+                                onTitleChange: { newTitle in
+                                    station.customLabels.lightning = newTitle
+                                    saveStation()
+                                }
+                            ) {
                                 VStack(spacing: 8) {
                                     Text("\(data.lightning.distance.value) \(data.lightning.distance.unit)")
                                         .font(.system(size: 24, weight: .bold, design: .rounded))
@@ -171,7 +235,14 @@ struct WeatherStationDetailView: View {
                         
                         // Additional Temperature/Humidity Sensors
                         if station.sensorPreferences.showTempHumidityCh1 {
-                            WeatherCard(title: "Temp/Humidity Ch1", systemImage: "thermometer") {
+                            EditableWeatherCard(
+                                title: .constant(station.customLabels.tempHumidityCh1),
+                                systemImage: "thermometer",
+                                onTitleChange: { newTitle in
+                                    station.customLabels.tempHumidityCh1 = newTitle
+                                    saveStation()
+                                }
+                            ) {
                                 VStack(spacing: 8) {
                                     Text("\(data.tempAndHumidityCh1.temperature.value)\(data.tempAndHumidityCh1.temperature.unit)")
                                         .font(.system(size: 24, weight: .bold, design: .rounded))
@@ -185,7 +256,14 @@ struct WeatherStationDetailView: View {
                         }
                         
                         if station.sensorPreferences.showTempHumidityCh2 {
-                            WeatherCard(title: "Temp/Humidity Ch2", systemImage: "thermometer") {
+                            EditableWeatherCard(
+                                title: .constant(station.customLabels.tempHumidityCh2),
+                                systemImage: "thermometer",
+                                onTitleChange: { newTitle in
+                                    station.customLabels.tempHumidityCh2 = newTitle
+                                    saveStation()
+                                }
+                            ) {
                                 VStack(spacing: 8) {
                                     Text("\(data.tempAndHumidityCh2.temperature.value)\(data.tempAndHumidityCh2.temperature.unit)")
                                         .font(.system(size: 24, weight: .bold, design: .rounded))
@@ -199,7 +277,14 @@ struct WeatherStationDetailView: View {
                         }
                         
                         if station.sensorPreferences.showTempHumidityCh3, let tempHumCh3 = data.tempAndHumidityCh3 {
-                            WeatherCard(title: "Temp/Humidity Ch3", systemImage: "thermometer") {
+                            EditableWeatherCard(
+                                title: .constant(station.customLabels.tempHumidityCh3),
+                                systemImage: "thermometer",
+                                onTitleChange: { newTitle in
+                                    station.customLabels.tempHumidityCh3 = newTitle
+                                    saveStation()
+                                }
+                            ) {
                                 VStack(spacing: 8) {
                                     Text("\(tempHumCh3.temperature.value)\(tempHumCh3.temperature.unit)")
                                         .font(.system(size: 24, weight: .bold, design: .rounded))
@@ -214,7 +299,14 @@ struct WeatherStationDetailView: View {
                         
                         // Battery Status Card
                         if station.sensorPreferences.showBatteryStatus {
-                            WeatherCard(title: "Battery Status", systemImage: "battery.100") {
+                            EditableWeatherCard(
+                                title: .constant(station.customLabels.batteryStatus),
+                                systemImage: "battery.100",
+                                onTitleChange: { newTitle in
+                                    station.customLabels.batteryStatus = newTitle
+                                    saveStation()
+                                }
+                            ) {
                                 VStack(alignment: .leading, spacing: 4) {
                                     if let console = data.battery.console {
                                         HStack {
@@ -296,6 +388,10 @@ struct WeatherStationDetailView: View {
                     }
             }
         }
+    }
+    
+    private func saveStation() {
+        weatherService.updateStation(station)
     }
     
     private func aqiColor(for value: String) -> Color {
@@ -461,8 +557,77 @@ struct WeatherCard<Content: View>: View {
     }
 }
 
+struct EditableWeatherCard<Content: View>: View {
+    @Binding var title: String
+    let systemImage: String
+    let content: Content
+    let onTitleChange: (String) -> Void
+    
+    @State private var isEditing = false
+    @State private var editText = ""
+    
+    init(title: Binding<String>, systemImage: String, onTitleChange: @escaping (String) -> Void, @ViewBuilder content: () -> Content) {
+        self._title = title
+        self.systemImage = systemImage
+        self.onTitleChange = onTitleChange
+        self.content = content()
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: systemImage)
+                    .foregroundColor(.blue)
+                
+                if isEditing {
+                    TextField("Sensor Label", text: $editText)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit {
+                            title = editText
+                            onTitleChange(editText)
+                            isEditing = false
+                        }
+                        .onAppear {
+                            editText = title
+                        }
+                } else {
+                    Text(title)
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .onTapGesture {
+                            editText = title
+                            isEditing = true
+                        }
+                        .help("Click to edit label")
+                }
+                
+                Spacer()
+                
+                if isEditing {
+                    Button("Done") {
+                        title = editText
+                        onTitleChange(editText)
+                        isEditing = false
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.mini)
+                }
+            }
+            
+            content
+        }
+        .padding()
+        .background(Color(NSColor.controlBackgroundColor))
+        .cornerRadius(12)
+        .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+    }
+}
+
 #Preview {
     NavigationView {
-        WeatherStationDetailView(station: WeatherStation(name: "Test Station", macAddress: "A0:A3:B3:7B:28:8B"), weatherData: nil)
+        WeatherStationDetailView(
+            station: .constant(WeatherStation(name: "Test Station", macAddress: "A0:A3:B3:7B:28:8B")), 
+            weatherData: nil
+        )
     }
 }

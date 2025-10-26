@@ -592,6 +592,10 @@ class WeatherStationService: ObservableObject {
         saveWeatherStations()
     }
     
+    func updateStation(_ station: WeatherStation) {
+        updateWeatherStation(station)
+    }
+    
     func updateWeatherStation(_ station: WeatherStation) {
         if let index = weatherStations.firstIndex(where: { $0.id == station.id }) {
             weatherStations[index] = station

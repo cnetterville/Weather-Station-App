@@ -103,10 +103,13 @@ struct ContentView: View {
             if weatherService.weatherStations.isEmpty {
                 EmptyStateView(showingSettings: $showingSettings)
             } else if selectedTab < weatherService.weatherStations.count {
-                let selectedStation = weatherService.weatherStations[selectedTab]
+                let selectedStationBinding = Binding<WeatherStation>(
+                    get: { weatherService.weatherStations[selectedTab] },
+                    set: { weatherService.weatherStations[selectedTab] = $0 }
+                )
                 WeatherStationDetailView(
-                    station: selectedStation,
-                    weatherData: weatherService.weatherData[selectedStation.macAddress]
+                    station: selectedStationBinding,
+                    weatherData: weatherService.weatherData[weatherService.weatherStations[selectedTab].macAddress]
                 )
             }
         }

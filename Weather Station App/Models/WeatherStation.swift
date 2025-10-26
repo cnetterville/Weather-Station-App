@@ -14,18 +14,35 @@ struct WeatherStation: Identifiable, Codable, Equatable {
     var isActive: Bool = true
     var lastUpdated: Date?
     var sensorPreferences: SensorPreferences = SensorPreferences()
+    var customLabels: SensorLabels = SensorLabels()
     var stationType: String?
     var creationDate: Date?
     var deviceType: Int?
     
     enum CodingKeys: String, CodingKey {
-        case name, macAddress, isActive, lastUpdated, sensorPreferences, stationType, creationDate, deviceType
+        case name, macAddress, isActive, lastUpdated, sensorPreferences, customLabels, stationType, creationDate, deviceType
     }
     
     // Equatable conformance
     static func == (lhs: WeatherStation, rhs: WeatherStation) -> Bool {
         lhs.id == rhs.id
     }
+}
+
+struct SensorLabels: Codable, Equatable {
+    var outdoorTemp: String = "Outdoor Temperature"
+    var indoorTemp: String = "Indoor Temperature" 
+    var wind: String = "Wind"
+    var pressure: String = "Pressure"
+    var rainfall: String = "Rainfall (Piezo)"
+    var airQualityCh1: String = "Air Quality Ch1 (PM2.5)"
+    var airQualityCh2: String = "Air Quality Ch2 (PM2.5)"
+    var uvIndex: String = "UV Index"
+    var lightning: String = "Lightning"
+    var tempHumidityCh1: String = "Temp/Humidity Ch1"
+    var tempHumidityCh2: String = "Temp/Humidity Ch2"
+    var tempHumidityCh3: String = "Temp/Humidity Ch3"
+    var batteryStatus: String = "Battery Status"
 }
 
 struct SensorPreferences: Codable, Equatable {
