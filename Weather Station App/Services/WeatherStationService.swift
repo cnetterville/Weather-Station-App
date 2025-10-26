@@ -111,8 +111,9 @@ class WeatherStationService: ObservableObject {
         // Check if we have data and it's still fresh
         if let lastData = weatherData[station.macAddress],
            let lastUpdated = station.lastUpdated,
-           Date().timeIntervalSince(lastUpdated) < dataFreshnessDuration {
-            print("📊 Station \(station.name) has fresh data (age: \(Int(Date().timeIntervalSince(lastUpdated)))s)")
+           TimestampExtractor.isDataFresh(lastUpdated, freshnessDuration: dataFreshnessDuration) {
+            let ageSeconds = Int(Date().timeIntervalSince(lastUpdated))
+            print("📊 Station \(station.name) has fresh data (age: \(ageSeconds)s)")
             return false
         }
         
@@ -202,15 +203,12 @@ class WeatherStationService: ObservableObject {
                 }
             }
             
-            // Parse response efficiently
-            do {
-                let decoder = JSONDecoder()
-                let decodedResponse = try decoder.decode(WeatherStationResponse.self, from: data)
-                
-                if decodedResponse.code == 0 {
+            // Try safe parsing first
+            if let weatherResponse = parseWeatherResponseSafely(from: data, for: station) {
+                if weatherResponse.code == 0 {
                     await MainActor.run {
-                        weatherData[station.macAddress] = decodedResponse.data
-                        updateStationLastUpdated(station, weatherData: decodedResponse.data)
+                        weatherData[station.macAddress] = weatherResponse.data
+                        updateStationLastUpdated(station, weatherData: weatherResponse.data)
                         print("✅ [Station: \(station.name)] Data updated successfully")
                         
                         // Clear any error for this station
@@ -225,23 +223,12 @@ class WeatherStationService: ObservableObject {
                     }
                 } else {
                     await MainActor.run {
-                        errorMessage = "API Error for \(station.name): \(decodedResponse.msg) (Code: \(decodedResponse.code))"
+                        errorMessage = "API Error for \(station.name): \(weatherResponse.msg) (Code: \(weatherResponse.code))"
                     }
                 }
-                
-            } catch let parseError {
-                print("❌ [Station: \(station.name)] JSON parsing failed: \(parseError.localizedDescription)")
-                
-                // Log the raw response for debugging
-                if let responseString = String(data: data, encoding: .utf8) {
-                    print("📄 [Station: \(station.name)] Raw response that failed to parse:")
-                    print("--- START RESPONSE ---")
-                    print(String(responseString.prefix(1000))) // First 1000 characters
-                    print("--- END RESPONSE ---")
-                }
-                
+            } else {
                 await MainActor.run {
-                    errorMessage = "Parsing failed for \(station.name): \(parseError.localizedDescription)"
+                    errorMessage = "Failed to parse response for \(station.name)"
                 }
             }
             
@@ -259,24 +246,45 @@ class WeatherStationService: ObservableObject {
         await fetchWeatherDataOptimized(for: station)
     }
     
-    // MARK: - Data Freshness Management
+    // MARK: - Enhanced Data Freshness Management (with TimestampExtractor)
     
     func isDataFresh(for station: WeatherStation) -> Bool {
         guard let lastUpdated = station.lastUpdated else { return false }
-        return Date().timeIntervalSince(lastUpdated) < dataFreshnessDuration
+        return TimestampExtractor.isDataFresh(lastUpdated, freshnessDuration: dataFreshnessDuration)
     }
     
     func getDataAge(for station: WeatherStation) -> String {
         guard let lastUpdated = station.lastUpdated else { return "Never" }
+        return TimestampExtractor.formatDataAge(from: lastUpdated)
+    }
+    
+    /// Returns the formatted data recording time in the station's timezone
+    func getFormattedDataTime(for station: WeatherStation, style: DateFormatter.Style = .short) -> String? {
+        guard let lastUpdated = station.lastUpdated else { return nil }
+        return TimestampExtractor.formatTimestamp(lastUpdated, for: station, style: style)
+    }
+    
+    /// Returns the actual recording time of the weather data in the station's timezone
+    func getDataRecordingTime(for station: WeatherStation) -> String? {
+        guard let lastUpdated = station.lastUpdated else { return nil }
+        return TimestampExtractor.formatTimestamp(lastUpdated, for: station, format: "MMM d, yyyy 'at' h:mm a")
+    }
+    
+    /// Debug method to test timestamp parsing
+    func testTimestampParsing(_ timestamp: String = "1761510950") {
+        print("🧪 === TIMESTAMP PARSING TEST ===")
+        let (parsed, analysis) = TimestampExtractor.testTimestampParsing(timestamp)
+        print(analysis)
         
-        let age = Date().timeIntervalSince(lastUpdated)
-        if age < 60 {
-            return "\(Int(age))s ago"
-        } else if age < 3600 {
-            return "\(Int(age/60))m ago"
-        } else {
-            return "\(Int(age/3600))h ago"
+        if let parsedDate = parsed {
+            // Test with a sample station
+            if let station = weatherStations.first {
+                let formatted = TimestampExtractor.formatTimestamp(parsedDate, for: station, style: .medium)
+                print("Formatted for station \(station.name): \(formatted)")
+                print("Station timezone: \(station.timeZone.identifier)")
+            }
         }
+        print("🧪 === END TEST ===")
     }
     
     func setDataFreshnessDuration(_ duration: TimeInterval) {
@@ -737,8 +745,36 @@ class WeatherStationService: ObservableObject {
         }
     }
     
+    // MARK: - Enhanced Timestamp Management (Using TimestampExtractor)
+    
     private func updateStationLastUpdated(_ station: WeatherStation, weatherData: WeatherStationData) {
-        // Use the outdoor temperature timestamp as it's always present and represents when data was recorded
+        // Try using TimestampExtractor to get the most recent timestamp from ALL sensor data
+        if let mostRecentTimestamp = TimestampExtractor.extractMostRecentTimestamp(from: weatherData) {
+            if let index = weatherStations.firstIndex(where: { $0.id == station.id }) {
+                let oldTimestamp = weatherStations[index].lastUpdated
+                weatherStations[index].lastUpdated = mostRecentTimestamp
+                saveWeatherStations()
+                
+                print("🕐 Updated \(station.name) timestamp (from all sensors):")
+                print("   Old: \(oldTimestamp?.description ?? "never")")
+                print("   New: \(mostRecentTimestamp.description)")
+                print("   Station timezone: \(station.timeZone.identifier)")
+                print("   Data age: \(TimestampExtractor.formatDataAge(from: mostRecentTimestamp))")
+                
+                // Warn if timestamp seems problematic
+                let currentTime = Date()
+                let timeDifference = abs(currentTime.timeIntervalSince(mostRecentTimestamp))
+                if timeDifference > 86400 { // More than 1 day difference
+                    print("⚠️ WARNING: Weather data timestamp is \(Int(timeDifference/3600)) hours off from current time")
+                }
+            } else {
+                print("❌ Could not find station \(station.name) to update timestamp")
+            }
+            return
+        }
+        
+        // Fallback to original method using outdoor temperature timestamp if TimestampExtractor fails
+        print("⚠️ TimestampExtractor failed, falling back to outdoor temperature timestamp")
         let timestampString = weatherData.outdoor.temperature.time
         
         // Parse the timestamp - it could be Unix timestamp or formatted date string
@@ -767,7 +803,7 @@ class WeatherStationService: ObservableObject {
             weatherStations[index].lastUpdated = actualDataTime
             saveWeatherStations()
             
-            print("🕐 Updated \(station.name) timestamp:")
+            print("🕐 Updated \(station.name) timestamp (fallback method):")
             print("   Old: \(oldTimestamp?.description ?? "never")")
             print("   New: \(actualDataTime.description) (from weather data)")
             print("   Raw timestamp: \(timestampString)")

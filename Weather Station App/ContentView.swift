@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Combine
 
 struct ContentView: View {
     @StateObject private var weatherService = WeatherStationService.shared
@@ -232,6 +233,10 @@ struct StationListItem: View {
     let refreshInterval: TimeInterval
     @StateObject private var weatherService = WeatherStationService.shared
     
+    // Add a timer to force UI refresh every few seconds for data age display
+    @State private var currentTime = Date()
+    private let timer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
@@ -244,10 +249,11 @@ struct StationListItem: View {
                 
                 Spacer()
                 
-                // Data age indicator
+                // Data age indicator - now refreshes every 5 seconds
                 Text(weatherService.getDataAge(for: station))
                     .font(.caption2)
                     .foregroundColor(weatherService.isDataFresh(for: station) ? .green : .orange)
+                    .id(currentTime) // Force refresh when currentTime changes
                 
                 // Device type badge
                 if let deviceType = station.deviceType {
@@ -281,6 +287,9 @@ struct StationListItem: View {
             }
         }
         .padding(.vertical, 2)
+        .onReceive(timer) { time in
+            currentTime = time // This will trigger UI refresh every 5 seconds
+        }
     }
     
     private func deviceTypeDescription(_ type: Int) -> String {

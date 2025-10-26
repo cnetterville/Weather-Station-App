@@ -637,13 +637,7 @@ struct WeatherStationDetailView: View {
 
 struct StationInfoCard: View {
     let station: WeatherStation
-    
-    private var dateFormatter: DateFormatter {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter
-    }
+    @StateObject private var weatherService = WeatherStationService.shared
     
     private var creationDateFormatter: DateFormatter {
         let formatter = DateFormatter()
@@ -711,13 +705,34 @@ struct StationInfoCard: View {
                     }
                 }
                 
-                // Last Updated
-                if let lastUpdated = station.lastUpdated {
+                // Last Updated - Use enhanced TimestampExtractor formatting
+                if let formattedTime = weatherService.getDataRecordingTime(for: station) {
                     HStack {
                         Text("Last Data Update:")
                             .fontWeight(.medium)
                         Spacer()
-                        Text(lastUpdated, formatter: dateFormatter)
+                        VStack(alignment: .trailing) {
+                            Text(formattedTime)
+                            Text("(\(weatherService.getDataAge(for: station)))")
+                                .font(.caption)
+                                .foregroundColor(weatherService.isDataFresh(for: station) ? .green : .orange)
+                        }
+                    }
+                } else if station.lastUpdated != nil {
+                    HStack {
+                        Text("Last Data Update:")
+                            .fontWeight(.medium)
+                        Spacer()
+                        Text("Data available but timestamp unavailable")
+                            .foregroundColor(.orange)
+                    }
+                } else {
+                    HStack {
+                        Text("Last Data Update:")
+                            .fontWeight(.medium)
+                        Spacer()
+                        Text("Never")
+                            .foregroundColor(.red)
                     }
                 }
                 
