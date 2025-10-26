@@ -44,11 +44,11 @@ class SunCalculator {
         let calendar = Calendar.current
         let dayOfYear = calendar.ordinality(of: .day, in: .year, for: date) ?? 1
         
-        // Debug logging for timezone information
-        print("🌍 SunCalculator Debug:")
-        print("   Latitude: \(latitude), Longitude: \(longitude)")
-        print("   Using timezone: \(timeZone.identifier)")
-        print("   Timezone offset: \(timeZone.secondsFromGMT(for: date) / 3600) hours from GMT")
+        // Debug logging for timezone information (disabled for cleaner console output)
+        // print("🌍 SunCalculator Debug:")
+        // print("   Latitude: \(latitude), Longitude: \(longitude)")
+        // print("   Using timezone: \(timeZone.identifier)")
+        // print("   Timezone offset: \(timeZone.secondsFromGMT(for: date) / 3600) hours from GMT")
         
         // Convert latitude to radians
         let latRad = latitude * .pi / 180.0
@@ -89,8 +89,8 @@ class SunCalculator {
         let utSunrise = 12 - timeFromHour - longitudeCorrection - equationCorrection
         let utSunset = 12 + timeFromHour - longitudeCorrection - equationCorrection
         
-        print("   UT Sunrise: \(String(format: "%.2f", utSunrise)) hours")
-        print("   UT Sunset: \(String(format: "%.2f", utSunset)) hours")
+        // print("   UT Sunrise: \(String(format: "%.2f", utSunrise)) hours")
+        // print("   UT Sunset: \(String(format: "%.2f", utSunset)) hours")
         
         // Step 5: Convert to local time using the specified timezone
         let timeZoneOffset = Double(timeZone.secondsFromGMT(for: date)) / 3600.0
@@ -98,8 +98,8 @@ class SunCalculator {
         let localSunrise = utSunrise + timeZoneOffset
         let localSunset = utSunset + timeZoneOffset
         
-        print("   Local Sunrise: \(String(format: "%.2f", localSunrise)) hours")
-        print("   Local Sunset: \(String(format: "%.2f", localSunset)) hours")
+        // print("   Local Sunrise: \(String(format: "%.2f", localSunrise)) hours")
+        // print("   Local Sunset: \(String(format: "%.2f", localSunset)) hours")
         
         // Convert decimal hours to actual Date objects
         let startOfDay = calendar.startOfDay(for: date)
@@ -110,9 +110,9 @@ class SunCalculator {
         let adjustedSunriseDate = adjustSunTimeIfNeeded(sunriseDate, referenceDate: date, calendar: calendar)
         let adjustedSunsetDate = adjustSunTimeIfNeeded(sunsetDate, referenceDate: date, calendar: calendar)
         
-        print("   Final Sunrise: \(adjustedSunriseDate)")
-        print("   Final Sunset: \(adjustedSunsetDate)")
-        print("🌍 End SunCalculator Debug\n")
+        // print("   Final Sunrise: \(adjustedSunriseDate)")
+        // print("   Final Sunset: \(adjustedSunsetDate)")
+        // print("🌍 End SunCalculator Debug\n")
         
         // Calculate day length
         let dayLength = adjustedSunsetDate.timeIntervalSince(adjustedSunriseDate)
