@@ -192,7 +192,7 @@ struct HistoricalChartView: View {
                         Spacer()
                         
                         if let lastDataPoint = chartData.last {
-                            Text("Latest: \(lastDataPoint.value, specifier: selectedSensor.formatSpecifier) \(selectedSensor.unit)")
+                            Text("Latest: \(formatLatestValue(lastDataPoint.value))")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
@@ -244,6 +244,23 @@ struct HistoricalChartView: View {
             )
         }
     }
+    
+    private func formatLatestValue(_ value: Double) -> String {
+        let valueString = String(format: selectedSensor.formatSpecifier, value)
+        
+        switch selectedSensor {
+        case .outdoorTemperature, .indoorTemperature:
+            return MeasurementConverter.formatDualTemperature(valueString, originalUnit: selectedSensor.unit)
+        case .windSpeed, .windGust:
+            return MeasurementConverter.formatDualWindSpeed(valueString, originalUnit: selectedSensor.unit)
+        case .rainRate:
+            return MeasurementConverter.formatDualRainRate(valueString, originalUnit: selectedSensor.unit)
+        case .rainDaily:
+            return MeasurementConverter.formatDualRainfall(valueString, originalUnit: selectedSensor.unit)
+        default:
+            return "\(valueString) \(selectedSensor.unit)"
+        }
+    }
 }
 
 enum HistoricalSensor: String, CaseIterable {
@@ -279,12 +296,12 @@ enum HistoricalSensor: String, CaseIterable {
     
     var unit: String {
         switch self {
-        case .outdoorTemperature, .indoorTemperature: return "°F"
+        case .outdoorTemperature, .indoorTemperature: return "°F / °C"
         case .outdoorHumidity, .indoorHumidity: return "%"
-        case .windSpeed, .windGust: return "mph"
+        case .windSpeed, .windGust: return "mph / km/h"
         case .pressure: return "inHg"
-        case .rainRate: return "in/hr"
-        case .rainDaily: return "in"
+        case .rainRate: return "in/h / mm/h"
+        case .rainDaily: return "in / mm"
         case .pm25: return "µg/m³"
         case .uvIndex: return ""
         case .solar: return "W/m²"
