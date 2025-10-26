@@ -887,7 +887,7 @@ class WeatherStationService: ObservableObject {
         return nil
     }
     
-    func associateCamerasWithStations(distanceThresholdKm: Double = 15.0) {
+    func associateCamerasWithStations(distanceThresholdKm: Double = 2.0) {
         print("🔗 Starting automatic camera-station association...")
         print("🔗 Distance threshold: \(distanceThresholdKm) km")
         
