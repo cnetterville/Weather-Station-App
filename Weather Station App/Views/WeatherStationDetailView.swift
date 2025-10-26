@@ -118,6 +118,17 @@ struct WeatherStationDetailView: View {
                             ) {
                                 let rainfallData = data.rainfallPiezo
                                 VStack(alignment: .leading, spacing: 4) {
+                                    // Rain Status
+                                    HStack {
+                                        Text("Status:")
+                                        Spacer()
+                                        Text(rainStatusText(rainfallData.state.value))
+                                            .fontWeight(.semibold)
+                                            .foregroundColor(rainStatusColor(rainfallData.state.value))
+                                    }
+                                    
+                                    Divider()
+                                    
                                     HStack {
                                         Text("Today:")
                                         Spacer()
@@ -392,6 +403,22 @@ struct WeatherStationDetailView: View {
     
     private func saveStation() {
         weatherService.updateStation(station)
+    }
+    
+    private func rainStatusText(_ value: String) -> String {
+        switch value {
+        case "0": return "Not Raining"
+        case "1": return "Raining"
+        default: return "Status: \(value)"
+        }
+    }
+    
+    private func rainStatusColor(_ value: String) -> Color {
+        switch value {
+        case "0": return .green
+        case "1": return .blue
+        default: return .secondary
+        }
     }
     
     private func aqiColor(for value: String) -> Color {
