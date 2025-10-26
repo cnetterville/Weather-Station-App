@@ -61,7 +61,7 @@ struct ContentView: View {
                         }
                     }
                 )) { station in
-                    StationListItem(station: station)
+                    StationListItem(station: station, refreshInterval: refreshInterval)
                         .tag(station.id)
                 }
                 .listStyle(.sidebar)
@@ -165,20 +165,38 @@ struct ContentView: View {
         
         guard autoRefreshEnabled && !weatherService.weatherStations.isEmpty else { return }
         
-        autoRefreshTimer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { _ in
+        autoRefreshTimer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { timer in
+            print("🔄 Auto-refresh timer fired at \(Date())")
+            
             if !weatherService.isLoading {
                 Task {
+                    print("🔄 Starting auto-refresh for \(weatherService.weatherStations.count) stations")
                     await weatherService.fetchAllWeatherData()
+                    print("🔄 Auto-refresh completed at \(Date())")
                 }
+            } else {
+                print("⚠️ Skipping auto-refresh - previous refresh still in progress")
             }
         }
         
         let minutes = Int(refreshInterval / 60)
         let seconds = Int(refreshInterval.truncatingRemainder(dividingBy: 60))
         if minutes > 0 {
-            print("🔄 Auto-refresh started: every \(minutes) minute\(minutes == 1 ? "" : "s")")
+            print("🔄 Auto-refresh started: every \(minutes) minute\(minutes == 1 ? "" : "s") at \(Date())")
         } else {
-            print("🔄 Auto-refresh started: every \(seconds) second\(seconds == 1 ? "" : "s")")
+            print("🔄 Auto-refresh started: every \(seconds) second\(seconds == 1 ? "" : "s") at \(Date())")
+        }
+        
+        // Add timer validation
+        DispatchQueue.main.asyncAfter(deadline: .now() + refreshInterval + 30) {
+            if let timer = autoRefreshTimer, timer.isValid {
+                print("✅ Auto-refresh timer is still valid after first cycle")
+            } else {
+                print("❌ Auto-refresh timer became invalid - restarting")
+                if autoRefreshEnabled {
+                    startAutoRefresh()
+                }
+            }
         }
     }
     
@@ -201,6 +219,7 @@ struct ContentView: View {
 
 struct StationListItem: View {
     let station: WeatherStation
+    let refreshInterval: TimeInterval
     
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -248,11 +267,18 @@ struct StationListItem: View {
                 
                 Spacer()
                 
-                // Last updated
+                // Last updated with time since
                 if let lastUpdated = station.lastUpdated {
-                    Text("Updated: \(lastUpdated, formatter: timeFormatter)")
+                    let timeSince = Date().timeIntervalSince(lastUpdated)
+                    let timeString = formatTimeSince(timeSince)
+                    
+                    Text("Updated: \(timeString) ago")
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(timeSince > refreshInterval * 2 ? .red : .secondary)
+                } else {
+                    Text("Never updated")
+                        .font(.caption2)
+                        .foregroundColor(.red)
                 }
             }
         }
@@ -279,6 +305,20 @@ struct StationListItem: View {
         formatter.dateStyle = .none
         formatter.timeStyle = .short
         return formatter
+    }
+    
+    private func formatTimeSince(_ interval: TimeInterval) -> String {
+        let minutes = Int(interval / 60)
+        let hours = minutes / 60
+        let days = hours / 24
+        
+        if days > 0 {
+            return "\(days)d"
+        } else if hours > 0 {
+            return "\(hours)h \(minutes % 60)m"
+        } else {
+            return "\(minutes)m"
+        }
     }
 }
 

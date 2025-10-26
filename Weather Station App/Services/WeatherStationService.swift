@@ -26,6 +26,7 @@ class WeatherStationService: ObservableObject {
     @Published var isLoadingHistory = false
     @Published var isDiscoveringStations = false
     @Published var errorMessage: String?
+    @Published var lastRefreshTime: Date = Date() // Add global refresh timestamp
     
     private init() {
         loadCredentials()
@@ -123,7 +124,8 @@ class WeatherStationService: ObservableObject {
                 await MainActor.run {
                     weatherData[station.macAddress] = decodedResponse.data
                     updateStationLastUpdated(station)
-                    print("✅ [Station: \(station.name)] Successfully parsed and stored data")
+                    lastRefreshTime = Date() // Update global refresh time
+                    print("✅ [Station: \(station.name)] Successfully parsed and stored data at \(Date())")
                     
                     // Clear error if successful
                     if let currentError = errorMessage, currentError.contains(station.name) {
@@ -608,9 +610,18 @@ class WeatherStationService: ObservableObject {
     }
     
     private func updateStationLastUpdated(_ station: WeatherStation) {
+        let updateTime = Date()
+        
         if let index = weatherStations.firstIndex(where: { $0.id == station.id }) {
-            weatherStations[index].lastUpdated = Date()
+            let oldTimestamp = weatherStations[index].lastUpdated
+            weatherStations[index].lastUpdated = updateTime
             saveWeatherStations()
+            
+            print("🕐 Updated \(station.name) timestamp:")
+            print("   Old: \(oldTimestamp?.description ?? "never")")
+            print("   New: \(updateTime.description)")
+        } else {
+            print("❌ Could not find station \(station.name) to update timestamp")
         }
     }
     
