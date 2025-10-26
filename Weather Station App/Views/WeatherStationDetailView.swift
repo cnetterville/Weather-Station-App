@@ -376,6 +376,42 @@ struct WeatherStationDetailView: View {
                                                 Text(batteryLevelText(pm25Ch2.value))
                                             }
                                         }
+                                        
+                                        if let hapticCap = data.battery.hapticArrayCapacitor {
+                                            HStack {
+                                                Text("Haptic Capacitor:")
+                                                Spacer()
+                                                Text("\(hapticCap.value) \(hapticCap.unit)")
+                                            }
+                                        }
+                                        if let rainfall = data.battery.rainfallSensor {
+                                            HStack {
+                                                Text("Rainfall Sensor:")
+                                                Spacer()
+                                                Text("\(rainfall.value) \(rainfall.unit)")
+                                            }
+                                        }
+                                        if let th1 = data.battery.tempHumiditySensorCh1 {
+                                            HStack {
+                                                Text("Temp/Humidity Ch1:")
+                                                Spacer()
+                                                Text(tempHumidityBatteryStatusText(th1.value))
+                                            }
+                                        }
+                                        if let th2 = data.battery.tempHumiditySensorCh2 {
+                                            HStack {
+                                                Text("Temp/Humidity Ch2:")
+                                                Spacer()
+                                                Text(tempHumidityBatteryStatusText(th2.value))
+                                            }
+                                        }
+                                        if let th3 = data.battery.tempHumiditySensorCh3 {
+                                            HStack {
+                                                Text("Temp/Humidity Ch3:")
+                                                Spacer()
+                                                Text(tempHumidityBatteryStatusText(th3.value))
+                                            }
+                                        }
                                     }
                                     .font(.caption)
                                 }
@@ -798,6 +834,15 @@ struct EditableWeatherCard<Content: View>: View {
         .background(Color(NSColor.controlBackgroundColor))
         .cornerRadius(12)
         .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+    }
+}
+
+// Helper for temp/humidity battery status
+private func tempHumidityBatteryStatusText(_ value: String) -> String {
+    switch value {
+    case "0": return "Normal"
+    case "1": return "Low"
+    default: return value
     }
 }
 
