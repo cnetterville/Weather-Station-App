@@ -1,0 +1,468 @@
+//
+//  WeatherStationDetailView.swift
+//  Weather Station App
+//
+//  Created by Curtis Netterville on 10/25/25.
+//
+
+import SwiftUI
+
+struct WeatherStationDetailView: View {
+    let station: WeatherStation
+    let weatherData: WeatherStationData?
+    
+    @State private var showingHistory = false
+    
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                // Station Information Card
+                StationInfoCard(station: station)
+                
+                if let data = weatherData {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 2), spacing: 16) {
+                        
+                        // Outdoor Temperature Card
+                        if station.sensorPreferences.showOutdoorTemp {
+                            WeatherCard(title: "Outdoor Temperature", systemImage: "thermometer") {
+                                VStack(spacing: 8) {
+                                    Text(data.outdoor.temperature.value + data.outdoor.temperature.unit)
+                                        .font(.system(size: 32, weight: .bold, design: .rounded))
+                                    Text("Feels like \(data.outdoor.feelsLike.value)\(data.outdoor.feelsLike.unit)")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                        
+                        // Indoor Temperature Card
+                        if station.sensorPreferences.showIndoorTemp {
+                            WeatherCard(title: "Indoor Temperature", systemImage: "house.fill") {
+                                VStack(spacing: 8) {
+                                    Text(data.indoor.temperature.value + data.indoor.temperature.unit)
+                                        .font(.system(size: 32, weight: .bold, design: .rounded))
+                                    Text("Humidity \(data.indoor.humidity.value)\(data.indoor.humidity.unit)")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                        
+                        // Wind Card
+                        if station.sensorPreferences.showWind {
+                            WeatherCard(title: "Wind", systemImage: "wind") {
+                                VStack(spacing: 8) {
+                                    Text("\(data.wind.windSpeed.value) \(data.wind.windSpeed.unit)")
+                                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                                    Text("Gusts: \(data.wind.windGust.value) \(data.wind.windGust.unit)")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                    Text("Direction: \(data.wind.windDirection.value)°")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                        
+                        // Pressure Card
+                        if station.sensorPreferences.showPressure {
+                            WeatherCard(title: "Pressure", systemImage: "barometer") {
+                                VStack(spacing: 8) {
+                                    Text("\(data.pressure.relative.value) \(data.pressure.relative.unit)")
+                                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                                    Text("Absolute: \(data.pressure.absolute.value) \(data.pressure.absolute.unit)")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                        
+                        // Rainfall Card (always use piezo data)
+                        if station.sensorPreferences.showRainfall {
+                            WeatherCard(title: "Rainfall (Piezo)", systemImage: "cloud.rain.fill") {
+                                let rainfallData = data.rainfallPiezo
+                                VStack(alignment: .leading, spacing: 4) {
+                                    HStack {
+                                        Text("Today:")
+                                        Spacer()
+                                        Text("\(rainfallData.daily.value) \(rainfallData.daily.unit)")
+                                            .fontWeight(.semibold)
+                                    }
+                                    HStack {
+                                        Text("This Hour:")
+                                        Spacer()
+                                        Text("\(rainfallData.oneHour.value) \(rainfallData.oneHour.unit)")
+                                    }
+                                    HStack {
+                                        Text("Rate:")
+                                        Spacer()
+                                        Text("\(rainfallData.rainRate.value) \(rainfallData.rainRate.unit)")
+                                    }
+                                    HStack {
+                                        Text("Weekly:")
+                                        Spacer()
+                                        Text("\(rainfallData.weekly.value) \(rainfallData.weekly.unit)")
+                                    }
+                                    HStack {
+                                        Text("Monthly:")
+                                        Spacer()
+                                        Text("\(rainfallData.monthly.value) \(rainfallData.monthly.unit)")
+                                    }
+                                }
+                                .font(.subheadline)
+                            }
+                        }
+                        
+                        // Air Quality Ch1 Card
+                        if station.sensorPreferences.showAirQualityCh1 {
+                            WeatherCard(title: "Air Quality Ch1 (PM2.5)", systemImage: "aqi.medium") {
+                                VStack(spacing: 8) {
+                                    Text(data.pm25Ch1.pm25.value)
+                                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                                    + Text(" \(data.pm25Ch1.pm25.unit)")
+                                        .font(.subheadline)
+                                    Text("AQI: \(data.pm25Ch1.realTimeAqi.value)")
+                                        .font(.subheadline)
+                                        .foregroundColor(aqiColor(for: data.pm25Ch1.realTimeAqi.value))
+                                }
+                            }
+                        }
+                        
+                        // Air Quality Ch2 Card (if available and enabled)
+                        if station.sensorPreferences.showAirQualityCh2, let pm25Ch2 = data.pm25Ch2 {
+                            WeatherCard(title: "Air Quality Ch2 (PM2.5)", systemImage: "aqi.medium") {
+                                VStack(spacing: 8) {
+                                    Text(pm25Ch2.pm25.value)
+                                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                                    + Text(" \(pm25Ch2.pm25.unit)")
+                                        .font(.subheadline)
+                                    Text("AQI: \(pm25Ch2.realTimeAqi.value)")
+                                        .font(.subheadline)
+                                        .foregroundColor(aqiColor(for: pm25Ch2.realTimeAqi.value))
+                                }
+                            }
+                        }
+                        
+                        // UV Index Card
+                        if station.sensorPreferences.showUVIndex {
+                            WeatherCard(title: "UV Index", systemImage: "sun.max.fill") {
+                                VStack(spacing: 8) {
+                                    Text(data.solarAndUvi.uvi.value)
+                                        .font(.system(size: 32, weight: .bold, design: .rounded))
+                                    Text("Solar: \(data.solarAndUvi.solar.value) \(data.solarAndUvi.solar.unit)")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                        
+                        // Lightning Card
+                        if station.sensorPreferences.showLightning {
+                            WeatherCard(title: "Lightning", systemImage: "cloud.bolt.fill") {
+                                VStack(spacing: 8) {
+                                    Text("\(data.lightning.distance.value) \(data.lightning.distance.unit)")
+                                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                                    Text("Count: \(data.lightning.count.value)")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                        
+                        // Additional Temperature/Humidity Sensors
+                        if station.sensorPreferences.showTempHumidityCh1 {
+                            WeatherCard(title: "Temp/Humidity Ch1", systemImage: "thermometer") {
+                                VStack(spacing: 8) {
+                                    Text("\(data.tempAndHumidityCh1.temperature.value)\(data.tempAndHumidityCh1.temperature.unit)")
+                                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                                    if let humidity = data.tempAndHumidityCh1.humidity {
+                                        Text("Humidity: \(humidity.value)\(humidity.unit)")
+                                            .font(.subheadline)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                        
+                        if station.sensorPreferences.showTempHumidityCh2 {
+                            WeatherCard(title: "Temp/Humidity Ch2", systemImage: "thermometer") {
+                                VStack(spacing: 8) {
+                                    Text("\(data.tempAndHumidityCh2.temperature.value)\(data.tempAndHumidityCh2.temperature.unit)")
+                                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                                    if let humidity = data.tempAndHumidityCh2.humidity {
+                                        Text("Humidity: \(humidity.value)\(humidity.unit)")
+                                            .font(.subheadline)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                        
+                        if station.sensorPreferences.showTempHumidityCh3, let tempHumCh3 = data.tempAndHumidityCh3 {
+                            WeatherCard(title: "Temp/Humidity Ch3", systemImage: "thermometer") {
+                                VStack(spacing: 8) {
+                                    Text("\(tempHumCh3.temperature.value)\(tempHumCh3.temperature.unit)")
+                                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                                    if let humidity = tempHumCh3.humidity {
+                                        Text("Humidity: \(humidity.value)\(humidity.unit)")
+                                            .font(.subheadline)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Battery Status Card
+                        if station.sensorPreferences.showBatteryStatus {
+                            WeatherCard(title: "Battery Status", systemImage: "battery.100") {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    if let console = data.battery.console {
+                                        HStack {
+                                            Text("Console:")
+                                            Spacer()
+                                            Text("\(console.value) \(console.unit)")
+                                        }
+                                    }
+                                    if let haptic = data.battery.hapticArrayBattery {
+                                        HStack {
+                                            Text("Haptic Array:")
+                                            Spacer()
+                                            Text("\(haptic.value) \(haptic.unit)")
+                                        }
+                                    }
+                                    if let lightning = data.battery.lightningSensor {
+                                        HStack {
+                                            Text("Lightning Sensor:")
+                                            Spacer()
+                                            Text(batteryLevelText(lightning.value))
+                                        }
+                                    }
+                                    if let pm25Ch1 = data.battery.pm25SensorCh1 {
+                                        HStack {
+                                            Text("PM2.5 Ch1:")
+                                            Spacer()
+                                            Text(batteryLevelText(pm25Ch1.value))
+                                        }
+                                    }
+                                    if let pm25Ch2 = data.battery.pm25SensorCh2 {
+                                        HStack {
+                                            Text("PM2.5 Ch2:")
+                                            Spacer()
+                                            Text(batteryLevelText(pm25Ch2.value))
+                                        }
+                                    }
+                                }
+                                .font(.caption)
+                            }
+                        }
+                    }
+                } else {
+                    VStack(spacing: 20) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.system(size: 48))
+                            .foregroundColor(.orange)
+                        
+                        Text("No Data Available")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                        
+                        Text("Tap refresh to load weather data for \(station.name)")
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+            .padding()
+        }
+        .navigationTitle(station.name)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button("History") {
+                    showingHistory = true
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .sheet(isPresented: $showingHistory) {
+            NavigationView {
+                HistoricalChartView(station: station)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Done") {
+                                showingHistory = false
+                            }
+                        }
+                    }
+            }
+        }
+    }
+    
+    private func aqiColor(for value: String) -> Color {
+        guard let intValue = Int(value) else { return .secondary }
+        switch intValue {
+        case 0...50: return .green
+        case 51...100: return .yellow
+        case 101...150: return .orange
+        case 151...200: return .red
+        case 201...300: return .purple
+        default: return .black
+        }
+    }
+    
+    private func batteryLevelText(_ value: String) -> String {
+        guard let level = Int(value) else { return value }
+        switch level {
+        case 0: return "Empty"
+        case 1: return "1-20%"
+        case 2: return "21-40%"
+        case 3: return "41-60%"
+        case 4: return "61-80%"
+        case 5: return "81-100%"
+        case 6: return "DC Power"
+        default: return value
+        }
+    }
+}
+
+struct StationInfoCard: View {
+    let station: WeatherStation
+    
+    private var dateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter
+    }
+    
+    private var creationDateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .long
+        formatter.timeStyle = .none
+        return formatter
+    }
+    
+    private func deviceTypeDescription(_ type: Int) -> String {
+        switch type {
+        case 1: return "Weather Station Gateway"
+        case 2: return "Weather Camera"
+        default: return "Device Type \(type)"
+        }
+    }
+    
+    var body: some View {
+        WeatherCard(title: "Station Information", systemImage: "info.circle.fill") {
+            VStack(alignment: .leading, spacing: 8) {
+                // Device Type
+                if let deviceType = station.deviceType {
+                    HStack {
+                        Text("Device Type:")
+                            .fontWeight(.medium)
+                        Spacer()
+                        Text(deviceTypeDescription(deviceType))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(deviceType == 1 ? Color.blue.opacity(0.2) : Color.purple.opacity(0.2))
+                            .foregroundColor(deviceType == 1 ? .blue : .purple)
+                            .cornerRadius(6)
+                    }
+                }
+                
+                // MAC Address
+                HStack {
+                    Text("MAC Address:")
+                        .fontWeight(.medium)
+                    Spacer()
+                    Text(station.macAddress)
+                        .font(.system(.body, design: .monospaced))
+                        .textSelection(.enabled)
+                }
+                
+                // Station Model
+                if let stationType = station.stationType {
+                    HStack {
+                        Text("Model:")
+                            .fontWeight(.medium)
+                        Spacer()
+                        Text(stationType)
+                            .font(.system(.body, design: .monospaced))
+                    }
+                }
+                
+                Divider()
+                
+                // Creation Date
+                if let creationDate = station.creationDate {
+                    HStack {
+                        Text("Device Created:")
+                            .fontWeight(.medium)
+                        Spacer()
+                        Text(creationDate, formatter: creationDateFormatter)
+                    }
+                }
+                
+                // Last Updated
+                if let lastUpdated = station.lastUpdated {
+                    HStack {
+                        Text("Last Data Update:")
+                            .fontWeight(.medium)
+                        Spacer()
+                        Text(lastUpdated, formatter: dateFormatter)
+                    }
+                }
+                
+                // Status
+                HStack {
+                    Text("Status:")
+                        .fontWeight(.medium)
+                    Spacer()
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(station.isActive ? Color.green : Color.red)
+                            .frame(width: 8, height: 8)
+                        Text(station.isActive ? "Active" : "Inactive")
+                            .foregroundColor(station.isActive ? .green : .red)
+                    }
+                }
+            }
+            .font(.subheadline)
+        }
+    }
+}
+
+struct WeatherCard<Content: View>: View {
+    let title: String
+    let systemImage: String
+    let content: Content
+    
+    init(title: String, systemImage: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.systemImage = systemImage
+        self.content = content()
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: systemImage)
+                    .foregroundColor(.blue)
+                Text(title)
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                Spacer()
+            }
+            
+            content
+        }
+        .padding()
+        .background(Color(NSColor.controlBackgroundColor))
+        .cornerRadius(12)
+        .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+    }
+}
+
+#Preview {
+    NavigationView {
+        WeatherStationDetailView(station: WeatherStation(name: "Test Station", macAddress: "A0:A3:B3:7B:28:8B"), weatherData: nil)
+    }
+}
