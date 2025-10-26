@@ -396,6 +396,102 @@ struct WeatherStationDetailView: View {
                                 .font(.caption)
                             }
                         }
+                        
+                        // Sunrise/Sunset Card
+                        if station.sensorPreferences.showSunriseSunset && station.latitude != nil && station.longitude != nil {
+                            EditableWeatherCard(
+                                title: .constant(station.customLabels.sunriseSunset),
+                                systemImage: sunIconForCurrentTime(station: station),
+                                onTitleChange: { newTitle in
+                                    station.customLabels.sunriseSunset = newTitle
+                                    saveStation()
+                                }
+                            ) {
+                                if let latitude = station.latitude, let longitude = station.longitude,
+                                   let sunTimes = SunCalculator.calculateSunTimes(for: Date(), latitude: latitude, longitude: longitude) {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        // Current status
+                                        HStack {
+                                            Image(systemName: sunTimes.isCurrentlyDaylight ? "sun.max.fill" : "moon.fill")
+                                                .foregroundColor(sunTimes.isCurrentlyDaylight ? .orange : .blue)
+                                            Text(sunTimes.isCurrentlyDaylight ? "Daylight" : "Nighttime")
+                                                .font(.headline)
+                                                .fontWeight(.semibold)
+                                            Spacer()
+                                        }
+                                        
+                                        Divider()
+                                        
+                                        // Sunrise and sunset times
+                                        HStack {
+                                            VStack(alignment: .leading, spacing: 4) {
+                                                HStack {
+                                                    Image(systemName: "sunrise.fill")
+                                                        .foregroundColor(.orange)
+                                                    Text("Sunrise")
+                                                        .font(.subheadline)
+                                                        .foregroundColor(.secondary)
+                                                }
+                                                Text(sunTimes.formattedSunrise)
+                                                    .font(.title2)
+                                                    .fontWeight(.bold)
+                                            }
+                                            
+                                            Spacer()
+                                            
+                                            VStack(alignment: .trailing, spacing: 4) {
+                                                HStack {
+                                                    Text("Sunset")
+                                                        .font(.subheadline)
+                                                        .foregroundColor(.secondary)
+                                                    Image(systemName: "sunset.fill")
+                                                        .foregroundColor(.red)
+                                                }
+                                                Text(sunTimes.formattedSunset)
+                                                    .font(.title2)
+                                                    .fontWeight(.bold)
+                                            }
+                                        }
+                                        
+                                        // Day length
+                                        HStack {
+                                            Text("Day Length:")
+                                                .font(.subheadline)
+                                                .foregroundColor(.secondary)
+                                            Spacer()
+                                            Text(sunTimes.formattedDayLength)
+                                                .font(.subheadline)
+                                                .fontWeight(.semibold)
+                                        }
+                                        
+                                        // Next event
+                                        let nextEvent = SunCalculator.getNextSunEvent(latitude: latitude, longitude: longitude)
+                                        HStack {
+                                            Text("Next \(nextEvent.event):")
+                                                .font(.subheadline)
+                                                .foregroundColor(.secondary)
+                                            Spacer()
+                                            Text(nextEvent.time, style: .time)
+                                                .font(.subheadline)
+                                                .fontWeight(.semibold)
+                                        }
+                                    }
+                                } else {
+                                    VStack(spacing: 8) {
+                                        Image(systemName: "location.slash")
+                                            .font(.system(size: 24))
+                                            .foregroundColor(.secondary)
+                                        Text("Location Required")
+                                            .font(.headline)
+                                            .foregroundColor(.secondary)
+                                        Text("Sunrise/sunset calculations require station location data")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                            .multilineTextAlignment(.center)
+                                    }
+                                }
+                            }
+                        }
                     }
                 } else {
                     VStack(spacing: 20) {
@@ -483,6 +579,15 @@ struct WeatherStationDetailView: View {
         case 6: return "DC Power"
         default: return value
         }
+    }
+    
+    private func sunIconForCurrentTime(station: WeatherStation) -> String {
+        guard let latitude = station.latitude, let longitude = station.longitude,
+              let sunTimes = SunCalculator.calculateSunTimes(for: Date(), latitude: latitude, longitude: longitude) else {
+            return "sun.horizon"
+        }
+        
+        return sunTimes.isCurrentlyDaylight ? "sun.max.fill" : "moon.stars.fill"
     }
 }
 

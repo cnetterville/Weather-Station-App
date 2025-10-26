@@ -54,6 +54,10 @@ struct EcowittDevice: Codable {
         station.stationType = stationtype
         station.deviceType = type
         
+        // Set location data
+        station.latitude = latitude
+        station.longitude = longitude
+        
         return station
     }
 }

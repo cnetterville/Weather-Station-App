@@ -18,9 +18,11 @@ struct WeatherStation: Identifiable, Codable, Equatable {
     var stationType: String?
     var creationDate: Date?
     var deviceType: Int?
+    var latitude: Double?
+    var longitude: Double?
     
     enum CodingKeys: String, CodingKey {
-        case name, macAddress, isActive, lastUpdated, sensorPreferences, customLabels, stationType, creationDate, deviceType
+        case name, macAddress, isActive, lastUpdated, sensorPreferences, customLabels, stationType, creationDate, deviceType, latitude, longitude
     }
     
     // Equatable conformance
@@ -44,6 +46,7 @@ struct SensorLabels: Codable, Equatable {
     var tempHumidityCh2: String = "Temp/Humidity Ch2"
     var tempHumidityCh3: String = "Temp/Humidity Ch3"
     var batteryStatus: String = "Battery Status"
+    var sunriseSunset: String = "Sunrise/Sunset"
 }
 
 struct SensorPreferences: Codable, Equatable {
@@ -61,6 +64,7 @@ struct SensorPreferences: Codable, Equatable {
     var showTempHumidityCh2: Bool = false
     var showTempHumidityCh3: Bool = false
     var showBatteryStatus: Bool = false
+    var showSunriseSunset: Bool = true
 }
 
 struct APICredentials: Codable {

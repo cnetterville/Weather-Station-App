@@ -461,6 +461,8 @@ class WeatherStationService: ObservableObject {
             updatedStation.stationType = newStation.stationType
             updatedStation.creationDate = newStation.creationDate
             updatedStation.deviceType = newStation.deviceType
+            updatedStation.latitude = newStation.latitude
+            updatedStation.longitude = newStation.longitude
             
             weatherStations[existingIndex] = updatedStation
             saveWeatherStations()
