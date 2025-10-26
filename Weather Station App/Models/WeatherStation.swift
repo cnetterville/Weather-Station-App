@@ -20,9 +20,22 @@ struct WeatherStation: Identifiable, Codable, Equatable {
     var deviceType: Int?
     var latitude: Double?
     var longitude: Double?
+    var timeZoneId: String?
+    var associatedCameraMAC: String? // Link to camera device
     
     enum CodingKeys: String, CodingKey {
-        case name, macAddress, isActive, lastUpdated, sensorPreferences, customLabels, stationType, creationDate, deviceType, latitude, longitude
+        case name, macAddress, isActive, lastUpdated, sensorPreferences, customLabels, stationType, creationDate, deviceType, latitude, longitude, timeZoneId, associatedCameraMAC
+    }
+    
+    // Computed property to get the station's timezone
+    var timeZone: TimeZone {
+        if let timeZoneId = timeZoneId,
+           let stationTimeZone = TimeZone(identifier: timeZoneId) {
+            return stationTimeZone
+        }
+        
+        // Fallback to device's local timezone if station timezone is not available
+        return TimeZone.current
     }
     
     // Equatable conformance
@@ -47,6 +60,7 @@ struct SensorLabels: Codable, Equatable {
     var tempHumidityCh3: String = "Temp/Humidity Ch3"
     var batteryStatus: String = "Battery Status"
     var sunriseSunset: String = "Sunrise/Sunset"
+    var camera: String = "Weather Camera"
 }
 
 struct SensorPreferences: Codable, Equatable {
@@ -65,6 +79,7 @@ struct SensorPreferences: Codable, Equatable {
     var showTempHumidityCh3: Bool = false
     var showBatteryStatus: Bool = false
     var showSunriseSunset: Bool = true
+    var showCamera: Bool = true
 }
 
 struct APICredentials: Codable {

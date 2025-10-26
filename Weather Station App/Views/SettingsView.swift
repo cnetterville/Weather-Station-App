@@ -109,34 +109,38 @@ struct SettingsView: View {
                                     VStack(alignment: .leading, spacing: 8) {
                                         // First row
                                         HStack(spacing: 8) {
-                                            ForEach([("1 min", 60.0), ("2 min", 120.0), ("5 min", 300.0)], id: \.1) { label, interval in
-                                                Button(label) {
-                                                    refreshIntervalBinding.wrappedValue = interval
-                                                    saveAutoRefreshSettings()
-                                                    onSettingsChanged?()
-                                                }
-                                                .buttonStyle(.bordered)
-                                                .controlSize(.small)
-                                                .background(refreshIntervalBinding.wrappedValue == interval ? Color.accentColor : Color.clear)
-                                                .foregroundColor(refreshIntervalBinding.wrappedValue == interval ? .white : .primary)
-                                                .cornerRadius(6)
-                                            }
+                                            IntervalButton(label: "1 min", interval: 60.0, binding: refreshIntervalBinding, onChanged: {
+                                                saveAutoRefreshSettings()
+                                                onSettingsChanged?()
+                                            })
+                                            IntervalButton(label: "2 min", interval: 120.0, binding: refreshIntervalBinding, onChanged: {
+                                                saveAutoRefreshSettings()
+                                                onSettingsChanged?()
+                                            })
+                                            IntervalButton(label: "5 min", interval: 300.0, binding: refreshIntervalBinding, onChanged: {
+                                                saveAutoRefreshSettings()
+                                                onSettingsChanged?()
+                                            })
                                         }
                                         
                                         // Second row
                                         HStack(spacing: 8) {
-                                            ForEach([("10 min", 600.0), ("15 min", 900.0), ("30 min", 1800.0), ("1 hour", 3600.0)], id: \.1) { label, interval in
-                                                Button(label) {
-                                                    refreshIntervalBinding.wrappedValue = interval
-                                                    saveAutoRefreshSettings()
-                                                    onSettingsChanged?()
-                                                }
-                                                .buttonStyle(.bordered)
-                                                .controlSize(.small)
-                                                .background(refreshIntervalBinding.wrappedValue == interval ? Color.accentColor : Color.clear)
-                                                .foregroundColor(refreshIntervalBinding.wrappedValue == interval ? .white : .primary)
-                                                .cornerRadius(6)
-                                            }
+                                            IntervalButton(label: "10 min", interval: 600.0, binding: refreshIntervalBinding, onChanged: {
+                                                saveAutoRefreshSettings()
+                                                onSettingsChanged?()
+                                            })
+                                            IntervalButton(label: "15 min", interval: 900.0, binding: refreshIntervalBinding, onChanged: {
+                                                saveAutoRefreshSettings()
+                                                onSettingsChanged?()
+                                            })
+                                            IntervalButton(label: "30 min", interval: 1800.0, binding: refreshIntervalBinding, onChanged: {
+                                                saveAutoRefreshSettings()
+                                                onSettingsChanged?()
+                                            })
+                                            IntervalButton(label: "1 hour", interval: 3600.0, binding: refreshIntervalBinding, onChanged: {
+                                                saveAutoRefreshSettings()
+                                                onSettingsChanged?()
+                                            })
                                         }
                                     }
                                     
@@ -243,17 +247,49 @@ struct SettingsView: View {
                             
                             Spacer()
                             
-                            // Station Discovery Button
-                            Button("Discover Stations") {
-                                discoverStations()
+                            // First row of buttons
+                            HStack(spacing: 8) {
+                                Button("Discover Stations") {
+                                    discoverStations()
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .disabled(applicationKey.isEmpty || apiKey.isEmpty || weatherService.isDiscoveringStations)
+                                
+                                Button("Add Manually") {
+                                    showingAddStation = true
+                                }
+                                .buttonStyle(.bordered)
+                            }
+                        }
+                        
+                        // Second row of management buttons
+                        HStack {
+                            Spacer()
+                            
+                            Button("Update All Info") {
+                                updateAllStationsInfo()
                             }
                             .buttonStyle(.bordered)
-                            .disabled(applicationKey.isEmpty || apiKey.isEmpty || weatherService.isDiscoveringStations)
+                            .controlSize(.small)
+                            .disabled(applicationKey.isEmpty || apiKey.isEmpty || weatherService.weatherStations.isEmpty)
                             
-                            Button("Add Manually") {
-                                showingAddStation = true
+                            Menu("Associate Cameras") {
+                                Button("Within 1 km") {
+                                    weatherService.associateCamerasWithStations(distanceThresholdKm: 1.0)
+                                }
+                                Button("Within 5 km") {
+                                    weatherService.associateCamerasWithStations(distanceThresholdKm: 5.0)
+                                }
+                                Button("Within 15 km") {
+                                    weatherService.associateCamerasWithStations(distanceThresholdKm: 15.0)
+                                }
+                                Button("Within 50 km") {
+                                    weatherService.associateCamerasWithStations(distanceThresholdKm: 50.0)
+                                }
                             }
-                            .buttonStyle(.borderedProminent)
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .disabled(applicationKey.isEmpty || apiKey.isEmpty || weatherService.discoveredStations.isEmpty)
                         }
                         
                         // Station Discovery Results
@@ -410,6 +446,18 @@ struct SettingsView: View {
         }
     }
 
+    private func updateAllStationsInfo() {
+        Task {
+            for station in weatherService.weatherStations {
+                let result = await weatherService.fetchStationInfo(for: station)
+                print("Updated \(station.name): \(result.message)")
+                
+                // Small delay between requests
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+            }
+        }
+    }
+
     private func saveAutoRefreshSettings() {
         UserDefaults.standard.set(autoRefreshBinding.wrappedValue, forKey: "AutoRefreshEnabled")
         UserDefaults.standard.set(refreshIntervalBinding.wrappedValue, forKey: "RefreshInterval")
@@ -483,6 +531,12 @@ struct AddWeatherStationView: View {
                     macAddress: formattedMAC
                 )
                 weatherService.addWeatherStation(newStation)
+                
+                // Automatically fetch station info (timezone, location, etc.) after adding
+                Task {
+                    let _ = await weatherService.fetchStationInfo(for: newStation)
+                }
+                
                 dismiss()
             }
             .buttonStyle(.borderedProminent)
@@ -645,6 +699,8 @@ struct EditWeatherStationView: View {
                                     .font(.headline)
                                 
                                 SensorToggleRow("🔋 Battery Status", isOn: $sensorPreferences.showBatteryStatus)
+                                SensorToggleRow("🌅 Sunrise/Sunset", isOn: $sensorPreferences.showSunriseSunset)
+                                SensorToggleRow("📷 Weather Camera", isOn: $sensorPreferences.showCamera)
                             }
                             
                             // Quick Actions
@@ -753,6 +809,8 @@ struct EditWeatherStationView: View {
         sensorPreferences.showTempHumidityCh2 = value
         sensorPreferences.showTempHumidityCh3 = value
         sensorPreferences.showBatteryStatus = value
+        sensorPreferences.showSunriseSunset = value
+        sensorPreferences.showCamera = value
     }
     
     private func testUpdatedStation() {
@@ -825,17 +883,36 @@ struct DiscoveredStationsSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Discovered Stations")
-                    .font(.headline)
-                    .fontWeight(.semibold)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Discovered Devices")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                    
+                    let stationCount = weatherService.discoveredStations.filter { $0.type == 1 }.count
+                    let cameraCount = weatherService.discoveredStations.filter { $0.type == 2 }.count
+                    
+                    Text("\(stationCount) weather station\(stationCount == 1 ? "" : "s"), \(cameraCount) camera\(cameraCount == 1 ? "" : "s")")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
                 
                 Spacer()
                 
-                Button("Add All") {
-                    weatherService.addAllDiscoveredStations()
+                VStack(spacing: 4) {
+                    Button("Add All Stations") {
+                        weatherService.addAllDiscoveredStations()
+                    }
+                    .buttonStyle(.bordered)
+                    .font(.caption)
+                    .disabled(weatherService.discoveredStations.filter { $0.type == 1 }.isEmpty)
+                    
+                    Button("Associate Cameras") {
+                        weatherService.associateCamerasWithStations()
+                    }
+                    .buttonStyle(.bordered)
+                    .font(.caption)
+                    .disabled(weatherService.discoveredStations.filter { $0.type == 2 }.isEmpty)
                 }
-                .buttonStyle(.bordered)
-                .font(.caption)
             }
             
             VStack(spacing: 8) {
@@ -869,6 +946,14 @@ struct DiscoveredStationRow: View {
         }
     }
     
+    private func deviceTypeColor(_ type: Int) -> Color {
+        switch type {
+        case 1: return .blue
+        case 2: return .purple
+        default: return .gray
+        }
+    }
+    
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
@@ -883,8 +968,8 @@ struct DiscoveredStationRow: View {
                         .font(.caption2)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Color.blue.opacity(0.2))
-                        .foregroundColor(.blue)
+                        .background(deviceTypeColor(device.type).opacity(0.2))
+                        .foregroundColor(deviceTypeColor(device.type))
                         .cornerRadius(4)
                 }
                 
@@ -915,29 +1000,48 @@ struct DiscoveredStationRow: View {
             
             Spacer()
             
-            // Check if already added
-            if weatherService.weatherStations.contains(where: { $0.macAddress == device.mac }) {
-                Text("Already Added")
+            VStack(spacing: 4) {
+                // Check if already added as a station
+                if weatherService.weatherStations.contains(where: { $0.macAddress == device.mac }) {
+                    Text("Added as Station")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.gray.opacity(0.2))
+                        .cornerRadius(4)
+                } else if device.type == 1 {
+                    // Weather station - can be added
+                    Button("Add as Station") {
+                        weatherService.addDiscoveredStation(device)
+                    }
+                    .buttonStyle(.bordered)
                     .font(.caption)
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.gray.opacity(0.2))
-                    .cornerRadius(4)
-            } else {
-                Button("Add") {
-                    weatherService.addDiscoveredStation(device)
+                } else if device.type == 2 {
+                    // Camera - show different options
+                    Text("Camera Device")
+                        .font(.caption2)
+                        .foregroundColor(.purple)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.purple.opacity(0.1))
+                        .cornerRadius(4)
+                } else {
+                    // Unknown device type
+                    Button("Add Device") {
+                        weatherService.addDiscoveredStation(device)
+                    }
+                    .buttonStyle(.bordered)
+                    .font(.caption)
                 }
-                .buttonStyle(.bordered)
-                .font(.caption)
             }
         }
         .padding()
-        .background(Color.green.opacity(0.1))
+        .background(device.type == 2 ? Color.purple.opacity(0.05) : Color.green.opacity(0.1))
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.green.opacity(0.3), lineWidth: 1)
+                .stroke(device.type == 2 ? Color.purple.opacity(0.3) : Color.green.opacity(0.3), lineWidth: 1)
         )
     }
 }
@@ -1018,6 +1122,29 @@ struct ExistingStationRow: View {
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
+                    
+                    // Show location and timezone info
+                    if let latitude = station.latitude, let longitude = station.longitude {
+                        Text("Location: \(String(format: "%.4f", latitude)), \(String(format: "%.4f", longitude))")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    if let timeZoneId = station.timeZoneId {
+                        Text("Timezone: \(timeZoneId)")
+                            .font(.caption2)
+                            .foregroundColor(.blue)
+                    } else {
+                        Text("⚠️ No timezone data - using device timezone")
+                            .font(.caption2)
+                            .foregroundColor(.orange)
+                    }
+                    
+                    if let cameraMAC = station.associatedCameraMAC {
+                        Text("📷 Camera: \(cameraMAC)")
+                            .font(.caption2)
+                            .foregroundColor(.green)
+                    }
                 }
                 
                 Spacer()
@@ -1063,6 +1190,11 @@ struct StationActionButtons: View {
     @Binding var editingStation: WeatherStation?
     @Binding var showingEditStation: Bool
     
+    @StateObject private var weatherService = WeatherStationService.shared
+    @State private var isUpdatingInfo = false
+    @State private var updateMessage = ""
+    @State private var updateSuccess = false
+    
     var body: some View {
         VStack(spacing: 4) {
             Button("Test") {
@@ -1078,11 +1210,45 @@ struct StationActionButtons: View {
             .buttonStyle(.bordered)
             .font(.caption)
             
+            Button(isUpdatingInfo ? "Updating..." : "Update Info") {
+                updateStationInfo()
+            }
+            .buttonStyle(.bordered)
+            .font(.caption)
+            .disabled(isUpdatingInfo)
+            
             Button("Copy URL") {
                 copyAPIURL(station)
             }
             .buttonStyle(.bordered)
             .font(.caption)
+            
+            if !updateMessage.isEmpty {
+                Text(updateMessage)
+                    .font(.caption2)
+                    .foregroundColor(updateSuccess ? .green : .red)
+                    .multilineTextAlignment(.center)
+            }
+        }
+    }
+    
+    private func updateStationInfo() {
+        isUpdatingInfo = true
+        updateMessage = ""
+        
+        Task {
+            let result = await weatherService.fetchStationInfo(for: station)
+            
+            await MainActor.run {
+                isUpdatingInfo = false
+                updateSuccess = result.success
+                updateMessage = result.message
+                
+                // Clear message after a delay
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                    updateMessage = ""
+                }
+            }
         }
     }
 }
@@ -1105,6 +1271,25 @@ struct StationAPIURL: View {
                 .textSelection(.enabled)
         }
         .padding(.top, 4)
+    }
+}
+
+struct IntervalButton: View {
+    let label: String
+    let interval: TimeInterval
+    let binding: Binding<TimeInterval>
+    let onChanged: () -> Void
+    
+    var body: some View {
+        Button(label) {
+            binding.wrappedValue = interval
+            onChanged()
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .background(binding.wrappedValue == interval ? Color.accentColor : Color.clear)
+        .foregroundColor(binding.wrappedValue == interval ? .white : .primary)
+        .cornerRadius(6)
     }
 }
 

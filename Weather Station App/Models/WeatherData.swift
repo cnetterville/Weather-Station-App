@@ -30,9 +30,10 @@ struct WeatherStationData: Codable {
     let tempAndHumidityCh2: TempHumidityData
     let tempAndHumidityCh3: TempHumidityData? // Made optional
     let battery: BatteryData
+    let camera: CameraData? // Add camera data
     
     enum CodingKeys: String, CodingKey {
-        case outdoor, indoor, wind, pressure, lightning, battery
+        case outdoor, indoor, wind, pressure, lightning, battery, camera
         case solarAndUvi = "solar_and_uvi"
         case rainfall
         case rainfallPiezo = "rainfall_piezo"
@@ -190,4 +191,34 @@ struct BatteryData: Codable {
         case tempHumiditySensorCh2 = "temp_humidity_sensor_ch2"
         case tempHumiditySensorCh3 = "temp_humidity_sensor_ch3"
     }
+}
+
+struct CameraData: Codable {
+    let imageUrl: String?
+    let lastUpdate: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case imageUrl = "image_url"
+        case lastUpdate = "last_update"
+    }
+}
+
+struct CameraResponse: Codable {
+    let code: Int
+    let msg: String
+    let time: String
+    let data: CameraResponseData
+}
+
+struct CameraResponseData: Codable {
+    let camera: CameraInfo
+}
+
+struct CameraInfo: Codable {
+    let photo: PhotoInfo
+}
+
+struct PhotoInfo: Codable {
+    let time: String
+    let url: String
 }

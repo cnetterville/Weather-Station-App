@@ -40,9 +40,15 @@ class SunCalculator {
     
     /// Calculate sunrise and sunset times using the accurate astronomical formula
     /// Based on the hour angle calculation with proper atmospheric correction
-    static func calculateSunTimes(for date: Date, latitude: Double, longitude: Double) -> SunTimes? {
+    static func calculateSunTimes(for date: Date, latitude: Double, longitude: Double, timeZone: TimeZone = TimeZone.current) -> SunTimes? {
         let calendar = Calendar.current
         let dayOfYear = calendar.ordinality(of: .day, in: .year, for: date) ?? 1
+        
+        // Debug logging for timezone information
+        print("🌍 SunCalculator Debug:")
+        print("   Latitude: \(latitude), Longitude: \(longitude)")
+        print("   Using timezone: \(timeZone.identifier)")
+        print("   Timezone offset: \(timeZone.secondsFromGMT(for: date) / 3600) hours from GMT")
         
         // Convert latitude to radians
         let latRad = latitude * .pi / 180.0
@@ -83,12 +89,17 @@ class SunCalculator {
         let utSunrise = 12 - timeFromHour - longitudeCorrection - equationCorrection
         let utSunset = 12 + timeFromHour - longitudeCorrection - equationCorrection
         
-        // Step 5: Convert to local time
-        let timeZone = calendar.timeZone
+        print("   UT Sunrise: \(String(format: "%.2f", utSunrise)) hours")
+        print("   UT Sunset: \(String(format: "%.2f", utSunset)) hours")
+        
+        // Step 5: Convert to local time using the specified timezone
         let timeZoneOffset = Double(timeZone.secondsFromGMT(for: date)) / 3600.0
         
         let localSunrise = utSunrise + timeZoneOffset
         let localSunset = utSunset + timeZoneOffset
+        
+        print("   Local Sunrise: \(String(format: "%.2f", localSunrise)) hours")
+        print("   Local Sunset: \(String(format: "%.2f", localSunset)) hours")
         
         // Convert decimal hours to actual Date objects
         let startOfDay = calendar.startOfDay(for: date)
@@ -98,6 +109,10 @@ class SunCalculator {
         // Handle cases where times might be in the next/previous day
         let adjustedSunriseDate = adjustSunTimeIfNeeded(sunriseDate, referenceDate: date, calendar: calendar)
         let adjustedSunsetDate = adjustSunTimeIfNeeded(sunsetDate, referenceDate: date, calendar: calendar)
+        
+        print("   Final Sunrise: \(adjustedSunriseDate)")
+        print("   Final Sunset: \(adjustedSunsetDate)")
+        print("🌍 End SunCalculator Debug\n")
         
         // Calculate day length
         let dayLength = adjustedSunsetDate.timeIntervalSince(adjustedSunriseDate)
@@ -120,9 +135,9 @@ class SunCalculator {
     }
     
     /// Calculate next event (sunrise or sunset) for a given location
-    static func getNextSunEvent(latitude: Double, longitude: Double) -> (event: String, time: Date, isCurrentlyDaylight: Bool) {
+    static func getNextSunEvent(latitude: Double, longitude: Double, timeZone: TimeZone = TimeZone.current) -> (event: String, time: Date, isCurrentlyDaylight: Bool) {
         let now = Date()
-        let today = SunCalculator.calculateSunTimes(for: now, latitude: latitude, longitude: longitude)
+        let today = SunCalculator.calculateSunTimes(for: now, latitude: latitude, longitude: longitude, timeZone: timeZone)
         
         guard let sunTimes = today else {
             return ("Unknown", now, false)
@@ -136,7 +151,7 @@ class SunCalculator {
             // After sunset, get tomorrow's sunrise
             let calendar = Calendar.current
             let tomorrow = calendar.date(byAdding: .day, value: 1, to: now) ?? now
-            let tomorrowSunTimes = SunCalculator.calculateSunTimes(for: tomorrow, latitude: latitude, longitude: longitude)
+            let tomorrowSunTimes = SunCalculator.calculateSunTimes(for: tomorrow, latitude: latitude, longitude: longitude, timeZone: timeZone)
             return ("Sunrise", tomorrowSunTimes?.sunrise ?? sunTimes.sunrise, false)
         }
     }

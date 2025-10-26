@@ -408,7 +408,7 @@ struct WeatherStationDetailView: View {
                                 }
                             ) {
                                 if let latitude = station.latitude, let longitude = station.longitude,
-                                   let sunTimes = SunCalculator.calculateSunTimes(for: Date(), latitude: latitude, longitude: longitude) {
+                                   let sunTimes = SunCalculator.calculateSunTimes(for: Date(), latitude: latitude, longitude: longitude, timeZone: station.timeZone) {
                                     VStack(alignment: .leading, spacing: 8) {
                                         // Current status
                                         HStack {
@@ -465,7 +465,7 @@ struct WeatherStationDetailView: View {
                                         }
                                         
                                         // Next event
-                                        let nextEvent = SunCalculator.getNextSunEvent(latitude: latitude, longitude: longitude)
+                                        let nextEvent = SunCalculator.getNextSunEvent(latitude: latitude, longitude: longitude, timeZone: station.timeZone)
                                         HStack {
                                             Text("Next \(nextEvent.event):")
                                                 .font(.subheadline)
@@ -491,6 +491,14 @@ struct WeatherStationDetailView: View {
                                     }
                                 }
                             }
+                        }
+                        
+                        // Camera Card (show only for stations with associated cameras)
+                        if station.sensorPreferences.showCamera && station.associatedCameraMAC != nil {
+                            CameraTileView(station: station, onTitleChange: { newTitle in
+                                station.customLabels.camera = newTitle
+                                saveStation()
+                            })
                         }
                     }
                 } else {
@@ -583,7 +591,7 @@ struct WeatherStationDetailView: View {
     
     private func sunIconForCurrentTime(station: WeatherStation) -> String {
         guard let latitude = station.latitude, let longitude = station.longitude,
-              let sunTimes = SunCalculator.calculateSunTimes(for: Date(), latitude: latitude, longitude: longitude) else {
+              let sunTimes = SunCalculator.calculateSunTimes(for: Date(), latitude: latitude, longitude: longitude, timeZone: station.timeZone) else {
             return "sun.horizon"
         }
         

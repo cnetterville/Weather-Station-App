@@ -400,7 +400,8 @@ class WeatherStationService: ObservableObject {
                         
                         // Log discovered stations
                         for device in discoveredStations {
-                            print("📍 Found station: \(device.name) (\(device.mac))")
+                            print("📍 Found device: \(device.name) (\(device.mac))")
+                            print("   Device Type: \(device.type) (\(deviceTypeDescription(device.type)))")
                             if let stationType = device.stationtype {
                                 print("   Station Type: \(stationType)")
                             }
@@ -463,6 +464,7 @@ class WeatherStationService: ObservableObject {
             updatedStation.deviceType = newStation.deviceType
             updatedStation.latitude = newStation.latitude
             updatedStation.longitude = newStation.longitude
+            updatedStation.timeZoneId = newStation.timeZoneId
             
             weatherStations[existingIndex] = updatedStation
             saveWeatherStations()
@@ -642,6 +644,337 @@ class WeatherStationService: ObservableObject {
         if let data = UserDefaults.standard.data(forKey: "WeatherStations"),
            let savedStations = try? JSONDecoder().decode([WeatherStation].self, from: data) {
             weatherStations = savedStations
+        }
+    }
+    
+    func fetchStationInfo(for station: WeatherStation) async -> (success: Bool, message: String) {
+        guard credentials.isValid else {
+            return (false, "API credentials are not configured")
+        }
+        
+        // Build device info URL
+        let urlString = "https://api.ecowitt.net/api/v3/device/info?application_key=\(credentials.applicationKey)&api_key=\(credentials.apiKey)&mac=\(station.macAddress)&call_back=all"
+        
+        guard let url = URL(string: urlString) else {
+            return (false, "Invalid device info URL")
+        }
+        
+        print("🔍 Fetching station info for \(station.name)...")
+        print("🔍 URL: \(url.absoluteString)")
+        
+        do {
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+            request.cachePolicy = .reloadIgnoringLocalCacheData
+            request.timeoutInterval = 30.0
+            request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+            request.setValue("application/json", forHTTPHeaderField: "Accept")
+            
+            let (data, response) = try await session.data(for: request)
+            
+            if let httpResponse = response as? HTTPURLResponse {
+                print("📡 Station info HTTP Status: \(httpResponse.statusCode)")
+                
+                if httpResponse.statusCode != 200 {
+                    return (false, "HTTP \(httpResponse.statusCode)")
+                }
+            }
+            
+            // Parse the response
+            if let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let code = jsonObject["code"] as? Int {
+                
+                print("📊 Device info JSON response: \(jsonObject)")
+                
+                if code == 0,
+                   let dataField = jsonObject["data"] as? [String: Any] {
+                    
+                    // Extract station info
+                    let latitude = dataField["latitude"] as? Double
+                    let longitude = dataField["longitude"] as? Double
+                    let timeZoneId = dataField["date_zone_id"] as? String
+                    let stationType = dataField["stationtype"] as? String
+                    let createtime = dataField["createtime"] as? Int
+                    
+                    // Look for camera-related fields
+                    print("🔍 Checking for camera fields in device info...")
+                    for (key, value) in dataField {
+                        if key.lowercased().contains("camera") || 
+                           key.lowercased().contains("image") || 
+                           key.lowercased().contains("photo") || 
+                           key.lowercased().contains("picture") {
+                            print("📷 Found potential camera field: \(key) = \(value)")
+                        }
+                    }
+                    
+                    // Update the station with the new info
+                    await MainActor.run {
+                        if let index = weatherStations.firstIndex(where: { $0.macAddress == station.macAddress }) {
+                            var updatedStation = weatherStations[index]
+                            
+                            if let lat = latitude { updatedStation.latitude = lat }
+                            if let lon = longitude { updatedStation.longitude = lon }
+                            if let tzId = timeZoneId { updatedStation.timeZoneId = tzId }
+                            if let stType = stationType { updatedStation.stationType = stType }
+                            if let createTime = createtime { 
+                                updatedStation.creationDate = Date(timeIntervalSince1970: TimeInterval(createTime))
+                            }
+                            
+                            weatherStations[index] = updatedStation
+                            saveWeatherStations()
+                            
+                            print("✅ Updated station info for \(station.name):")
+                            if let tzId = timeZoneId {
+                                print("   Timezone: \(tzId)")
+                            }
+                            if let lat = latitude, let lon = longitude {
+                                print("   Location: \(lat), \(lon)")
+                            }
+                        }
+                    }
+                    
+                    return (true, "Station info updated successfully")
+                } else {
+                    let msg = jsonObject["msg"] as? String ?? "Unknown error"
+                    return (false, "API Error: \(msg) (Code: \(code))")
+                }
+            }
+            
+            return (false, "Invalid response format")
+            
+        } catch {
+            print("❌ Station info fetch error: \(error)")
+            return (false, "Failed to fetch station info: \(error.localizedDescription)")
+        }
+    }
+    
+    func fetchCameraImage(for station: WeatherStation) async -> String? {
+        guard credentials.isValid else {
+            print("❌ Credentials invalid for camera image fetch")
+            return nil
+        }
+        
+        // Only proceed if station has an associated camera
+        guard let cameraMAC = station.associatedCameraMAC else {
+            print("❌ No associated camera for station: \(station.name)")
+            return nil
+        }
+        
+        print("🔍 Starting camera image search for station: \(station.name)")
+        print("🔍 Using associated camera MAC: \(cameraMAC)")
+        
+        // Construct the camera endpoint URL carefully
+        let baseURL = "https://cdnapi.ecowitt.net/api/v3/device/real_time"
+        let applicationKey = credentials.applicationKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let apiKey = credentials.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        guard let url = URL(string: "\(baseURL)?application_key=\(applicationKey)&api_key=\(apiKey)&mac=\(cameraMAC)&call_back=camera") else {
+            print("❌ Invalid camera URL construction")
+            return nil
+        }
+        
+        print("🔍 Camera endpoint URL: \(url.absoluteString)")
+        
+        do {
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+            request.cachePolicy = .reloadIgnoringLocalCacheData
+            request.timeoutInterval = 30.0
+            request.setValue("application/json", forHTTPHeaderField: "Accept")
+            
+            let (data, response) = try await session.data(for: request)
+            
+            if let httpResponse = response as? HTTPURLResponse {
+                print("📡 Camera HTTP Status: \(httpResponse.statusCode)")
+                
+                if httpResponse.statusCode == 200 {
+                    print("📊 Response size: \(data.count) bytes")
+                    
+                    // Log the raw response for debugging
+                    if let responseString = String(data: data, encoding: .utf8) {
+                        print("📄 Camera raw response: \(responseString)")
+                    }
+                    
+                    // Check if data field is an empty array (no camera data available)
+                    if let jsonObject = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                       let dataField = jsonObject["data"] as? [Any],
+                       dataField.isEmpty {
+                        print("❌ Camera API returned empty data array - no camera data available for this device")
+                        return nil
+                    }
+                    
+                    // Try to parse as camera response
+                    do {
+                        let decoder = JSONDecoder()
+                        let cameraResponse = try decoder.decode(CameraResponse.self, from: data)
+                        
+                        if cameraResponse.code == 0 {
+                            let imageUrl = cameraResponse.data.camera.photo.url
+                            let imageTime = cameraResponse.data.camera.photo.time
+                            
+                            print("✅ Found camera image URL: \(imageUrl)")
+                            print("📷 Image timestamp: \(imageTime)")
+                            
+                            return imageUrl
+                        } else {
+                            print("❌ Camera API error: \(cameraResponse.msg) (Code: \(cameraResponse.code))")
+                        }
+                    } catch {
+                        print("❌ Failed to parse camera response: \(error)")
+                        print("❌ This likely means the device is not a camera or has no camera data available")
+                        
+                        return nil
+                    }
+                } else {
+                    print("❌ HTTP Error: \(httpResponse.statusCode)")
+                    
+                    // Log error response body
+                    if let responseString = String(data: data, encoding: .utf8) {
+                        print("❌ Error response: \(responseString)")
+                    }
+                }
+            }
+            
+        } catch {
+            print("❌ Camera request error: \(error.localizedDescription)")
+        }
+        
+        print("❌ No camera image URL found for station: \(station.name)")
+        return nil
+    }
+    
+    private func extractImageURL(from json: [String: Any]) -> String? {
+        // Check the specific camera structure we found: data.camera.photo.url
+        if let data = json["data"] as? [String: Any],
+           let camera = data["camera"] as? [String: Any],
+           let photo = camera["photo"] as? [String: Any],
+           let url = photo["url"] as? String {
+            return url
+        }
+        
+        // Try other possible structures
+        let possibleKeys = [
+            "image_url", "imageUrl", "camera_url", "cameraUrl", 
+            "latest_image", "latestImage", "picture_url", "pictureUrl",
+            "snapshot_url", "snapshotUrl", "live_image", "liveImage", "url"
+        ]
+        
+        // Check root level
+        for key in possibleKeys {
+            if let url = json[key] as? String, !url.isEmpty {
+                return url
+            }
+        }
+        
+        // Check in data field
+        if let data = json["data"] as? [String: Any] {
+            for key in possibleKeys {
+                if let url = data[key] as? String, !url.isEmpty {
+                    return url
+                }
+            }
+            
+            // Check in camera field within data
+            if let camera = data["camera"] as? [String: Any] {
+                for key in possibleKeys {
+                    if let url = camera[key] as? String, !url.isEmpty {
+                        return url
+                    }
+                }
+            }
+        }
+        
+        return nil
+    }
+    
+    func associateCamerasWithStations(distanceThresholdKm: Double = 15.0) {
+        print("🔗 Starting automatic camera-station association...")
+        print("🔗 Distance threshold: \(distanceThresholdKm) km")
+        
+        // Get all camera devices (type 2)
+        let cameraDevices = discoveredStations.filter { $0.type == 2 }
+        
+        // Get all weather station devices (any type, or specifically type 1)
+        let stationDevices = weatherStations.filter { station in
+            // Accept stations without device type or with device type 1
+            station.deviceType == nil || station.deviceType == 1
+        }
+        
+        print("📷 Found \(cameraDevices.count) camera devices")
+        print("🌡️ Found \(stationDevices.count) weather stations")
+        
+        // Debug: show all stations
+        for station in weatherStations {
+            print("🌡️ Station: \(station.name), deviceType: \(station.deviceType?.description ?? "nil"), location: \(station.latitude?.description ?? "nil"), \(station.longitude?.description ?? "nil")")
+        }
+        
+        for camera in cameraDevices {
+            guard let cameraLat = camera.latitude, let cameraLon = camera.longitude else {
+                print("📷 Camera \(camera.name) has no location data, skipping")
+                continue
+            }
+            
+            print("📷 Processing camera: \(camera.name) at (\(cameraLat), \(cameraLon))")
+            
+            var associatedStations: [WeatherStation] = []
+            
+            // Find ALL stations within the threshold distance
+            for station in stationDevices {
+                guard let stationLat = station.latitude, let stationLon = station.longitude else {
+                    print("📍 Station \(station.name) has no location data, skipping")
+                    continue
+                }
+                
+                let distance = calculateDistance(
+                    lat1: cameraLat, lon1: cameraLon,
+                    lat2: stationLat, lon2: stationLon
+                )
+                
+                print("📍 Distance to \(station.name): \(String(format: "%.3f", distance)) km")
+                
+                if distance <= distanceThresholdKm {
+                    associatedStations.append(station)
+                    print("✅ Station \(station.name) is within threshold (\(String(format: "%.3f", distance)) km)")
+                }
+            }
+            
+            // Associate camera with all nearby stations
+            if !associatedStations.isEmpty {
+                for station in associatedStations {
+                    if let index = weatherStations.firstIndex(where: { $0.id == station.id }) {
+                        weatherStations[index].associatedCameraMAC = camera.mac
+                        print("✅ Associated camera \(camera.name) with station \(station.name)")
+                    }
+                }
+                saveWeatherStations()
+                print("🎉 Camera \(camera.name) associated with \(associatedStations.count) station(s)")
+            } else {
+                print("❌ No weather stations found within \(distanceThresholdKm) km for camera \(camera.name)")
+            }
+        }
+        
+        print("🔗 Camera-station association complete")
+    }
+    
+    private func calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double) -> Double {
+        let earthRadius = 6371.0 // Earth's radius in kilometers
+        
+        let dLat = (lat2 - lat1) * .pi / 180.0
+        let dLon = (lon2 - lon1) * .pi / 180.0
+        
+        let a = sin(dLat / 2) * sin(dLat / 2) +
+                cos(lat1 * .pi / 180.0) * cos(lat2 * .pi / 180.0) *
+                sin(dLon / 2) * sin(dLon / 2)
+        
+        let c = 2 * atan2(sqrt(a), sqrt(1 - a))
+        return earthRadius * c
+    }
+    
+    private func deviceTypeDescription(_ type: Int) -> String {
+        switch type {
+        case 1: return "Weather Station Gateway"
+        case 2: return "Weather Camera"
+        default: return "Device Type \(type)"
         }
     }
 }

@@ -58,6 +58,9 @@ struct EcowittDevice: Codable {
         station.latitude = latitude
         station.longitude = longitude
         
+        // Set timezone
+        station.timeZoneId = dateZoneId
+        
         return station
     }
 }
