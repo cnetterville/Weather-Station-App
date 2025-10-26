@@ -20,6 +20,7 @@ struct SettingsView: View {
     @State private var showingAPIDebugger = false
     @State private var showingEditStation = false
     @State private var editingStation: WeatherStation?
+    @State private var unitSystemDisplayMode: UnitSystemDisplayMode = .both
     
     // Auto-refresh settings - use local state if no binding provided
     @State private var localAutoRefreshEnabled = true
@@ -86,6 +87,98 @@ struct SettingsView: View {
             
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
+                    // Display Preferences
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Display Preferences")
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                        
+                        VStack(alignment: .leading, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Unit System:")
+                                    .font(.headline)
+                                
+                                HStack(spacing: 8) {
+                                    ForEach(UnitSystemDisplayMode.allCases, id: \.self) { mode in
+                                        Button(mode.displayName) {
+                                            unitSystemDisplayMode = mode
+                                            UserDefaults.standard.unitSystemDisplayMode = mode
+                                        }
+                                        .buttonStyle(.bordered)
+                                        .controlSize(.small)
+                                        .background(unitSystemDisplayMode == mode ? Color.accentColor : Color.clear)
+                                        .foregroundColor(unitSystemDisplayMode == mode ? .white : .primary)
+                                        .cornerRadius(6)
+                                    }
+                                }
+                                
+                                HStack {
+                                    Image(systemName: "info.circle")
+                                        .foregroundColor(.blue)
+                                    Text("Choose how temperature values are displayed throughout the app")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                        .padding()
+                        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                        .cornerRadius(8)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Display Preferences")
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                        
+                        VStack(alignment: .leading, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Unit System:")
+                                    .font(.headline)
+                                
+                                VStack(alignment: .leading, spacing: 8) {
+                                    ForEach(UnitSystemDisplayMode.allCases, id: \.self) { mode in
+                                        Button(action: {
+                                            unitSystemDisplayMode = mode
+                                            UserDefaults.standard.unitSystemDisplayMode = mode
+                                        }) {
+                                            HStack {
+                                                Image(systemName: unitSystemDisplayMode == mode ? "checkmark.circle.fill" : "circle")
+                                                    .foregroundColor(unitSystemDisplayMode == mode ? .blue : .secondary)
+                                                
+                                                VStack(alignment: .leading, spacing: 2) {
+                                                    Text(mode.shortName)
+                                                        .font(.headline)
+                                                        .foregroundColor(.primary)
+                                                    Text(mode.displayName)
+                                                        .font(.caption)
+                                                        .foregroundColor(.secondary)
+                                                }
+                                                
+                                                Spacer()
+                                            }
+                                            .padding(.vertical, 4)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .background(unitSystemDisplayMode == mode ? Color.blue.opacity(0.1) : Color.clear)
+                                        .cornerRadius(6)
+                                    }
+                                }
+                                
+                                HStack {
+                                    Image(systemName: "info.circle")
+                                        .foregroundColor(.blue)
+                                    Text("Choose how measurements are displayed: temperature, wind speed, rainfall, lightning distance, etc.")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                        .padding()
+                        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                        .cornerRadius(8)
+                    }
+                    
                     // Auto-Refresh Settings
                     VStack(alignment: .leading, spacing: 16) {
                         Text("Auto-Refresh Settings")
@@ -344,6 +437,7 @@ struct SettingsView: View {
         .onAppear {
             applicationKey = weatherService.credentials.applicationKey
             apiKey = weatherService.credentials.apiKey
+            unitSystemDisplayMode = UserDefaults.standard.unitSystemDisplayMode
         }
         .sheet(isPresented: $showingAddStation) {
             AddWeatherStationView()
@@ -1095,6 +1189,9 @@ struct ExistingStationRow: View {
     @Binding var showingEditStation: Bool
     
     @StateObject private var weatherService = WeatherStationService.shared
+    @State private var isUpdatingInfo = false
+    @State private var updateMessage = ""
+    @State private var updateSuccess = false
     
     private var dateFormatter: DateFormatter {
         let formatter = DateFormatter()

@@ -33,6 +33,19 @@ struct MeasurementConverter {
         return "\(converted.fahrenheit)°F / \(converted.celsius)°C"
     }
     
+    static func formatTemperature(_ value: String, originalUnit: String, displayMode: UnitSystemDisplayMode = UserDefaults.standard.unitSystemDisplayMode) -> String {
+        let converted = convertTemperature(value, from: originalUnit)
+        
+        switch displayMode {
+        case .imperial:
+            return "\(converted.fahrenheit)°F"
+        case .metric:
+            return "\(converted.celsius)°C"
+        case .both:
+            return "\(converted.fahrenheit)°F / \(converted.celsius)°C"
+        }
+    }
+    
     // MARK: - Wind Speed Conversions
     static func convertWindSpeed(_ value: String, from originalUnit: String) -> (mph: String, kph: String, ms: String) {
         guard let speed = Double(value) else {
@@ -65,6 +78,19 @@ struct MeasurementConverter {
         return "\(converted.mph) mph / \(converted.kph) km/h"
     }
     
+    static func formatWindSpeed(_ value: String, originalUnit: String, displayMode: UnitSystemDisplayMode = UserDefaults.standard.unitSystemDisplayMode) -> String {
+        let converted = convertWindSpeed(value, from: originalUnit)
+        
+        switch displayMode {
+        case .imperial:
+            return "\(converted.mph) mph"
+        case .metric:
+            return "\(converted.kph) km/h"
+        case .both:
+            return "\(converted.mph) mph / \(converted.kph) km/h"
+        }
+    }
+    
     // MARK: - Distance Conversions
     static func convertDistance(_ value: String, from originalUnit: String) -> (miles: String, kilometers: String) {
         guard let distance = Double(value) else {
@@ -88,6 +114,19 @@ struct MeasurementConverter {
     static func formatDualDistance(_ value: String, originalUnit: String) -> String {
         let converted = convertDistance(value, from: originalUnit)
         return "\(converted.miles) mi / \(converted.kilometers) km"
+    }
+    
+    static func formatDistance(_ value: String, originalUnit: String, displayMode: UnitSystemDisplayMode = UserDefaults.standard.unitSystemDisplayMode) -> String {
+        let converted = convertDistance(value, from: originalUnit)
+        
+        switch displayMode {
+        case .imperial:
+            return "\(converted.miles) mi"
+        case .metric:
+            return "\(converted.kilometers) km"
+        case .both:
+            return "\(converted.miles) mi / \(converted.kilometers) km"
+        }
     }
     
     // MARK: - Rainfall Conversions
@@ -115,6 +154,19 @@ struct MeasurementConverter {
         return "\(converted.inches) in / \(converted.millimeters) mm"
     }
     
+    static func formatRainfall(_ value: String, originalUnit: String, displayMode: UnitSystemDisplayMode = UserDefaults.standard.unitSystemDisplayMode) -> String {
+        let converted = convertRainfall(value, from: originalUnit)
+        
+        switch displayMode {
+        case .imperial:
+            return "\(converted.inches) in"
+        case .metric:
+            return "\(converted.millimeters) mm"
+        case .both:
+            return "\(converted.inches) in / \(converted.millimeters) mm"
+        }
+    }
+    
     // MARK: - Rain Rate Conversions  
     static func convertRainRate(_ value: String, from originalUnit: String) -> (inchesPerHour: String, millimetersPerHour: String) {
         guard let rate = Double(value) else {
@@ -138,6 +190,19 @@ struct MeasurementConverter {
     static func formatDualRainRate(_ value: String, originalUnit: String) -> String {
         let converted = convertRainRate(value, from: originalUnit)
         return "\(converted.inchesPerHour) in/h / \(converted.millimetersPerHour) mm/h"
+    }
+    
+    static func formatRainRate(_ value: String, originalUnit: String, displayMode: UnitSystemDisplayMode = UserDefaults.standard.unitSystemDisplayMode) -> String {
+        let converted = convertRainRate(value, from: originalUnit)
+        
+        switch displayMode {
+        case .imperial:
+            return "\(converted.inchesPerHour) in/h"
+        case .metric:
+            return "\(converted.millimetersPerHour) mm/h"
+        case .both:
+            return "\(converted.inchesPerHour) in/h / \(converted.millimetersPerHour) mm/h"
+        }
     }
     
     // MARK: - Wind Direction Conversions

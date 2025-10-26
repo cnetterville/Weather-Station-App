@@ -257,29 +257,11 @@ struct StationListItem: View {
                     .foregroundColor(.secondary)
             }
             
-            HStack {
-                // Creation date
-                if let creationDate = station.creationDate {
-                    Text("Created: \(creationDate, formatter: dateFormatter)")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
-                
-                Spacer()
-                
-                // Last updated with time since
-                if let lastUpdated = station.lastUpdated {
-                    let timeSince = Date().timeIntervalSince(lastUpdated)
-                    let timeString = formatTimeSince(timeSince)
-                    
-                    Text("Updated: \(timeString) ago")
-                        .font(.caption2)
-                        .foregroundColor(timeSince > refreshInterval * 2 ? .red : .secondary)
-                } else {
-                    Text("Never updated")
-                        .font(.caption2)
-                        .foregroundColor(.red)
-                }
+            // Creation date
+            if let creationDate = station.creationDate {
+                Text("Created: \(creationDate, formatter: dateFormatter)")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
             }
         }
         .padding(.vertical, 2)
@@ -298,27 +280,6 @@ struct StationListItem: View {
         formatter.dateStyle = .medium
         formatter.timeStyle = .none
         return formatter
-    }
-    
-    private var timeFormatter: DateFormatter {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .none
-        formatter.timeStyle = .short
-        return formatter
-    }
-    
-    private func formatTimeSince(_ interval: TimeInterval) -> String {
-        let minutes = Int(interval / 60)
-        let hours = minutes / 60
-        let days = hours / 24
-        
-        if days > 0 {
-            return "\(days)d"
-        } else if hours > 0 {
-            return "\(hours)h \(minutes % 60)m"
-        } else {
-            return "\(minutes)m"
-        }
     }
 }
 

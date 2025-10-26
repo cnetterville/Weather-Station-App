@@ -123,7 +123,7 @@ class WeatherStationService: ObservableObject {
                 
                 await MainActor.run {
                     weatherData[station.macAddress] = decodedResponse.data
-                    updateStationLastUpdated(station)
+                    updateStationLastUpdated(station, weatherData: decodedResponse.data)
                     lastRefreshTime = Date() // Update global refresh time
                     print("✅ [Station: \(station.name)] Successfully parsed and stored data at \(Date())")
                     
@@ -609,17 +609,40 @@ class WeatherStationService: ObservableObject {
         }
     }
     
-    private func updateStationLastUpdated(_ station: WeatherStation) {
-        let updateTime = Date()
+    private func updateStationLastUpdated(_ station: WeatherStation, weatherData: WeatherStationData) {
+        // Use the outdoor temperature timestamp as it's always present and represents when data was recorded
+        let timestampString = weatherData.outdoor.temperature.time
+        
+        // Parse the timestamp - it could be Unix timestamp or formatted date string
+        let actualDataTime: Date
+        
+        if let unixTimestamp = Double(timestampString) {
+            // It's a Unix timestamp (seconds since 1970)
+            actualDataTime = Date(timeIntervalSince1970: unixTimestamp)
+        } else {
+            // Try parsing as formatted date string - need to determine the format from actual data
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+            dateFormatter.timeZone = TimeZone.current
+            
+            if let parsedDate = dateFormatter.date(from: timestampString) {
+                actualDataTime = parsedDate
+            } else {
+                // If we can't parse the timestamp, fall back to current time
+                print("⚠️ Could not parse timestamp '\(timestampString)' for \(station.name), using current time")
+                actualDataTime = Date()
+            }
+        }
         
         if let index = weatherStations.firstIndex(where: { $0.id == station.id }) {
             let oldTimestamp = weatherStations[index].lastUpdated
-            weatherStations[index].lastUpdated = updateTime
+            weatherStations[index].lastUpdated = actualDataTime
             saveWeatherStations()
             
             print("🕐 Updated \(station.name) timestamp:")
             print("   Old: \(oldTimestamp?.description ?? "never")")
-            print("   New: \(updateTime.description)")
+            print("   New: \(actualDataTime.description) (from weather data)")
+            print("   Raw timestamp: \(timestampString)")
         } else {
             print("❌ Could not find station \(station.name) to update timestamp")
         }

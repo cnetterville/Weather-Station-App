@@ -250,7 +250,7 @@ struct HistoricalChartView: View {
         
         switch selectedSensor {
         case .outdoorTemperature, .indoorTemperature:
-            return MeasurementConverter.formatDualTemperature(valueString, originalUnit: selectedSensor.unit)
+            return MeasurementConverter.formatTemperature(valueString, originalUnit: selectedSensor.unit)
         case .windSpeed, .windGust:
             return MeasurementConverter.formatDualWindSpeed(valueString, originalUnit: selectedSensor.unit)
         case .rainRate:

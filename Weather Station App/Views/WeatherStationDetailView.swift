@@ -36,9 +36,9 @@ struct WeatherStationDetailView: View {
                                     }
                                 ) {
                                     VStack(spacing: 8) {
-                                        Text(TemperatureConverter.formatDualTemperature(data.outdoor.temperature.value, originalUnit: data.outdoor.temperature.unit))
+                                        Text(TemperatureConverter.formatTemperature(data.outdoor.temperature.value, originalUnit: data.outdoor.temperature.unit))
                                             .font(.system(size: 32, weight: .bold, design: .rounded))
-                                        Text("Feels like \(TemperatureConverter.formatDualTemperature(data.outdoor.feelsLike.value, originalUnit: data.outdoor.feelsLike.unit))")
+                                        Text("Feels like \(TemperatureConverter.formatTemperature(data.outdoor.feelsLike.value, originalUnit: data.outdoor.feelsLike.unit))")
                                             .font(.subheadline)
                                             .foregroundColor(.secondary)
                                     }
@@ -56,7 +56,7 @@ struct WeatherStationDetailView: View {
                                     }
                                 ) {
                                     VStack(spacing: 8) {
-                                        Text(TemperatureConverter.formatDualTemperature(data.indoor.temperature.value, originalUnit: data.indoor.temperature.unit))
+                                        Text(TemperatureConverter.formatTemperature(data.indoor.temperature.value, originalUnit: data.indoor.temperature.unit))
                                             .font(.system(size: 32, weight: .bold, design: .rounded))
                                         Text("Humidity \(data.indoor.humidity.value)\(data.indoor.humidity.unit)")
                                             .font(.subheadline)
@@ -76,9 +76,9 @@ struct WeatherStationDetailView: View {
                                     }
                                 ) {
                                     VStack(spacing: 8) {
-                                        Text(MeasurementConverter.formatDualWindSpeed(data.wind.windSpeed.value, originalUnit: data.wind.windSpeed.unit))
+                                        Text(MeasurementConverter.formatWindSpeed(data.wind.windSpeed.value, originalUnit: data.wind.windSpeed.unit))
                                             .font(.system(size: 24, weight: .bold, design: .rounded))
-                                        Text("Gusts: \(MeasurementConverter.formatDualWindSpeed(data.wind.windGust.value, originalUnit: data.wind.windGust.unit))")
+                                        Text("Gusts: \(MeasurementConverter.formatWindSpeed(data.wind.windGust.value, originalUnit: data.wind.windGust.unit))")
                                             .font(.subheadline)
                                             .foregroundColor(.secondary)
                                         Text("Direction: \(MeasurementConverter.formatWindDirectionWithCompass(data.wind.windDirection.value))")
@@ -134,28 +134,28 @@ struct WeatherStationDetailView: View {
                                         HStack {
                                             Text("Today:")
                                             Spacer()
-                                            Text(MeasurementConverter.formatDualRainfall(rainfallData.daily.value, originalUnit: rainfallData.daily.unit))
+                                            Text(MeasurementConverter.formatRainfall(rainfallData.daily.value, originalUnit: rainfallData.daily.unit))
                                                 .fontWeight(.semibold)
                                         }
                                         HStack {
                                             Text("This Hour:")
                                             Spacer()
-                                            Text(MeasurementConverter.formatDualRainfall(rainfallData.oneHour.value, originalUnit: rainfallData.oneHour.unit))
+                                            Text(MeasurementConverter.formatRainfall(rainfallData.oneHour.value, originalUnit: rainfallData.oneHour.unit))
                                         }
                                         HStack {
                                             Text("Rate:")
                                             Spacer()
-                                            Text(MeasurementConverter.formatDualRainRate(rainfallData.rainRate.value, originalUnit: rainfallData.rainRate.unit))
+                                            Text(MeasurementConverter.formatRainRate(rainfallData.rainRate.value, originalUnit: rainfallData.rainRate.unit))
                                         }
                                         HStack {
                                             Text("Weekly:")
                                             Spacer()
-                                            Text(MeasurementConverter.formatDualRainfall(rainfallData.weekly.value, originalUnit: rainfallData.weekly.unit))
+                                            Text(MeasurementConverter.formatRainfall(rainfallData.weekly.value, originalUnit: rainfallData.weekly.unit))
                                         }
                                         HStack {
                                             Text("Monthly:")
                                             Spacer()
-                                            Text(MeasurementConverter.formatDualRainfall(rainfallData.monthly.value, originalUnit: rainfallData.monthly.unit))
+                                            Text(MeasurementConverter.formatRainfall(rainfallData.monthly.value, originalUnit: rainfallData.monthly.unit))
                                         }
                                     }
                                     .font(.subheadline)
@@ -257,7 +257,7 @@ struct WeatherStationDetailView: View {
                                     }
                                 ) {
                                     VStack(spacing: 8) {
-                                        Text(MeasurementConverter.formatDualDistance(data.lightning.distance.value, originalUnit: data.lightning.distance.unit))
+                                        Text(MeasurementConverter.formatDistance(data.lightning.distance.value, originalUnit: data.lightning.distance.unit))
                                             .font(.system(size: 24, weight: .bold, design: .rounded))
                                         Text("Count: \(data.lightning.count.value)")
                                             .font(.subheadline)
@@ -277,7 +277,7 @@ struct WeatherStationDetailView: View {
                                     }
                                 ) {
                                     VStack(spacing: 8) {
-                                        Text(TemperatureConverter.formatDualTemperature(data.tempAndHumidityCh1.temperature.value, originalUnit: data.tempAndHumidityCh1.temperature.unit))
+                                        Text(TemperatureConverter.formatTemperature(data.tempAndHumidityCh1.temperature.value, originalUnit: data.tempAndHumidityCh1.temperature.unit))
                                             .font(.system(size: 24, weight: .bold, design: .rounded))
                                         if let humidity = data.tempAndHumidityCh1.humidity {
                                             Text("Humidity: \(humidity.value)\(humidity.unit)")
@@ -298,7 +298,7 @@ struct WeatherStationDetailView: View {
                                     }
                                 ) {
                                     VStack(spacing: 8) {
-                                        Text(TemperatureConverter.formatDualTemperature(data.tempAndHumidityCh2.temperature.value, originalUnit: data.tempAndHumidityCh2.temperature.unit))
+                                        Text(TemperatureConverter.formatTemperature(data.tempAndHumidityCh2.temperature.value, originalUnit: data.tempAndHumidityCh2.temperature.unit))
                                             .font(.system(size: 24, weight: .bold, design: .rounded))
                                         if let humidity = data.tempAndHumidityCh2.humidity {
                                             Text("Humidity: \(humidity.value)\(humidity.unit)")
@@ -319,7 +319,7 @@ struct WeatherStationDetailView: View {
                                     }
                                 ) {
                                     VStack(spacing: 8) {
-                                        Text(TemperatureConverter.formatDualTemperature(tempHumCh3.temperature.value, originalUnit: tempHumCh3.temperature.unit))
+                                        Text(TemperatureConverter.formatTemperature(tempHumCh3.temperature.value, originalUnit: tempHumCh3.temperature.unit))
                                             .font(.system(size: 24, weight: .bold, design: .rounded))
                                         if let humidity = tempHumCh3.humidity {
                                             Text("Humidity: \(humidity.value)\(humidity.unit)")
