@@ -173,9 +173,13 @@ enum HistoricalTimeRange: String, CaseIterable {
     
     var displayName: String {
         switch self {
-        case .last90Days: return "90 Days (Daily data limit: ~3 months)"
-        case .last365Days: return "1 Year (Weekly aggregated data)"
-        default: return self.rawValue
+        case .lastHour: return "1H"
+        case .last6Hours: return "6H" 
+        case .last24Hours: return "24H"
+        case .last7Days: return "7D"
+        case .last30Days: return "30D"
+        case .last90Days: return "90D"
+        case .last365Days: return "1Y"
         }
     }
 }

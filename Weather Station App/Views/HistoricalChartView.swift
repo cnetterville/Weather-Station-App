@@ -101,14 +101,29 @@ struct HistoricalChartView: View {
                     Text("Time Range:")
                         .font(.headline)
                     
-                    Picker("Time Range", selection: $selectedTimeRange) {
+                    HStack(spacing: 8) {
                         ForEach(HistoricalTimeRange.allCases, id: \.self) { range in
-                            Text(range.displayName).tag(range)
+                            Button(action: {
+                                selectedTimeRange = range
+                                loadHistoricalData()
+                            }) {
+                                Text(range.displayName)
+                                    .font(.system(size: 12, weight: .medium))
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .frame(minWidth: 60)
+                                    .background(selectedTimeRange == range ? Color.accentColor : Color(NSColor.controlBackgroundColor))
+                                    .foregroundColor(selectedTimeRange == range ? .white : .primary)
+                                    .cornerRadius(6)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .stroke(selectedTimeRange == range ? Color.clear : Color.secondary.opacity(0.3), lineWidth: 1)
+                                    )
+                            }
+                            .buttonStyle(.plain)
                         }
-                    }
-                    .pickerStyle(.segmented)
-                    .onChange(of: selectedTimeRange) { _, _ in
-                        loadHistoricalData()
+                        
+                        Spacer()
                     }
                     
                     // Show warning for longer time ranges
