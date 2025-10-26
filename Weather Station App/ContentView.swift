@@ -169,7 +169,7 @@ struct ContentView: View {
             print("🔄 Auto-refresh timer fired at \(Date())")
             
             if !weatherService.isLoading {
-                Task {
+                Task { @MainActor in
                     print("🔄 Starting auto-refresh for \(weatherService.weatherStations.count) stations")
                     await weatherService.fetchAllWeatherData()
                     print("🔄 Auto-refresh completed at \(Date())")

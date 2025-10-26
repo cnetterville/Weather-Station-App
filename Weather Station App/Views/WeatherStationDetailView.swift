@@ -15,510 +15,513 @@ struct WeatherStationDetailView: View {
     @State private var showingHistory = false
     
     var body: some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                // Station Information Card
-                StationInfoCard(station: station)
-                
-                if let data = weatherData {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 2), spacing: 16) {
-                        
-                        // Outdoor Temperature Card
-                        if station.sensorPreferences.showOutdoorTemp {
-                            EditableWeatherCard(
-                                title: .constant(station.customLabels.outdoorTemp),
-                                systemImage: "thermometer",
-                                onTitleChange: { newTitle in
-                                    station.customLabels.outdoorTemp = newTitle
-                                    saveStation()
-                                }
-                            ) {
-                                VStack(spacing: 8) {
-                                    Text(TemperatureConverter.formatDualTemperature(data.outdoor.temperature.value, originalUnit: data.outdoor.temperature.unit))
-                                        .font(.system(size: 32, weight: .bold, design: .rounded))
-                                    Text("Feels like \(TemperatureConverter.formatDualTemperature(data.outdoor.feelsLike.value, originalUnit: data.outdoor.feelsLike.unit))")
-                                        .font(.subheadline)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                        }
-                        
-                        // Indoor Temperature Card
-                        if station.sensorPreferences.showIndoorTemp {
-                            EditableWeatherCard(
-                                title: .constant(station.customLabels.indoorTemp),
-                                systemImage: "house.fill",
-                                onTitleChange: { newTitle in
-                                    station.customLabels.indoorTemp = newTitle
-                                    saveStation()
-                                }
-                            ) {
-                                VStack(spacing: 8) {
-                                    Text(TemperatureConverter.formatDualTemperature(data.indoor.temperature.value, originalUnit: data.indoor.temperature.unit))
-                                        .font(.system(size: 32, weight: .bold, design: .rounded))
-                                    Text("Humidity \(data.indoor.humidity.value)\(data.indoor.humidity.unit)")
-                                        .font(.subheadline)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                        }
-                        
-                        // Wind Card
-                        if station.sensorPreferences.showWind {
-                            EditableWeatherCard(
-                                title: .constant(station.customLabels.wind),
-                                systemImage: "wind",
-                                onTitleChange: { newTitle in
-                                    station.customLabels.wind = newTitle
-                                    saveStation()
-                                }
-                            ) {
-                                VStack(spacing: 8) {
-                                    Text(MeasurementConverter.formatDualWindSpeed(data.wind.windSpeed.value, originalUnit: data.wind.windSpeed.unit))
-                                        .font(.system(size: 24, weight: .bold, design: .rounded))
-                                    Text("Gusts: \(MeasurementConverter.formatDualWindSpeed(data.wind.windGust.value, originalUnit: data.wind.windGust.unit))")
-                                        .font(.subheadline)
-                                        .foregroundColor(.secondary)
-                                    Text("Direction: \(MeasurementConverter.formatWindDirectionWithCompass(data.wind.windDirection.value))")
-                                        .font(.subheadline)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                        }
-                        
-                        // Pressure Card
-                        if station.sensorPreferences.showPressure {
-                            EditableWeatherCard(
-                                title: .constant(station.customLabels.pressure),
-                                systemImage: "barometer",
-                                onTitleChange: { newTitle in
-                                    station.customLabels.pressure = newTitle
-                                    saveStation()
-                                }
-                            ) {
-                                VStack(spacing: 8) {
-                                    Text("\(data.pressure.relative.value) \(data.pressure.relative.unit)")
-                                        .font(.system(size: 24, weight: .bold, design: .rounded))
-                                    Text("Absolute: \(data.pressure.absolute.value) \(data.pressure.absolute.unit)")
-                                        .font(.subheadline)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                        }
-                        
-                        // Rainfall Card (always use piezo data)
-                        if station.sensorPreferences.showRainfall {
-                            EditableWeatherCard(
-                                title: .constant(station.customLabels.rainfall),
-                                systemImage: "cloud.rain.fill",
-                                onTitleChange: { newTitle in
-                                    station.customLabels.rainfall = newTitle
-                                    saveStation()
-                                }
-                            ) {
-                                let rainfallData = data.rainfallPiezo
-                                VStack(alignment: .leading, spacing: 4) {
-                                    // Rain Status
-                                    HStack {
-                                        Text("Status:")
-                                        Spacer()
-                                        Text(rainStatusText(rainfallData.state.value))
-                                            .fontWeight(.semibold)
-                                            .foregroundColor(rainStatusColor(rainfallData.state.value))
+        GeometryReader { geometry in
+            ScrollView {
+                VStack(spacing: 16) {
+                    // Station Information Card
+                    StationInfoCard(station: station)
+                    
+                    if let data = weatherData {
+                        let columns = calculateColumns(for: geometry.size.width)
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: columns), spacing: 16) {
+                            
+                            // Outdoor Temperature Card
+                            if station.sensorPreferences.showOutdoorTemp {
+                                EditableWeatherCard(
+                                    title: .constant(station.customLabels.outdoorTemp),
+                                    systemImage: "thermometer",
+                                    onTitleChange: { newTitle in
+                                        station.customLabels.outdoorTemp = newTitle
+                                        saveStation()
                                     }
-                                    
-                                    Divider()
-                                    
-                                    HStack {
-                                        Text("Today:")
-                                        Spacer()
-                                        Text(MeasurementConverter.formatDualRainfall(rainfallData.daily.value, originalUnit: rainfallData.daily.unit))
-                                            .fontWeight(.semibold)
-                                    }
-                                    HStack {
-                                        Text("This Hour:")
-                                        Spacer()
-                                        Text(MeasurementConverter.formatDualRainfall(rainfallData.oneHour.value, originalUnit: rainfallData.oneHour.unit))
-                                    }
-                                    HStack {
-                                        Text("Rate:")
-                                        Spacer()
-                                        Text(MeasurementConverter.formatDualRainRate(rainfallData.rainRate.value, originalUnit: rainfallData.rainRate.unit))
-                                    }
-                                    HStack {
-                                        Text("Weekly:")
-                                        Spacer()
-                                        Text(MeasurementConverter.formatDualRainfall(rainfallData.weekly.value, originalUnit: rainfallData.weekly.unit))
-                                    }
-                                    HStack {
-                                        Text("Monthly:")
-                                        Spacer()
-                                        Text(MeasurementConverter.formatDualRainfall(rainfallData.monthly.value, originalUnit: rainfallData.monthly.unit))
-                                    }
-                                }
-                                .font(.subheadline)
-                            }
-                        }
-                        
-                        // Air Quality Ch1 Card
-                        if station.sensorPreferences.showAirQualityCh1 {
-                            EditableWeatherCard(
-                                title: .constant(station.customLabels.airQualityCh1),
-                                systemImage: "aqi.medium",
-                                onTitleChange: { newTitle in
-                                    station.customLabels.airQualityCh1 = newTitle
-                                    saveStation()
-                                }
-                            ) {
-                                VStack(spacing: 8) {
-                                    Text("\(data.pm25Ch1.pm25.value) \(data.pm25Ch1.pm25.unit)")
-                                        .font(.system(size: 24, weight: .bold, design: .rounded))
-                                    Text("AQI: \(data.pm25Ch1.realTimeAqi.value)")
-                                        .font(.subheadline)
-                                        .foregroundColor(aqiColor(for: data.pm25Ch1.realTimeAqi.value))
-                                }
-                            }
-                        }
-                        
-                        // Air Quality Ch2 Card (if enabled)
-                        if station.sensorPreferences.showAirQualityCh2 {
-                            EditableWeatherCard(
-                                title: .constant(station.customLabels.airQualityCh2),
-                                systemImage: "aqi.medium",
-                                onTitleChange: { newTitle in
-                                    station.customLabels.airQualityCh2 = newTitle
-                                    saveStation()
-                                }
-                            ) {
-                                if let pm25Ch2 = data.pm25Ch2 {
+                                ) {
                                     VStack(spacing: 8) {
-                                        Text("\(pm25Ch2.pm25.value) \(pm25Ch2.pm25.unit)")
-                                            .font(.system(size: 24, weight: .bold, design: .rounded))
-                                        Text("AQI: \(pm25Ch2.realTimeAqi.value)")
+                                        Text(TemperatureConverter.formatDualTemperature(data.outdoor.temperature.value, originalUnit: data.outdoor.temperature.unit))
+                                            .font(.system(size: 32, weight: .bold, design: .rounded))
+                                        Text("Feels like \(TemperatureConverter.formatDualTemperature(data.outdoor.feelsLike.value, originalUnit: data.outdoor.feelsLike.unit))")
                                             .font(.subheadline)
-                                            .foregroundColor(aqiColor(for: pm25Ch2.realTimeAqi.value))
+                                            .foregroundColor(.secondary)
                                     }
-                                } else {
+                                }
+                            }
+                            
+                            // Indoor Temperature Card
+                            if station.sensorPreferences.showIndoorTemp {
+                                EditableWeatherCard(
+                                    title: .constant(station.customLabels.indoorTemp),
+                                    systemImage: "house.fill",
+                                    onTitleChange: { newTitle in
+                                        station.customLabels.indoorTemp = newTitle
+                                        saveStation()
+                                    }
+                                ) {
                                     VStack(spacing: 8) {
-                                        Text("No Data")
-                                            .font(.system(size: 24, weight: .bold, design: .rounded))
-                                            .foregroundColor(.secondary)
-                                        Text("Sensor not available or offline")
+                                        Text(TemperatureConverter.formatDualTemperature(data.indoor.temperature.value, originalUnit: data.indoor.temperature.unit))
+                                            .font(.system(size: 32, weight: .bold, design: .rounded))
+                                        Text("Humidity \(data.indoor.humidity.value)\(data.indoor.humidity.unit)")
                                             .font(.subheadline)
                                             .foregroundColor(.secondary)
                                     }
                                 }
                             }
-                        }
-                        
-                        // Air Quality Ch3 Card (if enabled)
-                        if station.sensorPreferences.showAirQualityCh3 {
-                            EditableWeatherCard(
-                                title: .constant(station.customLabels.airQualityCh3),
-                                systemImage: "aqi.medium",
-                                onTitleChange: { newTitle in
-                                    station.customLabels.airQualityCh3 = newTitle
-                                    saveStation()
-                                }
-                            ) {
-                                if let pm25Ch3 = data.pm25Ch3 {
+                            
+                            // Wind Card
+                            if station.sensorPreferences.showWind {
+                                EditableWeatherCard(
+                                    title: .constant(station.customLabels.wind),
+                                    systemImage: "wind",
+                                    onTitleChange: { newTitle in
+                                        station.customLabels.wind = newTitle
+                                        saveStation()
+                                    }
+                                ) {
                                     VStack(spacing: 8) {
-                                        Text("\(pm25Ch3.pm25.value) \(pm25Ch3.pm25.unit)")
+                                        Text(MeasurementConverter.formatDualWindSpeed(data.wind.windSpeed.value, originalUnit: data.wind.windSpeed.unit))
                                             .font(.system(size: 24, weight: .bold, design: .rounded))
-                                        Text("AQI: \(pm25Ch3.realTimeAqi.value)")
+                                        Text("Gusts: \(MeasurementConverter.formatDualWindSpeed(data.wind.windGust.value, originalUnit: data.wind.windGust.unit))")
                                             .font(.subheadline)
-                                            .foregroundColor(aqiColor(for: pm25Ch3.realTimeAqi.value))
+                                            .foregroundColor(.secondary)
+                                        Text("Direction: \(MeasurementConverter.formatWindDirectionWithCompass(data.wind.windDirection.value))")
+                                            .font(.subheadline)
+                                            .foregroundColor(.secondary)
                                     }
-                                } else {
+                                }
+                            }
+                            
+                            // Pressure Card
+                            if station.sensorPreferences.showPressure {
+                                EditableWeatherCard(
+                                    title: .constant(station.customLabels.pressure),
+                                    systemImage: "barometer",
+                                    onTitleChange: { newTitle in
+                                        station.customLabels.pressure = newTitle
+                                        saveStation()
+                                    }
+                                ) {
                                     VStack(spacing: 8) {
-                                        Text("No Data")
+                                        Text("\(data.pressure.relative.value) \(data.pressure.relative.unit)")
                                             .font(.system(size: 24, weight: .bold, design: .rounded))
-                                            .foregroundColor(.secondary)
-                                        Text("Sensor not available or offline")
+                                        Text("Absolute: \(data.pressure.absolute.value) \(data.pressure.absolute.unit)")
                                             .font(.subheadline)
                                             .foregroundColor(.secondary)
                                     }
                                 }
                             }
-                        }
-                        
-                        // UV Index Card
-                        if station.sensorPreferences.showUVIndex {
-                            EditableWeatherCard(
-                                title: .constant(station.customLabels.uvIndex),
-                                systemImage: "sun.max.fill",
-                                onTitleChange: { newTitle in
-                                    station.customLabels.uvIndex = newTitle
-                                    saveStation()
-                                }
-                            ) {
-                                VStack(spacing: 8) {
-                                    Text(data.solarAndUvi.uvi.value)
-                                        .font(.system(size: 32, weight: .bold, design: .rounded))
-                                    Text("Solar: \(data.solarAndUvi.solar.value) \(data.solarAndUvi.solar.unit)")
-                                        .font(.subheadline)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                        }
-                        
-                        // Lightning Card
-                        if station.sensorPreferences.showLightning {
-                            EditableWeatherCard(
-                                title: .constant(station.customLabels.lightning),
-                                systemImage: "cloud.bolt.fill",
-                                onTitleChange: { newTitle in
-                                    station.customLabels.lightning = newTitle
-                                    saveStation()
-                                }
-                            ) {
-                                VStack(spacing: 8) {
-                                    Text(MeasurementConverter.formatDualDistance(data.lightning.distance.value, originalUnit: data.lightning.distance.unit))
-                                        .font(.system(size: 24, weight: .bold, design: .rounded))
-                                    Text("Count: \(data.lightning.count.value)")
-                                        .font(.subheadline)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                        }
-                        
-                        // Additional Temperature/Humidity Sensors
-                        if station.sensorPreferences.showTempHumidityCh1 {
-                            EditableWeatherCard(
-                                title: .constant(station.customLabels.tempHumidityCh1),
-                                systemImage: "thermometer",
-                                onTitleChange: { newTitle in
-                                    station.customLabels.tempHumidityCh1 = newTitle
-                                    saveStation()
-                                }
-                            ) {
-                                VStack(spacing: 8) {
-                                    Text(TemperatureConverter.formatDualTemperature(data.tempAndHumidityCh1.temperature.value, originalUnit: data.tempAndHumidityCh1.temperature.unit))
-                                        .font(.system(size: 24, weight: .bold, design: .rounded))
-                                    if let humidity = data.tempAndHumidityCh1.humidity {
-                                        Text("Humidity: \(humidity.value)\(humidity.unit)")
-                                            .font(.subheadline)
-                                            .foregroundColor(.secondary)
+                            
+                            // Rainfall Card (always use piezo data)
+                            if station.sensorPreferences.showRainfall {
+                                EditableWeatherCard(
+                                    title: .constant(station.customLabels.rainfall),
+                                    systemImage: "cloud.rain.fill",
+                                    onTitleChange: { newTitle in
+                                        station.customLabels.rainfall = newTitle
+                                        saveStation()
                                     }
-                                }
-                            }
-                        }
-                        
-                        if station.sensorPreferences.showTempHumidityCh2 {
-                            EditableWeatherCard(
-                                title: .constant(station.customLabels.tempHumidityCh2),
-                                systemImage: "thermometer",
-                                onTitleChange: { newTitle in
-                                    station.customLabels.tempHumidityCh2 = newTitle
-                                    saveStation()
-                                }
-                            ) {
-                                VStack(spacing: 8) {
-                                    Text(TemperatureConverter.formatDualTemperature(data.tempAndHumidityCh2.temperature.value, originalUnit: data.tempAndHumidityCh2.temperature.unit))
-                                        .font(.system(size: 24, weight: .bold, design: .rounded))
-                                    if let humidity = data.tempAndHumidityCh2.humidity {
-                                        Text("Humidity: \(humidity.value)\(humidity.unit)")
-                                            .font(.subheadline)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
-                            }
-                        }
-                        
-                        if station.sensorPreferences.showTempHumidityCh3, let tempHumCh3 = data.tempAndHumidityCh3 {
-                            EditableWeatherCard(
-                                title: .constant(station.customLabels.tempHumidityCh3),
-                                systemImage: "thermometer",
-                                onTitleChange: { newTitle in
-                                    station.customLabels.tempHumidityCh3 = newTitle
-                                    saveStation()
-                                }
-                            ) {
-                                VStack(spacing: 8) {
-                                    Text(TemperatureConverter.formatDualTemperature(tempHumCh3.temperature.value, originalUnit: tempHumCh3.temperature.unit))
-                                        .font(.system(size: 24, weight: .bold, design: .rounded))
-                                    if let humidity = tempHumCh3.humidity {
-                                        Text("Humidity: \(humidity.value)\(humidity.unit)")
-                                            .font(.subheadline)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // Battery Status Card
-                        if station.sensorPreferences.showBatteryStatus {
-                            EditableWeatherCard(
-                                title: .constant(station.customLabels.batteryStatus),
-                                systemImage: "battery.100",
-                                onTitleChange: { newTitle in
-                                    station.customLabels.batteryStatus = newTitle
-                                    saveStation()
-                                }
-                            ) {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    if let console = data.battery.console {
+                                ) {
+                                    let rainfallData = data.rainfallPiezo
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        // Rain Status
                                         HStack {
-                                            Text("Console:")
+                                            Text("Status:")
                                             Spacer()
-                                            Text("\(console.value) \(console.unit)")
-                                        }
-                                    }
-                                    if let haptic = data.battery.hapticArrayBattery {
-                                        HStack {
-                                            Text("Haptic Array:")
-                                            Spacer()
-                                            Text("\(haptic.value) \(haptic.unit)")
-                                        }
-                                    }
-                                    if let lightning = data.battery.lightningSensor {
-                                        HStack {
-                                            Text("Lightning Sensor:")
-                                            Spacer()
-                                            Text(batteryLevelText(lightning.value))
-                                        }
-                                    }
-                                    if let pm25Ch1 = data.battery.pm25SensorCh1 {
-                                        HStack {
-                                            Text("PM2.5 Ch1:")
-                                            Spacer()
-                                            Text(batteryLevelText(pm25Ch1.value))
-                                        }
-                                    }
-                                    if let pm25Ch2 = data.battery.pm25SensorCh2 {
-                                        HStack {
-                                            Text("PM2.5 Ch2:")
-                                            Spacer()
-                                            Text(batteryLevelText(pm25Ch2.value))
-                                        }
-                                    }
-                                }
-                                .font(.caption)
-                            }
-                        }
-                        
-                        // Sunrise/Sunset Card
-                        if station.sensorPreferences.showSunriseSunset && station.latitude != nil && station.longitude != nil {
-                            EditableWeatherCard(
-                                title: .constant(station.customLabels.sunriseSunset),
-                                systemImage: sunIconForCurrentTime(station: station),
-                                onTitleChange: { newTitle in
-                                    station.customLabels.sunriseSunset = newTitle
-                                    saveStation()
-                                }
-                            ) {
-                                if let latitude = station.latitude, let longitude = station.longitude,
-                                   let sunTimes = SunCalculator.calculateSunTimes(for: Date(), latitude: latitude, longitude: longitude, timeZone: station.timeZone) {
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        // Current status
-                                        HStack {
-                                            Image(systemName: sunTimes.isCurrentlyDaylight ? "sun.max.fill" : "moon.fill")
-                                                .foregroundColor(sunTimes.isCurrentlyDaylight ? .orange : .blue)
-                                            Text(sunTimes.isCurrentlyDaylight ? "Daylight" : "Nighttime")
-                                                .font(.headline)
+                                            Text(rainStatusText(rainfallData.state.value))
                                                 .fontWeight(.semibold)
-                                            Spacer()
+                                                .foregroundColor(rainStatusColor(rainfallData.state.value))
                                         }
                                         
                                         Divider()
                                         
-                                        // Sunrise and sunset times
                                         HStack {
-                                            VStack(alignment: .leading, spacing: 4) {
-                                                HStack {
-                                                    Image(systemName: "sunrise.fill")
-                                                        .foregroundColor(.orange)
-                                                    Text("Sunrise")
-                                                        .font(.subheadline)
-                                                        .foregroundColor(.secondary)
-                                                }
-                                                Text(sunTimes.formattedSunrise)
-                                                    .font(.title2)
-                                                    .fontWeight(.bold)
-                                            }
-                                            
+                                            Text("Today:")
                                             Spacer()
-                                            
-                                            VStack(alignment: .trailing, spacing: 4) {
-                                                HStack {
-                                                    Text("Sunset")
-                                                        .font(.subheadline)
-                                                        .foregroundColor(.secondary)
-                                                    Image(systemName: "sunset.fill")
-                                                        .foregroundColor(.red)
-                                                }
-                                                Text(sunTimes.formattedSunset)
-                                                    .font(.title2)
-                                                    .fontWeight(.bold)
-                                            }
-                                        }
-                                        
-                                        // Day length
-                                        HStack {
-                                            Text("Day Length:")
-                                                .font(.subheadline)
-                                                .foregroundColor(.secondary)
-                                            Spacer()
-                                            Text(sunTimes.formattedDayLength)
-                                                .font(.subheadline)
+                                            Text(MeasurementConverter.formatDualRainfall(rainfallData.daily.value, originalUnit: rainfallData.daily.unit))
                                                 .fontWeight(.semibold)
                                         }
-                                        
-                                        // Next event
-                                        let nextEvent = SunCalculator.getNextSunEvent(latitude: latitude, longitude: longitude, timeZone: station.timeZone)
                                         HStack {
-                                            Text("Next \(nextEvent.event):")
-                                                .font(.subheadline)
-                                                .foregroundColor(.secondary)
+                                            Text("This Hour:")
                                             Spacer()
-                                            Text(nextEvent.time, style: .time)
-                                                .font(.subheadline)
-                                                .fontWeight(.semibold)
+                                            Text(MeasurementConverter.formatDualRainfall(rainfallData.oneHour.value, originalUnit: rainfallData.oneHour.unit))
+                                        }
+                                        HStack {
+                                            Text("Rate:")
+                                            Spacer()
+                                            Text(MeasurementConverter.formatDualRainRate(rainfallData.rainRate.value, originalUnit: rainfallData.rainRate.unit))
+                                        }
+                                        HStack {
+                                            Text("Weekly:")
+                                            Spacer()
+                                            Text(MeasurementConverter.formatDualRainfall(rainfallData.weekly.value, originalUnit: rainfallData.weekly.unit))
+                                        }
+                                        HStack {
+                                            Text("Monthly:")
+                                            Spacer()
+                                            Text(MeasurementConverter.formatDualRainfall(rainfallData.monthly.value, originalUnit: rainfallData.monthly.unit))
                                         }
                                     }
-                                } else {
+                                    .font(.subheadline)
+                                }
+                            }
+                            
+                            // Air Quality Ch1 Card
+                            if station.sensorPreferences.showAirQualityCh1 {
+                                EditableWeatherCard(
+                                    title: .constant(station.customLabels.airQualityCh1),
+                                    systemImage: "aqi.medium",
+                                    onTitleChange: { newTitle in
+                                        station.customLabels.airQualityCh1 = newTitle
+                                        saveStation()
+                                    }
+                                ) {
                                     VStack(spacing: 8) {
-                                        Image(systemName: "location.slash")
-                                            .font(.system(size: 24))
-                                            .foregroundColor(.secondary)
-                                        Text("Location Required")
-                                            .font(.headline)
-                                            .foregroundColor(.secondary)
-                                        Text("Sunrise/sunset calculations require station location data")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                            .multilineTextAlignment(.center)
+                                        Text("\(data.pm25Ch1.pm25.value) \(data.pm25Ch1.pm25.unit)")
+                                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                                        Text("AQI: \(data.pm25Ch1.realTimeAqi.value)")
+                                            .font(.subheadline)
+                                            .foregroundColor(aqiColor(for: data.pm25Ch1.realTimeAqi.value))
                                     }
                                 }
                             }
+                            
+                            // Air Quality Ch2 Card (if enabled)
+                            if station.sensorPreferences.showAirQualityCh2 {
+                                EditableWeatherCard(
+                                    title: .constant(station.customLabels.airQualityCh2),
+                                    systemImage: "aqi.medium",
+                                    onTitleChange: { newTitle in
+                                        station.customLabels.airQualityCh2 = newTitle
+                                        saveStation()
+                                    }
+                                ) {
+                                    if let pm25Ch2 = data.pm25Ch2 {
+                                        VStack(spacing: 8) {
+                                            Text("\(pm25Ch2.pm25.value) \(pm25Ch2.pm25.unit)")
+                                                .font(.system(size: 24, weight: .bold, design: .rounded))
+                                            Text("AQI: \(pm25Ch2.realTimeAqi.value)")
+                                                .font(.subheadline)
+                                                .foregroundColor(aqiColor(for: pm25Ch2.realTimeAqi.value))
+                                        }
+                                    } else {
+                                        VStack(spacing: 8) {
+                                            Text("No Data")
+                                                .font(.system(size: 24, weight: .bold, design: .rounded))
+                                                .foregroundColor(.secondary)
+                                            Text("Sensor not available or offline")
+                                                .font(.subheadline)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Air Quality Ch3 Card (if enabled)
+                            if station.sensorPreferences.showAirQualityCh3 {
+                                EditableWeatherCard(
+                                    title: .constant(station.customLabels.airQualityCh3),
+                                    systemImage: "aqi.medium",
+                                    onTitleChange: { newTitle in
+                                        station.customLabels.airQualityCh3 = newTitle
+                                        saveStation()
+                                    }
+                                ) {
+                                    if let pm25Ch3 = data.pm25Ch3 {
+                                        VStack(spacing: 8) {
+                                            Text("\(pm25Ch3.pm25.value) \(pm25Ch3.pm25.unit)")
+                                                .font(.system(size: 24, weight: .bold, design: .rounded))
+                                            Text("AQI: \(pm25Ch3.realTimeAqi.value)")
+                                                .font(.subheadline)
+                                                .foregroundColor(aqiColor(for: pm25Ch3.realTimeAqi.value))
+                                        }
+                                    } else {
+                                        VStack(spacing: 8) {
+                                            Text("No Data")
+                                                .font(.system(size: 24, weight: .bold, design: .rounded))
+                                                .foregroundColor(.secondary)
+                                            Text("Sensor not available or offline")
+                                                .font(.subheadline)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // UV Index Card
+                            if station.sensorPreferences.showUVIndex {
+                                EditableWeatherCard(
+                                    title: .constant(station.customLabels.uvIndex),
+                                    systemImage: "sun.max.fill",
+                                    onTitleChange: { newTitle in
+                                        station.customLabels.uvIndex = newTitle
+                                        saveStation()
+                                    }
+                                ) {
+                                    VStack(spacing: 8) {
+                                        Text(data.solarAndUvi.uvi.value)
+                                            .font(.system(size: 32, weight: .bold, design: .rounded))
+                                        Text("Solar: \(data.solarAndUvi.solar.value) \(data.solarAndUvi.solar.unit)")
+                                            .font(.subheadline)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                            
+                            // Lightning Card
+                            if station.sensorPreferences.showLightning {
+                                EditableWeatherCard(
+                                    title: .constant(station.customLabels.lightning),
+                                    systemImage: "cloud.bolt.fill",
+                                    onTitleChange: { newTitle in
+                                        station.customLabels.lightning = newTitle
+                                        saveStation()
+                                    }
+                                ) {
+                                    VStack(spacing: 8) {
+                                        Text(MeasurementConverter.formatDualDistance(data.lightning.distance.value, originalUnit: data.lightning.distance.unit))
+                                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                                        Text("Count: \(data.lightning.count.value)")
+                                            .font(.subheadline)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                            
+                            // Additional Temperature/Humidity Sensors
+                            if station.sensorPreferences.showTempHumidityCh1 {
+                                EditableWeatherCard(
+                                    title: .constant(station.customLabels.tempHumidityCh1),
+                                    systemImage: "thermometer",
+                                    onTitleChange: { newTitle in
+                                        station.customLabels.tempHumidityCh1 = newTitle
+                                        saveStation()
+                                    }
+                                ) {
+                                    VStack(spacing: 8) {
+                                        Text(TemperatureConverter.formatDualTemperature(data.tempAndHumidityCh1.temperature.value, originalUnit: data.tempAndHumidityCh1.temperature.unit))
+                                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                                        if let humidity = data.tempAndHumidityCh1.humidity {
+                                            Text("Humidity: \(humidity.value)\(humidity.unit)")
+                                                .font(.subheadline)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            if station.sensorPreferences.showTempHumidityCh2 {
+                                EditableWeatherCard(
+                                    title: .constant(station.customLabels.tempHumidityCh2),
+                                    systemImage: "thermometer",
+                                    onTitleChange: { newTitle in
+                                        station.customLabels.tempHumidityCh2 = newTitle
+                                        saveStation()
+                                    }
+                                ) {
+                                    VStack(spacing: 8) {
+                                        Text(TemperatureConverter.formatDualTemperature(data.tempAndHumidityCh2.temperature.value, originalUnit: data.tempAndHumidityCh2.temperature.unit))
+                                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                                        if let humidity = data.tempAndHumidityCh2.humidity {
+                                            Text("Humidity: \(humidity.value)\(humidity.unit)")
+                                                .font(.subheadline)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            if station.sensorPreferences.showTempHumidityCh3, let tempHumCh3 = data.tempAndHumidityCh3 {
+                                EditableWeatherCard(
+                                    title: .constant(station.customLabels.tempHumidityCh3),
+                                    systemImage: "thermometer",
+                                    onTitleChange: { newTitle in
+                                        station.customLabels.tempHumidityCh3 = newTitle
+                                        saveStation()
+                                    }
+                                ) {
+                                    VStack(spacing: 8) {
+                                        Text(TemperatureConverter.formatDualTemperature(tempHumCh3.temperature.value, originalUnit: tempHumCh3.temperature.unit))
+                                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                                        if let humidity = tempHumCh3.humidity {
+                                            Text("Humidity: \(humidity.value)\(humidity.unit)")
+                                                .font(.subheadline)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Battery Status Card
+                            if station.sensorPreferences.showBatteryStatus {
+                                EditableWeatherCard(
+                                    title: .constant(station.customLabels.batteryStatus),
+                                    systemImage: "battery.100",
+                                    onTitleChange: { newTitle in
+                                        station.customLabels.batteryStatus = newTitle
+                                        saveStation()
+                                    }
+                                ) {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        if let console = data.battery.console {
+                                            HStack {
+                                                Text("Console:")
+                                                Spacer()
+                                                Text("\(console.value) \(console.unit)")
+                                            }
+                                        }
+                                        if let haptic = data.battery.hapticArrayBattery {
+                                            HStack {
+                                                Text("Haptic Array:")
+                                                Spacer()
+                                                Text("\(haptic.value) \(haptic.unit)")
+                                            }
+                                        }
+                                        if let lightning = data.battery.lightningSensor {
+                                            HStack {
+                                                Text("Lightning Sensor:")
+                                                Spacer()
+                                                Text(batteryLevelText(lightning.value))
+                                            }
+                                        }
+                                        if let pm25Ch1 = data.battery.pm25SensorCh1 {
+                                            HStack {
+                                                Text("PM2.5 Ch1:")
+                                                Spacer()
+                                                Text(batteryLevelText(pm25Ch1.value))
+                                            }
+                                        }
+                                        if let pm25Ch2 = data.battery.pm25SensorCh2 {
+                                            HStack {
+                                                Text("PM2.5 Ch2:")
+                                                Spacer()
+                                                Text(batteryLevelText(pm25Ch2.value))
+                                            }
+                                        }
+                                    }
+                                    .font(.caption)
+                                }
+                            }
+                            
+                            // Sunrise/Sunset Card
+                            if station.sensorPreferences.showSunriseSunset && station.latitude != nil && station.longitude != nil {
+                                EditableWeatherCard(
+                                    title: .constant(station.customLabels.sunriseSunset),
+                                    systemImage: sunIconForCurrentTime(station: station),
+                                    onTitleChange: { newTitle in
+                                        station.customLabels.sunriseSunset = newTitle
+                                        saveStation()
+                                    }
+                                ) {
+                                    if let latitude = station.latitude, let longitude = station.longitude,
+                                       let sunTimes = SunCalculator.calculateSunTimes(for: Date(), latitude: latitude, longitude: longitude, timeZone: station.timeZone) {
+                                        VStack(alignment: .leading, spacing: 8) {
+                                            // Current status
+                                            HStack {
+                                                Image(systemName: sunTimes.isCurrentlyDaylight ? "sun.max.fill" : "moon.fill")
+                                                    .foregroundColor(sunTimes.isCurrentlyDaylight ? .orange : .blue)
+                                                Text(sunTimes.isCurrentlyDaylight ? "Daylight" : "Nighttime")
+                                                    .font(.headline)
+                                                    .fontWeight(.semibold)
+                                                Spacer()
+                                            }
+                                            
+                                            Divider()
+                                            
+                                            // Sunrise and sunset times
+                                            HStack {
+                                                VStack(alignment: .leading, spacing: 4) {
+                                                    HStack {
+                                                        Image(systemName: "sunrise.fill")
+                                                            .foregroundColor(.orange)
+                                                        Text("Sunrise")
+                                                            .font(.subheadline)
+                                                            .foregroundColor(.secondary)
+                                                    }
+                                                    Text(sunTimes.formattedSunrise)
+                                                        .font(.title2)
+                                                        .fontWeight(.bold)
+                                                }
+                                                
+                                                Spacer()
+                                                
+                                                VStack(alignment: .trailing, spacing: 4) {
+                                                    HStack {
+                                                        Text("Sunset")
+                                                            .font(.subheadline)
+                                                            .foregroundColor(.secondary)
+                                                        Image(systemName: "sunset.fill")
+                                                            .foregroundColor(.red)
+                                                    }
+                                                    Text(sunTimes.formattedSunset)
+                                                        .font(.title2)
+                                                        .fontWeight(.bold)
+                                                }
+                                            }
+                                            
+                                            // Day length
+                                            HStack {
+                                                Text("Day Length:")
+                                                    .font(.subheadline)
+                                                    .foregroundColor(.secondary)
+                                                Spacer()
+                                                Text(sunTimes.formattedDayLength)
+                                                    .font(.subheadline)
+                                                    .fontWeight(.semibold)
+                                            }
+                                            
+                                            // Next event
+                                            let nextEvent = SunCalculator.getNextSunEvent(latitude: latitude, longitude: longitude, timeZone: station.timeZone)
+                                            HStack {
+                                                Text("Next \(nextEvent.event):")
+                                                    .font(.subheadline)
+                                                    .foregroundColor(.secondary)
+                                                Spacer()
+                                                Text(nextEvent.time, style: .time)
+                                                    .font(.subheadline)
+                                                    .fontWeight(.semibold)
+                                            }
+                                        }
+                                    } else {
+                                        VStack(spacing: 8) {
+                                            Image(systemName: "location.slash")
+                                                .font(.system(size: 24))
+                                                .foregroundColor(.secondary)
+                                            Text("Location Required")
+                                                .font(.headline)
+                                                .foregroundColor(.secondary)
+                                            Text("Sunrise/sunset calculations require station location data")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                                .multilineTextAlignment(.center)
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Camera Card (show only for stations with associated cameras)
+                            if station.sensorPreferences.showCamera && station.associatedCameraMAC != nil {
+                                CameraTileView(station: station, onTitleChange: { newTitle in
+                                    station.customLabels.camera = newTitle
+                                    saveStation()
+                                })
+                            }
                         }
-                        
-                        // Camera Card (show only for stations with associated cameras)
-                        if station.sensorPreferences.showCamera && station.associatedCameraMAC != nil {
-                            CameraTileView(station: station, onTitleChange: { newTitle in
-                                station.customLabels.camera = newTitle
-                                saveStation()
-                            })
+                    } else {
+                        VStack(spacing: 20) {
+                            Image(systemName: "exclamationmark.triangle")
+                                .font(.system(size: 48))
+                                .foregroundColor(.orange)
+                            
+                            Text("No Data Available")
+                                .font(.title2)
+                                .fontWeight(.bold)
+                            
+                            Text("Tap refresh to load weather data for \(station.name)")
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
                         }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
-                } else {
-                    VStack(spacing: 20) {
-                        Image(systemName: "exclamationmark.triangle")
-                            .font(.system(size: 48))
-                            .foregroundColor(.orange)
-                        
-                        Text("No Data Available")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                        
-                        Text("Tap refresh to load weather data for \(station.name)")
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
+                .padding()
             }
-            .padding()
         }
         .navigationTitle(station.name)
         .toolbar {
@@ -541,6 +544,21 @@ struct WeatherStationDetailView: View {
                     }
             }
         }
+    }
+    
+    // Dynamic column calculation based on window width
+    private func calculateColumns(for width: CGFloat) -> Int {
+        let cardMinWidth: CGFloat = 300  // Minimum width for each card
+        let padding: CGFloat = 32       // Total horizontal padding
+        let spacing: CGFloat = 16       // Spacing between columns
+        
+        let availableWidth = width - padding
+        
+        // Calculate maximum possible columns
+        let maxColumns = max(1, Int((availableWidth + spacing) / (cardMinWidth + spacing)))
+        
+        // Cap at reasonable maximum for readability
+        return min(maxColumns, 5)
     }
     
     private func saveStation() {

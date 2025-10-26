@@ -12,8 +12,9 @@ struct Weather_Station_AppApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .frame(minWidth: 1000, minHeight: 700)
+                .frame(minWidth: 800, minHeight: 600)
         }
-        .windowResizability(.contentSize)
+        .windowResizability(.contentMinSize)
+        .defaultSize(width: 1200, height: 800)
     }
 }
