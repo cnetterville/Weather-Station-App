@@ -17,6 +17,7 @@ struct CameraTileView: View {
     @State private var lastUpdated: Date?
     @State private var imageTimestamp: String?
     @State private var showingFullScreen = false
+    @State private var refreshTimer: Timer?
     
     var body: some View {
         EditableWeatherCard(
@@ -80,6 +81,7 @@ struct CameraTileView: View {
                         
                         Button("Refresh") {
                             refreshCameraImage()
+                            resetRefreshTimer()
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.mini)
@@ -107,6 +109,7 @@ struct CameraTileView: View {
                         
                         Button("Try Again") {
                             refreshCameraImage()
+                            resetRefreshTimer()
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
@@ -125,6 +128,10 @@ struct CameraTileView: View {
         }
         .onAppear {
             refreshCameraImage()
+            startRefreshTimer()
+        }
+        .onDisappear {
+            stopRefreshTimer()
         }
     }
     
@@ -144,6 +151,22 @@ struct CameraTileView: View {
                 }
             }
         }
+    }
+    
+    private func startRefreshTimer() {
+        stopRefreshTimer() // Stop any existing timer
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { _ in
+            refreshCameraImage()
+        }
+    }
+    
+    private func stopRefreshTimer() {
+        refreshTimer?.invalidate()
+        refreshTimer = nil
+    }
+    
+    private func resetRefreshTimer() {
+        startRefreshTimer() // This will stop the existing timer and start a new one
     }
     
     private func formatCurrentTimestamp() -> String {
