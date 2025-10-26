@@ -107,7 +107,7 @@ struct TimestampExtractor {
         ]
         
         // Add optional sensors
-        var allOptionalSensors: [TimestampProvider?] = [
+        let allOptionalSensors: [TimestampProvider?] = [
             weatherData.rainfall,
             weatherData.pm25Ch2,
             weatherData.pm25Ch3,

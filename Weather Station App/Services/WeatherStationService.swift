@@ -109,7 +109,7 @@ class WeatherStationService: ObservableObject {
     
     private func shouldFetchFreshData(for station: WeatherStation) -> Bool {
         // Check if we have data and it's still fresh
-        if let lastData = weatherData[station.macAddress],
+        if let _ = weatherData[station.macAddress],
            let lastUpdated = station.lastUpdated,
            TimestampExtractor.isDataFresh(lastUpdated, freshnessDuration: dataFreshnessDuration) {
             let ageSeconds = Int(Date().timeIntervalSince(lastUpdated))
@@ -136,13 +136,13 @@ class WeatherStationService: ObservableObject {
         }
         
         // Request deduplication
-        await requestQueue.run {
+        _ = await requestQueue.run {
             self.pendingRequests.insert(station.macAddress)
         }
         
         defer {
             Task {
-                await requestQueue.run {
+                _ = await requestQueue.run {
                     self.pendingRequests.remove(station.macAddress)
                 }
             }
@@ -1217,17 +1217,17 @@ class WeatherStationService: ObservableObject {
         print("📊 [Station: \(station.name)] Attempting safe data extraction from available fields")
         
         // Create empty data structure and fill what we can
-        var extractedData = WeatherStationData.empty()
+        let extractedData = WeatherStationData.empty()
         
         // Extract outdoor data if available
-        if let outdoorDict = dataDict["outdoor"] as? [String: Any] {
+        if dataDict["outdoor"] != nil {
             print("📊 Found outdoor data for \(station.name)")
             // Try to extract basic outdoor measurements
             // This would need implementation based on your WeatherStationData model
         }
         
         // Extract indoor data if available
-        if let indoorDict = dataDict["indoor"] as? [String: Any] {
+        if dataDict["indoor"] != nil {
             print("📊 Found indoor data for \(station.name)")
             // Try to extract basic indoor measurements
         }
