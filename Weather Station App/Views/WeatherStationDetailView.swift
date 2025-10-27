@@ -745,10 +745,75 @@ struct WeatherStationDetailView: View {
                                         
                                         Divider()
                                         
+                                        // Daily Wind Maximums Section
+                                        if let windStats = getDailyWindStats(for: station, data: data) {
+                                            VStack(alignment: .leading, spacing: 8) {
+                                                Text("Today's Maximum")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                                    .fontWeight(.semibold)
+                                                
+                                                // Max Wind Speed and Gust
+                                                HStack(spacing: 16) {
+                                                    // Daily Max Wind Speed
+                                                    VStack(alignment: .leading, spacing: 2) {
+                                                        HStack(spacing: 4) {
+                                                            Image(systemName: "wind")
+                                                                .foregroundColor(.cyan)
+                                                                .font(.caption2)
+                                                            Text("Max Speed")
+                                                                .font(.caption)
+                                                                .foregroundColor(.secondary)
+                                                        }
+                                                        Text(windStats.formattedMaxSpeed)
+                                                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                                            .foregroundColor(.cyan)
+                                                        if windStats.isReliable && windStats.maxWindSpeedTime != nil {
+                                                            Text("at \(windStats.formattedMaxSpeedTime)")
+                                                                .font(.caption2)
+                                                                .foregroundColor(.secondary)
+                                                        }
+                                                    }
+                                                    
+                                                    Spacer()
+                                                    
+                                                    // Daily Max Wind Gust
+                                                    VStack(alignment: .trailing, spacing: 2) {
+                                                        HStack(spacing: 4) {
+                                                            Text("Max Gust")
+                                                                .font(.caption)
+                                                                .foregroundColor(.secondary)
+                                                            Image(systemName: "tornado")
+                                                                .foregroundColor(.orange)
+                                                                .font(.caption2)
+                                                        }
+                                                        Text(windStats.formattedMaxGust)
+                                                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                                            .foregroundColor(.orange)
+                                                        if windStats.isReliable && windStats.maxWindGustTime != nil {
+                                                            Text("at \(windStats.formattedMaxGustTime)")
+                                                                .font(.caption2)
+                                                                .foregroundColor(.secondary)
+                                                        }
+                                                    }
+                                                }
+                                                
+                                                // Confidence indicator for wind data
+                                                if !windStats.isReliable {
+                                                    Text(windStats.confidenceDescription)
+                                                        .font(.caption2)
+                                                        .foregroundColor(.secondary)
+                                                        .italic()
+                                                }
+                                            }
+                                            
+                                            Divider()
+                                        }
+                                        
                                         // Additional Wind Information
                                         VStack(spacing: 6) {
                                             HStack {
-                                                Text("Wind Gusts:")
+                                                Text("Current Gusts:")
                                                     .font(.subheadline)
                                                 Spacer()
                                                 Text(MeasurementConverter.formatWindSpeed(data.wind.windGust.value, originalUnit: data.wind.windGust.unit))
@@ -1024,20 +1089,39 @@ struct WeatherStationDetailView: View {
                                     }
                                 ) {
                                     VStack(alignment: .leading, spacing: 4) {
+                                        // Main Console and Haptic Array
                                         if let console = data.battery.console {
                                             HStack {
                                                 Text("Console:")
                                                 Spacer()
                                                 Text("\(console.value) \(console.unit)")
+                                                    .fontWeight(.semibold)
                                             }
                                         }
+                                        
                                         if let haptic = data.battery.hapticArrayBattery {
                                             HStack {
                                                 Text("Haptic Array:")
                                                 Spacer()
                                                 Text("\(haptic.value) \(haptic.unit)")
+                                                    .fontWeight(.semibold)
                                             }
                                         }
+                                        
+                                        // Haptic Capacitor - moved up for better visibility
+                                        if let hapticCap = data.battery.hapticArrayCapacitor {
+                                            HStack {
+                                                Text("Haptic Capacitor:")
+                                                Spacer()
+                                                Text("\(hapticCap.value) \(hapticCap.unit)")
+                                                    .fontWeight(.semibold)
+                                                    .foregroundColor(.blue)
+                                            }
+                                        }
+                                        
+                                        Divider()
+                                        
+                                        // Sensor Batteries
                                         if let lightning = data.battery.lightningSensor {
                                             HStack {
                                                 Text("Lightning Sensor:")
@@ -1045,6 +1129,15 @@ struct WeatherStationDetailView: View {
                                                 Text(batteryLevelText(lightning.value))
                                             }
                                         }
+                                        
+                                        if let rainfall = data.battery.rainfallSensor {
+                                            HStack {
+                                                Text("Rainfall Sensor:")
+                                                Spacer()
+                                                Text("\(rainfall.value) \(rainfall.unit)")
+                                            }
+                                        }
+                                        
                                         if let pm25Ch1 = data.battery.pm25SensorCh1 {
                                             HStack {
                                                 Text("PM2.5 Ch1:")
@@ -1052,6 +1145,7 @@ struct WeatherStationDetailView: View {
                                                 Text(batteryLevelText(pm25Ch1.value))
                                             }
                                         }
+                                        
                                         if let pm25Ch2 = data.battery.pm25SensorCh2 {
                                             HStack {
                                                 Text("PM2.5 Ch2:")
@@ -1060,20 +1154,6 @@ struct WeatherStationDetailView: View {
                                             }
                                         }
                                         
-                                        if let hapticCap = data.battery.hapticArrayCapacitor {
-                                            HStack {
-                                                Text("Haptic Capacitor:")
-                                                Spacer()
-                                                Text("\(hapticCap.value) \(hapticCap.unit)")
-                                            }
-                                        }
-                                        if let rainfall = data.battery.rainfallSensor {
-                                            HStack {
-                                                Text("Rainfall Sensor:")
-                                                Spacer()
-                                                Text("\(rainfall.value) \(rainfall.unit)")
-                                            }
-                                        }
                                         if let th1 = data.battery.tempHumiditySensorCh1 {
                                             HStack {
                                                 Text("Temp/Humidity Ch1:")
@@ -1081,6 +1161,7 @@ struct WeatherStationDetailView: View {
                                                 Text(tempHumidityBatteryStatusText(th1.value))
                                             }
                                         }
+                                        
                                         if let th2 = data.battery.tempHumiditySensorCh2 {
                                             HStack {
                                                 Text("Temp/Humidity Ch2:")
@@ -1088,6 +1169,7 @@ struct WeatherStationDetailView: View {
                                                 Text(tempHumidityBatteryStatusText(th2.value))
                                             }
                                         }
+                                        
                                         if let th3 = data.battery.tempHumiditySensorCh3 {
                                             HStack {
                                                 Text("Temp/Humidity Ch3:")
@@ -1325,94 +1407,92 @@ struct WeatherStationDetailView: View {
         return sunTimes.isCurrentlyDaylight ? "sun.max.fill" : "moon.stars.fill"
     }
     
-    // Helper method to get daily temperature stats
+    // MARK: - Daily Statistics Helper Functions
+    
     private func getDailyTemperatureStats(for station: WeatherStation, data: WeatherStationData) -> DailyTemperatureStats? {
-        let historicalData = weatherService.historicalData[station.macAddress]
         return DailyTemperatureCalculator.getDailyStats(
             weatherData: data,
-            historicalData: historicalData,
+            historicalData: weatherService.historicalData[station.macAddress],
             station: station
         )
     }
     
-    // Helper method to get daily humidity stats
     private func getDailyHumidityStats(for station: WeatherStation, data: WeatherStationData) -> DailyHumidityStats? {
-        let historicalData = weatherService.historicalData[station.macAddress]
         return DailyTemperatureCalculator.getDailyHumidityStats(
             weatherData: data,
-            historicalData: historicalData,
+            historicalData: weatherService.historicalData[station.macAddress],
+            station: station
+        )
+    }
+    
+    private func getDailyWindStats(for station: WeatherStation, data: WeatherStationData) -> DailyWindStats? {
+        return DailyTemperatureCalculator.getDailyWindStats(
+            weatherData: data,
+            historicalData: weatherService.historicalData[station.macAddress],
             station: station
         )
     }
     
     private func getIndoorDailyTemperatureStats(for station: WeatherStation, data: WeatherStationData) -> DailyTemperatureStats? {
-        let historicalData = weatherService.historicalData[station.macAddress]
         return DailyTemperatureCalculator.getIndoorDailyStats(
             weatherData: data,
-            historicalData: historicalData,
+            historicalData: weatherService.historicalData[station.macAddress],
             station: station
         )
     }
     
     private func getIndoorDailyHumidityStats(for station: WeatherStation, data: WeatherStationData) -> DailyHumidityStats? {
-        let historicalData = weatherService.historicalData[station.macAddress]
         return DailyTemperatureCalculator.getIndoorDailyHumidityStats(
             weatherData: data,
-            historicalData: historicalData,
+            historicalData: weatherService.historicalData[station.macAddress],
             station: station
         )
     }
     
     private func getTempHumidityCh1DailyTemperatureStats(for station: WeatherStation, data: WeatherStationData) -> DailyTemperatureStats? {
-        let historicalData = weatherService.historicalData[station.macAddress]
         return DailyTemperatureCalculator.getTempHumidityCh1DailyStats(
             weatherData: data,
-            historicalData: historicalData,
+            historicalData: weatherService.historicalData[station.macAddress],
             station: station
         )
     }
     
     private func getTempHumidityCh1DailyHumidityStats(for station: WeatherStation, data: WeatherStationData) -> DailyHumidityStats? {
-        let historicalData = weatherService.historicalData[station.macAddress]
         return DailyTemperatureCalculator.getTempHumidityCh1DailyHumidityStats(
             weatherData: data,
-            historicalData: historicalData,
+            historicalData: weatherService.historicalData[station.macAddress],
             station: station
         )
     }
     
     private func getTempHumidityCh2DailyTemperatureStats(for station: WeatherStation, data: WeatherStationData) -> DailyTemperatureStats? {
-        let historicalData = weatherService.historicalData[station.macAddress]
         return DailyTemperatureCalculator.getTempHumidityCh2DailyStats(
             weatherData: data,
-            historicalData: historicalData,
+            historicalData: weatherService.historicalData[station.macAddress],
             station: station
         )
     }
     
     private func getTempHumidityCh2DailyHumidityStats(for station: WeatherStation, data: WeatherStationData) -> DailyHumidityStats? {
-        let historicalData = weatherService.historicalData[station.macAddress]
         return DailyTemperatureCalculator.getTempHumidityCh2DailyHumidityStats(
             weatherData: data,
-            historicalData: historicalData,
+            historicalData: weatherService.historicalData[station.macAddress],
             station: station
         )
     }
     
     private func getTempHumidityCh3DailyTemperatureStats(for station: WeatherStation, data: WeatherStationData) -> DailyTemperatureStats? {
-        let historicalData = weatherService.historicalData[station.macAddress]
         return DailyTemperatureCalculator.getTempHumidityCh3DailyStats(
             weatherData: data,
-            historicalData: historicalData,
+            historicalData: weatherService.historicalData[station.macAddress],
             station: station
         )
     }
     
     private func getTempHumidityCh3DailyHumidityStats(for station: WeatherStation, data: WeatherStationData) -> DailyHumidityStats? {
-        let historicalData = weatherService.historicalData[station.macAddress]
         return DailyTemperatureCalculator.getTempHumidityCh3DailyHumidityStats(
             weatherData: data,
-            historicalData: historicalData,
+            historicalData: weatherService.historicalData[station.macAddress],
             station: station
         )
     }

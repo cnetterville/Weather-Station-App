@@ -423,10 +423,11 @@ class WeatherStationService: ObservableObject {
         print("📊 Fetching today's historical data for \(station.name)...")
         
         // Fetch hourly data for today to get good high/low resolution
+        // Include wind data for daily max wind/gust calculations
         await fetchHistoricalData(
             for: station,
             timeRange: .last24Hours,
-            sensors: ["outdoor"] // Just outdoor temperature for efficiency
+            sensors: ["outdoor", "wind"] // Include wind data for daily max calculations
         )
         
         print("📊 Completed today's historical data fetch for: \(station.name)")
@@ -650,7 +651,7 @@ class WeatherStationService: ObservableObject {
                         // Log discovered stations
                         for device in discoveredStations {
                             print("📍 Found device: \(device.name) (\(device.mac))")
-                            print("   Device Type: \(device.type) (\(deviceTypeDescription(device.type)))")
+                            print("   Device Type: \(device.type) (\(self.deviceTypeDescription(device.type)))")
                             if let stationType = device.stationtype {
                                 print("   Station Type: \(stationType)")
                             }

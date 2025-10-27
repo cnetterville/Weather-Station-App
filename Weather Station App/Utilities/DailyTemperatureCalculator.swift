@@ -105,6 +105,55 @@ struct DailyHumidityStats {
     }
 }
 
+struct DailyWindStats {
+    let maxWindSpeed: Double
+    let maxWindGust: Double
+    let maxWindSpeedTime: Date?
+    let maxWindGustTime: Date?
+    let unit: String
+    let dataPointCount: Int
+    let isFromHistoricalData: Bool
+    
+    var formattedMaxSpeed: String {
+        MeasurementConverter.formatWindSpeed(String(format: "%.1f", maxWindSpeed), originalUnit: unit)
+    }
+    
+    var formattedMaxGust: String {
+        MeasurementConverter.formatWindSpeed(String(format: "%.1f", maxWindGust), originalUnit: unit)
+    }
+    
+    var formattedMaxSpeedTime: String {
+        guard let time = maxWindSpeedTime else { return "Unknown" }
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter.string(from: time)
+    }
+    
+    var formattedMaxGustTime: String {
+        guard let time = maxWindGustTime else { return "Unknown" }
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter.string(from: time)
+    }
+    
+    var isReliable: Bool {
+        return isFromHistoricalData && dataPointCount >= 2
+    }
+    
+    var confidenceDescription: String {
+        if isFromHistoricalData {
+            switch dataPointCount {
+            case 0...1: return "Limited data"
+            case 2...5: return "Based on \(dataPointCount) readings"
+            case 6...12: return "Good data coverage"
+            default: return "Excellent data coverage"
+            }
+        } else {
+            return "Estimated from current conditions"
+        }
+    }
+}
+
 class DailyTemperatureCalculator {
     
     // MARK: - Temperature Calculations
@@ -388,6 +437,115 @@ class DailyTemperatureCalculator {
         )
     }
     
+    // MARK: - Wind Calculations
+    
+    static func calculateDailyWindStats(from historicalData: HistoricalWeatherData?, for date: Date = Date(), timeZone: TimeZone = .current) -> DailyWindStats? {
+        guard let windData = historicalData?.wind else {
+            return nil
+        }
+        
+        let windSpeedUnit = windData.windSpeed?.unit ?? "mph"
+        let windGustUnit = windData.windGust?.unit ?? "mph"
+        
+        var windSpeedReadings: [(speed: Double, time: Date)] = []
+        var windGustReadings: [(gust: Double, time: Date)] = []
+        
+        let calendar = Calendar.current
+        let targetDay = calendar.startOfDay(for: date)
+        let nextDay = calendar.date(byAdding: .day, value: 1, to: targetDay) ?? targetDay
+        
+        // Process wind speed readings
+        if let windSpeedData = windData.windSpeed {
+            for (timestampString, valueString) in windSpeedData.list {
+                guard let timestamp = Double(timestampString),
+                      let windSpeed = Double(valueString) else {
+                    continue
+                }
+                
+                let readingDate = Date(timeIntervalSince1970: timestamp)
+                
+                if readingDate >= targetDay && readingDate < nextDay {
+                    windSpeedReadings.append((speed: windSpeed, time: readingDate))
+                }
+            }
+        }
+        
+        // Process wind gust readings
+        if let windGustData = windData.windGust {
+            for (timestampString, valueString) in windGustData.list {
+                guard let timestamp = Double(timestampString),
+                      let windGust = Double(valueString) else {
+                    continue
+                }
+                
+                let readingDate = Date(timeIntervalSince1970: timestamp)
+                
+                if readingDate >= targetDay && readingDate < nextDay {
+                    windGustReadings.append((gust: windGust, time: readingDate))
+                }
+            }
+        }
+        
+        guard !windSpeedReadings.isEmpty || !windGustReadings.isEmpty else {
+            return nil
+        }
+        
+        // Find maximum wind speed
+        let maxSpeedReading = windSpeedReadings.max { $0.speed < $1.speed }
+        let maxGustReading = windGustReadings.max { $0.gust < $1.gust }
+        
+        let maxWindSpeed = maxSpeedReading?.speed ?? 0
+        let maxWindGust = maxGustReading?.gust ?? 0
+        let maxWindSpeedTime = maxSpeedReading?.time
+        let maxWindGustTime = maxGustReading?.time
+        
+        // Use the more common unit (prefer wind speed unit over gust unit)
+        let unit = windSpeedUnit
+        
+        return DailyWindStats(
+            maxWindSpeed: maxWindSpeed,
+            maxWindGust: maxWindGust,
+            maxWindSpeedTime: maxWindSpeedTime,
+            maxWindGustTime: maxWindGustTime,
+            unit: unit,
+            dataPointCount: windSpeedReadings.count + windGustReadings.count,
+            isFromHistoricalData: true
+        )
+    }
+    
+    static func estimateWindFromCurrentData(currentWindSpeed: String, currentWindGust: String, unit: String, station: WeatherStation) -> DailyWindStats? {
+        guard let windSpeed = Double(currentWindSpeed),
+              let windGust = Double(currentWindGust) else { return nil }
+        
+        let calendar = Calendar.current
+        let now = Date()
+        let hour = calendar.component(.hour, from: now)
+        
+        // Estimate daily max based on time of day
+        // Wind typically picks up during the day and calms at night
+        let dailyWindFactor: Double
+        if hour >= 6 && hour <= 18 {
+            // During the day, current readings might be close to daily max
+            dailyWindFactor = 1.2
+        } else {
+            // At night, winds are typically calmer, so daily max might be higher
+            dailyWindFactor = 1.8
+        }
+        
+        let estimatedMaxSpeed = max(windSpeed * dailyWindFactor, windSpeed)
+        let estimatedMaxGust = max(windGust * dailyWindFactor, windGust)
+        
+        return DailyWindStats(
+            maxWindSpeed: estimatedMaxSpeed,
+            maxWindGust: estimatedMaxGust,
+            maxWindSpeedTime: nil,
+            maxWindGustTime: nil,
+            unit: unit,
+            dataPointCount: 1,
+            isFromHistoricalData: false
+        )
+    }
+    
     // MARK: - Helper Methods
     
     private static func estimateDailyRange(dayOfYear: Int) -> Double {
@@ -419,6 +577,20 @@ class DailyTemperatureCalculator {
         return estimateHumidityFromCurrentData(
             currentHumidity: weatherData.outdoor.humidity.value,
             unit: weatherData.outdoor.humidity.unit,
+            station: station
+        )
+    }
+    
+    static func getDailyWindStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyWindStats? {
+        if let historical = historicalData,
+           let stats = calculateDailyWindStats(from: historical, for: date, timeZone: station.timeZone) {
+            return stats
+        }
+        
+        return estimateWindFromCurrentData(
+            currentWindSpeed: weatherData.wind.windSpeed.value,
+            currentWindGust: weatherData.wind.windGust.value,
+            unit: weatherData.wind.windSpeed.unit,
             station: station
         )
     }
