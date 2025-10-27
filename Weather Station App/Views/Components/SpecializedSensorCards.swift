@@ -392,12 +392,20 @@ struct SunTimesView: View {
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                     Spacer()
-                    Text(nextEvent.time, style: .time)
+                    Text(formatTimeInTimeZone(nextEvent.time, timeZone: station.timeZone))
                         .font(.subheadline)
                         .fontWeight(.semibold)
                 }
             }
         }
+    }
+    
+    // Helper function to format time in the correct timezone
+    private func formatTimeInTimeZone(_ date: Date, timeZone: TimeZone) -> String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        formatter.timeZone = timeZone
+        return formatter.string(from: date)
     }
 }
 
