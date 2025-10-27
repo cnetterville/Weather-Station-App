@@ -152,6 +152,7 @@ struct AdditionalWindInfoView: View {
                 let convertedSpeeds = MeasurementConverter.convertWindSpeed(data.wind.windSpeed.value, from: data.wind.windSpeed.unit)
                 let windSpeedMph = Double(convertedSpeeds.mph) ?? windSpeedValue
                 let beaufortScale = WindHelpers.getBeaufortScale(windSpeedMph: windSpeedMph)
+                
                 HStack {
                     Text("Beaufort Scale:")
                         .font(.subheadline)
@@ -160,6 +161,15 @@ struct AdditionalWindInfoView: View {
                         .font(.subheadline)
                         .fontWeight(.semibold)
                         .foregroundColor(.blue)
+                }
+                .onAppear {
+                    // Debug logging
+                    print("🌬️ Beaufort Debug:")
+                    print("  Original value: \(data.wind.windSpeed.value)")
+                    print("  Original unit: \(data.wind.windSpeed.unit)")  
+                    print("  Converted MPH: \(convertedSpeeds.mph)")
+                    print("  Parsed MPH: \(windSpeedMph)")
+                    print("  Beaufort result: \(beaufortScale.number) - \(beaufortScale.description)")
                 }
             }
         }
