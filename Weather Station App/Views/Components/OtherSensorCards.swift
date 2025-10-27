@@ -402,15 +402,36 @@ struct AirQualityCard: View {
                         currentAQI: Int(data.realTimeAqi.value) ?? 0
                     )
                 } else {
-                    // Fallback when no high/low data available
-                    HStack {
-                        Text("Daily High/Low:")
+                    // Enhanced fallback when no high/low data available
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Today's Range")
                             .font(.caption)
                             .foregroundColor(.secondary)
-                        Spacer()
-                        Text("Loading...")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                            .fontWeight(.semibold)
+                        
+                        HStack {
+                            Text("Historical data:")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Text("Loading...")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        // Show current health impact while waiting for historical data
+                        let currentAQI = Int(data.realTimeAqi.value) ?? 0
+                        let aqiCategory = AirQualityHelpers.getAQICategory(aqi: currentAQI)
+                        
+                        HStack {
+                            Image(systemName: "info.circle")
+                                .foregroundColor(aqiCategory.color)
+                                .font(.caption)
+                            Text("Current: \(aqiCategory.healthImpact)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                        }
                     }
                 }
             }

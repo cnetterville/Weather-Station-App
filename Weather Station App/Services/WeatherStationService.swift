@@ -449,7 +449,7 @@ class WeatherStationService: ObservableObject {
         await fetchHistoricalData(
             for: station,
             timeRange: .last24Hours, 
-            sensors: ["outdoor", "indoor", "temp_and_humidity_ch1", "temp_and_humidity_ch2", "temp_and_humidity_ch3", "wind", "pressure", "lightning"] 
+            sensors: ["outdoor", "indoor", "temp_and_humidity_ch1", "temp_and_humidity_ch2", "temp_and_humidity_ch3", "wind", "pressure", "lightning", "pm25_ch1", "pm25_ch2", "pm25_ch3"] 
         )
         
         // If we don't have enough lightning data, fetch more for better last lightning detection
@@ -465,7 +465,7 @@ class WeatherStationService: ObservableObject {
         print(" Completed today's historical data fetch for: \(station.name)")
     }
     
-    func fetchHistoricalData(for station: WeatherStation, timeRange: HistoricalTimeRange, sensors: [String] = ["outdoor", "indoor", "temp_and_humidity_ch1", "temp_and_humidity_ch2", "temp_and_humidity_ch3", "rainfall_piezo", "wind", "pressure"]) async {
+    func fetchHistoricalData(for station: WeatherStation, timeRange: HistoricalTimeRange, sensors: [String] = ["outdoor", "indoor", "temp_and_humidity_ch1", "temp_and_humidity_ch2", "temp_and_humidity_ch3", "rainfall_piezo", "wind", "pressure", "pm25_ch1", "pm25_ch2", "pm25_ch3"]) async {
         guard credentials.isValid else {
             await MainActor.run {
                 errorMessage = "API credentials are not configured"

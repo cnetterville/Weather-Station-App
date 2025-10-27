@@ -195,9 +195,11 @@ struct AirQualitySensorCards: View {
                         weatherService.updateStation(station)
                     },
                     getDailyPM25Stats: {
-                        // Note: There's no pm25Ch3 in HistoricalWeatherData yet, 
-                        // so this will return nil until historical data structure is updated
-                        nil
+                        DailyTemperatureCalculator.getDailyPM25Ch3Stats(
+                            weatherData: data,
+                            historicalData: weatherService.historicalData[station.macAddress],
+                            station: station
+                        )
                     }
                 )
             }

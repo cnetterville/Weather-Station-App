@@ -25,6 +25,7 @@ struct HistoricalWeatherData: Codable {
     let lightning: HistoricalLightningData?
     let pm25Ch1: HistoricalPM25Data?
     let pm25Ch2: HistoricalPM25Data?
+    let pm25Ch3: HistoricalPM25Data?
     let tempAndHumidityCh1: HistoricalTempHumidityData?
     let tempAndHumidityCh2: HistoricalTempHumidityData?
     let tempAndHumidityCh3: HistoricalTempHumidityData?
@@ -35,6 +36,7 @@ struct HistoricalWeatherData: Codable {
         case rainfallPiezo = "rainfall_piezo"
         case pm25Ch1 = "pm25_ch1"
         case pm25Ch2 = "pm25_ch2"
+        case pm25Ch3 = "pm25_ch3"
         case tempAndHumidityCh1 = "temp_and_humidity_ch1"
         case tempAndHumidityCh2 = "temp_and_humidity_ch2"
         case tempAndHumidityCh3 = "temp_and_humidity_ch3"
