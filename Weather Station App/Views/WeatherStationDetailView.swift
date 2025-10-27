@@ -1068,12 +1068,78 @@ struct WeatherStationDetailView: View {
                                         saveStation()
                                     }
                                 ) {
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        Text(MeasurementConverter.formatDistance(data.lightning.distance.value, originalUnit: data.lightning.distance.unit))
-                                            .font(.system(size: 24, weight: .bold, design: .rounded))
-                                        Text("Count: \(data.lightning.count.value)")
-                                            .font(.subheadline)
-                                            .foregroundColor(.secondary)
+                                    VStack(alignment: .leading, spacing: 12) {
+                                        // Current Lightning Distance - Main Display
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text("Current Distance")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                            Text(MeasurementConverter.formatDistance(data.lightning.distance.value, originalUnit: data.lightning.distance.unit))
+                                                .font(.system(size: 24, weight: .bold, design: .rounded))
+                                                .foregroundColor(.orange)
+                                        }
+                                        
+                                        // Current Lightning Count
+                                        HStack {
+                                            Text("Current Count:")
+                                                .font(.subheadline)
+                                            Spacer()
+                                            Text(data.lightning.count.value)
+                                                .font(.subheadline)
+                                                .fontWeight(.semibold)
+                                                .foregroundColor(.secondary)
+                                        }
+                                        
+                                        Divider()
+                                        
+                                        // Last Lightning Detection
+                                        if let lightningStats = getLastLightningStats(for: station, data: data) {
+                                            VStack(alignment: .leading, spacing: 8) {
+                                                Text("Last Lightning Detection")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                                    .fontWeight(.semibold)
+                                                
+                                                HStack {
+                                                    Image(systemName: lightningStats.lastDetectionTime != nil ? "clock.fill" : "clock")
+                                                        .foregroundColor(lightningStats.lastDetectionTime != nil ? .yellow : .secondary)
+                                                        .font(.caption)
+                                                    
+                                                    Text(lightningStats.formattedLastDetection)
+                                                        .font(.subheadline)
+                                                        .fontWeight(.semibold)
+                                                        .foregroundColor(lightningStats.lastDetectionTime != nil ? .primary : .secondary)
+                                                    
+                                                    Spacer()
+                                                }
+                                                
+                                                // Confidence/search range indicator
+                                                Text(lightningStats.confidenceDescription)
+                                                    .font(.caption2)
+                                                    .foregroundColor(.secondary)
+                                                    .italic()
+                                            }
+                                        } else {
+                                            // Fallback when no lightning data available
+                                            VStack(alignment: .leading, spacing: 4) {
+                                                Text("Last Lightning Detection")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                                    .fontWeight(.semibold)
+                                                
+                                                HStack {
+                                                    Image(systemName: "clock")
+                                                        .foregroundColor(.secondary)
+                                                        .font(.caption)
+                                                    
+                                                    Text("No data available")
+                                                        .font(.subheadline)
+                                                        .foregroundColor(.secondary)
+                                                    
+                                                    Spacer()
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -1494,6 +1560,15 @@ struct WeatherStationDetailView: View {
             weatherData: data,
             historicalData: weatherService.historicalData[station.macAddress],
             station: station
+        )
+    }
+    
+    private func getLastLightningStats(for station: WeatherStation, data: WeatherStationData) -> LastLightningStats? {
+        return DailyTemperatureCalculator.getLastLightningStats(
+            weatherData: data,
+            historicalData: weatherService.historicalData[station.macAddress],
+            station: station,
+            daysToSearch: 7
         )
     }
     

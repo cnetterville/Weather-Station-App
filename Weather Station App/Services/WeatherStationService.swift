@@ -418,17 +418,50 @@ class WeatherStationService: ObservableObject {
         return false
     }
     
+    private func hasRecentLightningHistoricalData(for station: WeatherStation, daysBack: Int = 7) -> Bool {
+        guard let historical = historicalData[station.macAddress],
+              let lightning = historical.lightning,
+              let lightningCount = lightning.count else {
+            return false
+        }
+        
+        let calendar = Calendar.current
+        let cutoffDate = calendar.date(byAdding: .day, value: -daysBack, to: Date()) ?? Date()
+        
+        // Check if we have lightning data from the last 7 days
+        for (timestampString, _) in lightningCount.list {
+            if let timestamp = Double(timestampString) {
+                let readingDate = Date(timeIntervalSince1970: timestamp)
+                if readingDate >= cutoffDate {
+                    return true
+                }
+            }
+        }
+        
+        return false
+    }
+    
     // Fetch today's historical data for high/low temperature calculations
     private func fetchTodaysHistoricalData(for station: WeatherStation) async {
         print("📊 Fetching today's historical data for \(station.name)...")
         
         // Fetch hourly data for today to get good high/low resolution
-        // Include wind data for daily max wind/gust calculations
+        // Include wind data for daily max calculations and lightning for last detection
         await fetchHistoricalData(
             for: station,
             timeRange: .last24Hours,
-            sensors: ["outdoor", "wind"] // Include wind data for daily max calculations
+            sensors: ["outdoor", "wind", "lightning"] // Include lightning data for last detection calculations
         )
+        
+        // If we don't have enough lightning data, fetch more for better last lightning detection
+        if !hasRecentLightningHistoricalData(for: station) {
+            print("📊 Fetching additional lightning historical data for \(station.name)...")
+            await fetchHistoricalData(
+                for: station,
+                timeRange: .last7Days,
+                sensors: ["lightning"] // Just lightning data for last detection
+            )
+        }
         
         print("📊 Completed today's historical data fetch for: \(station.name)")
     }

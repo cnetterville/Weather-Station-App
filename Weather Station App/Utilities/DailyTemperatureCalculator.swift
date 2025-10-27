@@ -154,6 +154,51 @@ struct DailyWindStats {
     }
 }
 
+struct LastLightningStats {
+    let lastDetectionTime: Date?
+    let isFromHistoricalData: Bool
+    let searchedDaysBack: Int
+    
+    var formattedLastDetection: String {
+        guard let lastTime = lastDetectionTime else {
+            return "No recent lightning detected"
+        }
+        
+        return formatTimeAgo(from: lastTime)
+    }
+    
+    var confidenceDescription: String {
+        if isFromHistoricalData {
+            if searchedDaysBack >= 7 {
+                return "Searched last \(searchedDaysBack) days"
+            } else {
+                return "Searched today only"
+            }
+        } else {
+            return "Based on current data only"
+        }
+    }
+    
+    private func formatTimeAgo(from date: Date) -> String {
+        let now = Date()
+        let timeInterval = now.timeIntervalSince(date)
+        
+        let minutes = Int(timeInterval / 60)
+        let hours = Int(timeInterval / 3600)
+        let days = Int(timeInterval / 86400)
+        
+        if days > 0 {
+            return days == 1 ? "1 Day Ago" : "\(days) Days Ago"
+        } else if hours > 0 {
+            return hours == 1 ? "1 Hour Ago" : "\(hours) Hours Ago"
+        } else if minutes > 0 {
+            return minutes == 1 ? "1 Minute Ago" : "\(minutes) Minutes Ago"
+        } else {
+            return "Just Now"
+        }
+    }
+}
+
 class DailyTemperatureCalculator {
     
     // MARK: - Temperature Calculations
@@ -546,6 +591,94 @@ class DailyTemperatureCalculator {
         )
     }
     
+    // MARK: - Lightning Calculations
+    
+    static func calculateLastLightningDetection(from historicalData: HistoricalWeatherData?, currentLightningCount: String, daysToSearch: Int = 7) -> LastLightningStats? {
+        // First, check if there's any current lightning activity
+        if let currentCount = Int(currentLightningCount), currentCount > 0 {
+            // Lightning detected recently (within current reading period)
+            return LastLightningStats(
+                lastDetectionTime: Date(), // Very recent
+                isFromHistoricalData: false,
+                searchedDaysBack: 0
+            )
+        }
+        
+        // Search historical lightning data
+        guard let lightningData = historicalData?.lightning,
+              let countData = lightningData.count else {
+            return LastLightningStats(
+                lastDetectionTime: nil,
+                isFromHistoricalData: false,
+                searchedDaysBack: 0
+            )
+        }
+        
+        let calendar = Calendar.current
+        let now = Date()
+        let searchStartDate = calendar.date(byAdding: .day, value: -daysToSearch, to: now) ?? now
+        
+        var mostRecentLightningTime: Date?
+        var actualDaysSearched = 0
+        
+        // Sort lightning count readings by timestamp (most recent first)
+        let sortedReadings = countData.list.compactMap { (timestampString, countString) -> (Date, Int)? in
+            guard let timestamp = Double(timestampString),
+                  let count = Int(countString) else {
+                return nil
+            }
+            
+            let readingDate = Date(timeIntervalSince1970: timestamp)
+            
+            // Only consider readings within our search window
+            guard readingDate >= searchStartDate && readingDate <= now else {
+                return nil
+            }
+            
+            return (readingDate, count)
+        }.sorted { $0.0 > $1.0 } // Sort by date, most recent first
+        
+        if !sortedReadings.isEmpty {
+            let oldestReading = sortedReadings.last!.0
+            let daysDifference = calendar.dateComponents([.day], from: oldestReading, to: now).day ?? 0
+            actualDaysSearched = min(daysToSearch, daysDifference + 1)
+        }
+        
+        // Look for the most recent non-zero lightning count
+        // Lightning count represents cumulative count, so we need to find when it last increased
+        var previousCount: Int?
+        
+        for (readingDate, count) in sortedReadings {
+            if let prevCount = previousCount {
+                // If current count is higher than previous count, lightning was detected at this time
+                if count > prevCount {
+                    mostRecentLightningTime = readingDate
+                    break
+                }
+            }
+            previousCount = count
+        }
+        
+        // If we didn't find an increase, but we have a non-zero count in our search period,
+        // lightning was detected before our search window
+        if mostRecentLightningTime == nil {
+            for (_, count) in sortedReadings {
+                if count > 0 {
+                    // Lightning was detected, but before our search window
+                    // Set the time to the beginning of our search window as a conservative estimate
+                    mostRecentLightningTime = searchStartDate
+                    break
+                }
+            }
+        }
+        
+        return LastLightningStats(
+            lastDetectionTime: mostRecentLightningTime,
+            isFromHistoricalData: true,
+            searchedDaysBack: actualDaysSearched
+        )
+    }
+    
     // MARK: - Helper Methods
     
     private static func estimateDailyRange(dayOfYear: Int) -> Double {
@@ -592,6 +725,14 @@ class DailyTemperatureCalculator {
             currentWindGust: weatherData.wind.windGust.value,
             unit: weatherData.wind.windSpeed.unit,
             station: station
+        )
+    }
+    
+    static func getLastLightningStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, daysToSearch: Int = 7) -> LastLightningStats? {
+        return calculateLastLightningDetection(
+            from: historicalData,
+            currentLightningCount: weatherData.lightning.count.value,
+            daysToSearch: daysToSearch
         )
     }
     
