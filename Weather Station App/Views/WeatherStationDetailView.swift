@@ -49,16 +49,29 @@ struct WeatherStationDetailView: View {
             }
         }
         .sheet(isPresented: $showingHistory) {
-            NavigationView {
-                HistoricalChartView(station: station)
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Done") {
-                                showingHistory = false
-                            }
-                        }
+            VStack(spacing: 0) {
+                // Header with Done button
+                HStack {
+                    Text("Historical Weather Data - \(station.name)")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                    
+                    Spacer()
+                    
+                    Button("Done") {
+                        showingHistory = false
                     }
+                    .buttonStyle(.borderedProminent)
+                }
+                .padding()
+                .background(Color(NSColor.controlBackgroundColor))
+                
+                Divider()
+                
+                // Chart content
+                HistoricalChartView(station: station)
             }
+            .frame(minWidth: 800, minHeight: 600)
         }
     }
 }
