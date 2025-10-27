@@ -47,15 +47,9 @@ struct WeatherStationDetailView: View {
                                                     .font(.subheadline)
                                                     .foregroundColor(.secondary)
                                                 
-                                                // Outdoor Humidity
-                                                HStack(spacing: 4) {
-                                                    Image(systemName: "humidity.fill")
-                                                        .foregroundColor(.blue)
-                                                        .font(.caption)
-                                                    Text("\(data.outdoor.humidity.value)\(data.outdoor.humidity.unit)")
-                                                        .font(.subheadline)
-                                                        .foregroundColor(.secondary)
-                                                }
+                                                Text("Humidity \(data.outdoor.humidity.value)\(data.outdoor.humidity.unit)")
+                                                    .font(.subheadline)
+                                                    .foregroundColor(.secondary)
                                             }
                                         }
                                         
@@ -721,134 +715,118 @@ struct WeatherStationDetailView: View {
                                         saveStation()
                                     }
                                 ) {
-                                    VStack(alignment: .leading, spacing: 12) {
-                                        // Current Wind Speed - Larger, more prominent
-                                        HStack {
-                                            VStack(alignment: .leading) {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        // Current Wind Speed & Direction - Compact Layout
+                                        HStack(alignment: .top, spacing: 10) {
+                                            VStack(alignment: .leading, spacing: 1) {
                                                 Text("Speed")
                                                     .font(.caption)
                                                     .foregroundColor(.secondary)
                                                 Text(MeasurementConverter.formatWindSpeed(data.wind.windSpeed.value, originalUnit: data.wind.windSpeed.unit))
-                                                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                                                    .font(.system(size: 18, weight: .bold, design: .rounded))
                                             }
+                                            
                                             Spacer()
                                             
                                             // Wind Direction with Compass
-                                            VStack(alignment: .trailing) {
+                                            VStack(alignment: .trailing, spacing: 1) {
                                                 Text("Direction")
                                                     .font(.caption)
                                                     .foregroundColor(.secondary)
                                                 Text(MeasurementConverter.formatWindDirectionWithCompass(data.wind.windDirection.value))
-                                                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                                    .font(.system(size: 13, weight: .semibold))
                                             }
                                         }
                                         
-                                        Divider()
-                                        
-                                        // Daily Wind Maximums Section
-                                        if let windStats = getDailyWindStats(for: station, data: data) {
-                                            VStack(alignment: .leading, spacing: 8) {
-                                                Text("Today's Maximum")
-                                                    .font(.caption)
-                                                    .foregroundColor(.secondary)
-                                                    .fontWeight(.semibold)
-                                                
-                                                // Max Wind Speed and Gust
-                                                HStack(spacing: 16) {
-                                                    // Daily Max Wind Speed
-                                                    VStack(alignment: .leading, spacing: 2) {
-                                                        HStack(spacing: 4) {
-                                                            Image(systemName: "wind")
-                                                                .foregroundColor(.cyan)
-                                                                .font(.caption2)
-                                                            Text("Max Speed")
-                                                                .font(.caption)
-                                                                .foregroundColor(.secondary)
-                                                        }
-                                                        Text(windStats.formattedMaxSpeed)
-                                                            .font(.system(size: 14, weight: .semibold, design: .rounded))
-                                                            .foregroundColor(.cyan)
-                                                        if windStats.isReliable && windStats.maxWindSpeedTime != nil {
-                                                            Text("at \(windStats.formattedMaxSpeedTime)")
-                                                                .font(.caption2)
-                                                                .foregroundColor(.secondary)
-                                                        }
-                                                    }
-                                                    
-                                                    Spacer()
-                                                    
-                                                    // Daily Max Wind Gust
-                                                    VStack(alignment: .trailing, spacing: 2) {
-                                                        HStack(spacing: 4) {
-                                                            Text("Max Gust")
-                                                                .font(.caption)
-                                                                .foregroundColor(.secondary)
-                                                            Image(systemName: "tornado")
-                                                                .foregroundColor(.orange)
-                                                                .font(.caption2)
-                                                        }
-                                                        Text(windStats.formattedMaxGust)
-                                                            .font(.system(size: 14, weight: .semibold, design: .rounded))
-                                                            .foregroundColor(.orange)
-                                                        if windStats.isReliable && windStats.maxWindGustTime != nil {
-                                                            Text("at \(windStats.formattedMaxGustTime)")
-                                                                .font(.caption2)
-                                                                .foregroundColor(.secondary)
-                                                        }
-                                                    }
-                                                }
-                                                
-                                                // Confidence indicator for wind data
-                                                if !windStats.isReliable {
-                                                    Text(windStats.confidenceDescription)
-                                                        .font(.caption2)
-                                                        .foregroundColor(.secondary)
-                                                        .italic()
-                                                }
-                                            }
-                                            
-                                            Divider()
-                                        }
-                                        
-                                        // Additional Wind Information
-                                        VStack(spacing: 6) {
+                                        // Current Gusts & 10-Min Avg Direction
+                                        VStack(spacing: 2) {
                                             HStack {
-                                                Text("Current Gusts:")
-                                                    .font(.subheadline)
+                                                Text("Gusts:")
+                                                    .font(.caption)
                                                 Spacer()
                                                 Text(MeasurementConverter.formatWindSpeed(data.wind.windGust.value, originalUnit: data.wind.windGust.unit))
-                                                    .font(.subheadline)
+                                                    .font(.caption)
                                                     .fontWeight(.semibold)
                                                     .foregroundColor(.orange)
                                             }
                                             
                                             HStack {
-                                                Text("10-Min Avg Direction:")
-                                                    .font(.subheadline)
+                                                Text("10-Min Avg:")
+                                                    .font(.caption)
                                                 Spacer()
                                                 Text(MeasurementConverter.formatWindDirectionWithCompass(data.wind.tenMinuteAverageWindDirection.value))
-                                                    .font(.subheadline)
-                                                    .fontWeight(.semibold)
+                                                    .font(.caption)
+                                                    .fontWeight(.medium)
                                             }
+                                        }
+                                        
+                                        // Daily Maximums - Compact with timestamps
+                                        if let windStats = getDailyWindStats(for: station, data: data) {
+                                            Divider()
                                             
-                                            // Beaufort Scale
-                                            if let windSpeedValue = Double(data.wind.windSpeed.value) {
-                                                let beaufortScale = getBeaufortScale(windSpeedMph: windSpeedValue)
-                                                HStack {
-                                                    Text("Beaufort Scale:")
-                                                        .font(.subheadline)
+                                            VStack(alignment: .leading, spacing: 3) {
+                                                Text("Today's Max")
+                                                    .font(.caption2)
+                                                    .foregroundColor(.secondary)
+                                                    .fontWeight(.medium)
+                                                
+                                                HStack(spacing: 8) {
+                                                    // Max Speed
+                                                    VStack(alignment: .leading, spacing: 0) {
+                                                        Text("Speed")
+                                                            .font(.caption2)
+                                                            .foregroundColor(.secondary)
+                                                        Text(windStats.formattedMaxSpeed)
+                                                            .font(.caption)
+                                                            .fontWeight(.semibold)
+                                                            .foregroundColor(.cyan)
+                                                        if windStats.isReliable && windStats.maxWindSpeedTime != nil {
+                                                            Text(windStats.formattedMaxSpeedTime)
+                                                                .font(.caption2)
+                                                                .foregroundColor(.secondary)
+                                                        }
+                                                    }
+                                                    
                                                     Spacer()
-                                                    Text("\(beaufortScale.number) - \(beaufortScale.description)")
-                                                        .font(.subheadline)
-                                                        .fontWeight(.semibold)
-                                                        .foregroundColor(.blue)
+                                                    
+                                                    // Max Gust
+                                                    VStack(alignment: .trailing, spacing: 0) {
+                                                        Text("Gust")
+                                                            .font(.caption2)
+                                                            .foregroundColor(.secondary)
+                                                        Text(windStats.formattedMaxGust)
+                                                            .font(.caption)
+                                                            .fontWeight(.semibold)
+                                                            .foregroundColor(.orange)
+                                                        if windStats.isReliable && windStats.maxWindGustTime != nil {
+                                                            Text(windStats.formattedMaxGustTime)
+                                                                .font(.caption2)
+                                                                .foregroundColor(.secondary)
+                                                        }
+                                                    }
                                                 }
+                                            }
+                                        }
+                                        
+                                        // Beaufort Scale - Compact
+                                        if let windSpeedValue = Double(data.wind.windSpeed.value) {
+                                            let beaufortScale = getBeaufortScale(windSpeedMph: windSpeedValue)
+                                            Divider()
+                                            HStack {
+                                                Text("Beaufort \(beaufortScale.number)")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                                Spacer()
+                                                Text(beaufortScale.description)
+                                                    .font(.caption)
+                                                    .fontWeight(.medium)
+                                                    .foregroundColor(.blue)
                                             }
                                         }
                                     }
                                 }
                             }
-                            
+                            // Rest of the code remains the same
                             // Pressure Card
                             if station.sensorPreferences.showPressure {
                                 EditableWeatherCard(
@@ -1071,7 +1049,7 @@ struct WeatherStationDetailView: View {
                                     VStack(alignment: .leading, spacing: 12) {
                                         // Current Lightning Distance - Main Display
                                         VStack(alignment: .leading, spacing: 4) {
-                                            Text("Current Distance")
+                                            Text("Distance")
                                                 .font(.caption)
                                                 .foregroundColor(.secondary)
                                             Text(MeasurementConverter.formatDistance(data.lightning.distance.value, originalUnit: data.lightning.distance.unit))
@@ -1081,7 +1059,7 @@ struct WeatherStationDetailView: View {
                                         
                                         // Current Lightning Count
                                         HStack {
-                                            Text("Current Count:")
+                                            Text("Daily Count:")
                                                 .font(.subheadline)
                                             Spacer()
                                             Text(data.lightning.count.value)
@@ -1322,7 +1300,7 @@ struct WeatherStationDetailView: View {
                                                     .font(.subheadline)
                                                     .foregroundColor(.secondary)
                                                 Spacer()
-                                                Text(nextEvent.time, style: .time)
+                                                Text(formatTimeInStationTimeZone(nextEvent.time, timeZone: station.timeZone))
                                                     .font(.subheadline)
                                                     .fontWeight(.semibold)
                                             }
@@ -1462,6 +1440,22 @@ struct WeatherStationDetailView: View {
         case 6: return "DC Power"
         default: return value
         }
+    }
+    
+    private func tempHumidityBatteryStatusText(_ value: String) -> String {
+        switch value {
+        case "0": return "Normal"
+        case "1": return "Low"
+        default: return value
+        }
+    }
+
+    private func formatTimeInStationTimeZone(_ date: Date, timeZone: TimeZone) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        formatter.timeZone = timeZone
+        return formatter.string(from: date)
     }
     
     private func sunIconForCurrentTime(station: WeatherStation) -> String {
@@ -1895,14 +1889,6 @@ struct EditableWeatherCard<Content: View>: View {
         )
         .scaleEffect(1.0)
         .animation(.easeInOut(duration: 0.2), value: isEditing)
-    }
-}
-
-private func tempHumidityBatteryStatusText(_ value: String) -> String {
-    switch value {
-    case "0": return "Normal"
-    case "1": return "Low"
-    default: return value
     }
 }
 

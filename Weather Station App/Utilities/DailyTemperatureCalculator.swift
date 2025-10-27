@@ -490,7 +490,7 @@ class DailyTemperatureCalculator {
         }
         
         let windSpeedUnit = windData.windSpeed?.unit ?? "mph"
-        let windGustUnit = windData.windGust?.unit ?? "mph"
+        _ = windData.windGust?.unit ?? "mph" // Acknowledge but don't use windGustUnit
         
         var windSpeedReadings: [(speed: Double, time: Date)] = []
         var windGustReadings: [(gust: Double, time: Date)] = []

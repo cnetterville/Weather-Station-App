@@ -260,7 +260,7 @@ struct FullScreenCameraView: View {
         Task {
             do {
                 let (data, _) = try await URLSession.shared.data(from: url)
-                if let nsImage = NSImage(data: data) {
+                if NSImage(data: data) != nil {
                     let savePanel = NSSavePanel()
                     savePanel.allowedContentTypes = [UTType.jpeg, UTType.png]
                     savePanel.nameFieldStringValue = "\(stationName)_camera_\(DateFormatter.filename.string(from: Date()))"

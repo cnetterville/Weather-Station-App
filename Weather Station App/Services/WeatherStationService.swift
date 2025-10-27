@@ -104,7 +104,7 @@ class WeatherStationService: ObservableObject {
                     await self.fetchWeatherDataOptimized(for: station)
                     
                     // Also fetch today's historical data for high/low calculations (if not already cached)
-                    if !self.hasTodaysHistoricalData(for: station) {
+                    if await !self.hasTodaysHistoricalData(for: station) {
                         await self.fetchTodaysHistoricalData(for: station)
                     }
                     
