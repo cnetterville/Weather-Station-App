@@ -1398,13 +1398,13 @@ struct WeatherStationDetailView: View {
     // Dynamic column calculation based on window width
     private func calculateColumns(for width: CGFloat) -> Int {
         switch width {
-        case 0..<650:
+        case 0..<600:
             return 1
-        case 650..<1000:
+        case 600..<900:
             return 2
-        case 1000..<1400:
+        case 900..<1200:
             return 3
-        case 1400..<1800:
+        case 1200..<1600:
             return 4
         default:
             return 5
@@ -1415,7 +1415,7 @@ struct WeatherStationDetailView: View {
         let spacing: CGFloat = 16
         let totalSpacing = spacing * CGFloat(columns - 1)
         let availableWidth = width - totalSpacing - 32 // 32 for padding
-        let baseSize = availableWidth / CGFloat(columns); let minTileSize: CGFloat = 320; let maxTileSize: CGFloat = 380; return min(maxTileSize, max(minTileSize, baseSize))
+        return availableWidth / CGFloat(columns)
     }
     
     private func saveStation() {
@@ -1852,11 +1852,11 @@ struct EditableWeatherCard<Content: View>: View {
             ScrollView {
                 content
             }
-            .frame(maxHeight: 250) // Fixed content height for uniformity
+            .frame(maxHeight: 180) // Fixed content height for uniformity
             
             Spacer(minLength: 0)
         }
-        .frame(height: 320) // Fixed card height
+        .frame(height: 250) // Fixed card height
         .padding(20)
         .background {
             // Modern multi-layer background effect
