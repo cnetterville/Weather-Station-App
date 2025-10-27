@@ -384,17 +384,40 @@ struct SunTimesView: View {
                     .fontWeight(.semibold)
             }
             
-            // Next event
+            // Tomorrow's sunrise and sunset
             if let latitude = station.latitude, let longitude = station.longitude {
-                let nextEvent = SunCalculator.getNextSunEvent(latitude: latitude, longitude: longitude, timeZone: station.timeZone)
-                HStack {
-                    Text("Next \(nextEvent.event):")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    Text(formatTimeInTimeZone(nextEvent.time, timeZone: station.timeZone))
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
+                let calendar = Calendar.current
+                let tomorrow = calendar.date(byAdding: .day, value: 1, to: Date()) ?? Date()
+                
+                if let tomorrowSunTimes = SunCalculator.calculateSunTimes(for: tomorrow, latitude: latitude, longitude: longitude, timeZone: station.timeZone) {
+                    Divider()
+                    
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Tomorrow")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .fontWeight(.semibold)
+                        
+                        HStack {
+                            Text("Sunrise:")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Text(tomorrowSunTimes.formattedSunrise)
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                        }
+                        
+                        HStack {
+                            Text("Sunset:")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Text(tomorrowSunTimes.formattedSunset)
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                        }
+                    }
                 }
             }
         }
