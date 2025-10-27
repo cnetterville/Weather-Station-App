@@ -25,6 +25,7 @@ struct WeatherStationDetailView: View {
                         let columns = calculateColumns(for: geometry.size.width)
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: columns), spacing: 16) {
                             
+                            // TEMPERATURE SENSORS SECTION - All grouped together
                             // Outdoor Temperature Card
                             if station.sensorPreferences.showOutdoorTemp {
                                 EditableWeatherCard(
@@ -65,6 +66,73 @@ struct WeatherStationDetailView: View {
                                 }
                             }
                             
+                            // Additional Temperature/Humidity Ch1 Sensor
+                            if station.sensorPreferences.showTempHumidityCh1 {
+                                EditableWeatherCard(
+                                    title: .constant(station.customLabels.tempHumidityCh1),
+                                    systemImage: "thermometer",
+                                    onTitleChange: { newTitle in
+                                        station.customLabels.tempHumidityCh1 = newTitle
+                                        saveStation()
+                                    }
+                                ) {
+                                    VStack(spacing: 8) {
+                                        Text(TemperatureConverter.formatTemperature(data.tempAndHumidityCh1.temperature.value, originalUnit: data.tempAndHumidityCh1.temperature.unit))
+                                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                                        if let humidity = data.tempAndHumidityCh1.humidity {
+                                            Text("Humidity: \(humidity.value)\(humidity.unit)")
+                                                .font(.subheadline)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Additional Temperature/Humidity Ch2 Sensor
+                            if station.sensorPreferences.showTempHumidityCh2 {
+                                EditableWeatherCard(
+                                    title: .constant(station.customLabels.tempHumidityCh2),
+                                    systemImage: "thermometer",
+                                    onTitleChange: { newTitle in
+                                        station.customLabels.tempHumidityCh2 = newTitle
+                                        saveStation()
+                                    }
+                                ) {
+                                    VStack(spacing: 8) {
+                                        Text(TemperatureConverter.formatTemperature(data.tempAndHumidityCh2.temperature.value, originalUnit: data.tempAndHumidityCh2.temperature.unit))
+                                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                                        if let humidity = data.tempAndHumidityCh2.humidity {
+                                            Text("Humidity: \(humidity.value)\(humidity.unit)")
+                                                .font(.subheadline)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Additional Temperature/Humidity Ch3 Sensor
+                            if station.sensorPreferences.showTempHumidityCh3, let tempHumCh3 = data.tempAndHumidityCh3 {
+                                EditableWeatherCard(
+                                    title: .constant(station.customLabels.tempHumidityCh3),
+                                    systemImage: "thermometer",
+                                    onTitleChange: { newTitle in
+                                        station.customLabels.tempHumidityCh3 = newTitle
+                                        saveStation()
+                                    }
+                                ) {
+                                    VStack(spacing: 8) {
+                                        Text(TemperatureConverter.formatTemperature(tempHumCh3.temperature.value, originalUnit: tempHumCh3.temperature.unit))
+                                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                                        if let humidity = tempHumCh3.humidity {
+                                            Text("Humidity: \(humidity.value)\(humidity.unit)")
+                                                .font(.subheadline)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // OTHER SENSORS SECTION
                             // Wind Card
                             if station.sensorPreferences.showWind {
                                 EditableWeatherCard(
@@ -262,70 +330,6 @@ struct WeatherStationDetailView: View {
                                         Text("Count: \(data.lightning.count.value)")
                                             .font(.subheadline)
                                             .foregroundColor(.secondary)
-                                    }
-                                }
-                            }
-                            
-                            // Additional Temperature/Humidity Sensors
-                            if station.sensorPreferences.showTempHumidityCh1 {
-                                EditableWeatherCard(
-                                    title: .constant(station.customLabels.tempHumidityCh1),
-                                    systemImage: "thermometer",
-                                    onTitleChange: { newTitle in
-                                        station.customLabels.tempHumidityCh1 = newTitle
-                                        saveStation()
-                                    }
-                                ) {
-                                    VStack(spacing: 8) {
-                                        Text(TemperatureConverter.formatTemperature(data.tempAndHumidityCh1.temperature.value, originalUnit: data.tempAndHumidityCh1.temperature.unit))
-                                            .font(.system(size: 24, weight: .bold, design: .rounded))
-                                        if let humidity = data.tempAndHumidityCh1.humidity {
-                                            Text("Humidity: \(humidity.value)\(humidity.unit)")
-                                                .font(.subheadline)
-                                                .foregroundColor(.secondary)
-                                        }
-                                    }
-                                }
-                            }
-                            
-                            if station.sensorPreferences.showTempHumidityCh2 {
-                                EditableWeatherCard(
-                                    title: .constant(station.customLabels.tempHumidityCh2),
-                                    systemImage: "thermometer",
-                                    onTitleChange: { newTitle in
-                                        station.customLabels.tempHumidityCh2 = newTitle
-                                        saveStation()
-                                    }
-                                ) {
-                                    VStack(spacing: 8) {
-                                        Text(TemperatureConverter.formatTemperature(data.tempAndHumidityCh2.temperature.value, originalUnit: data.tempAndHumidityCh2.temperature.unit))
-                                            .font(.system(size: 24, weight: .bold, design: .rounded))
-                                        if let humidity = data.tempAndHumidityCh2.humidity {
-                                            Text("Humidity: \(humidity.value)\(humidity.unit)")
-                                                .font(.subheadline)
-                                                .foregroundColor(.secondary)
-                                        }
-                                    }
-                                }
-                            }
-                            
-                            if station.sensorPreferences.showTempHumidityCh3, let tempHumCh3 = data.tempAndHumidityCh3 {
-                                EditableWeatherCard(
-                                    title: .constant(station.customLabels.tempHumidityCh3),
-                                    systemImage: "thermometer",
-                                    onTitleChange: { newTitle in
-                                        station.customLabels.tempHumidityCh3 = newTitle
-                                        saveStation()
-                                    }
-                                ) {
-                                    VStack(spacing: 8) {
-                                        Text(TemperatureConverter.formatTemperature(tempHumCh3.temperature.value, originalUnit: tempHumCh3.temperature.unit))
-                                            .font(.system(size: 24, weight: .bold, design: .rounded))
-                                        if let humidity = tempHumCh3.humidity {
-                                            Text("Humidity: \(humidity.value)\(humidity.unit)")
-                                                .font(.subheadline)
-                                                .foregroundColor(.secondary)
-                                        }
                                     }
                                 }
                             }
