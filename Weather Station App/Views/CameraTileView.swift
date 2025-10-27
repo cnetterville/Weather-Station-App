@@ -26,7 +26,7 @@ struct CameraTileView: View {
             systemImage: "camera.fill",
             onTitleChange: onTitleChange
         ) {
-            VStack(spacing: 12) {
+            VStack(spacing: 8) {
                 if isLoadingImage {
                     VStack(spacing: 8) {
                         ProgressView()
@@ -35,14 +35,14 @@ struct CameraTileView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
-                    .frame(height: 120)
+                    .frame(maxHeight: .infinity)
                 } else if let imageURL = cameraImageURL {
-                    // Camera Image
+                    // Camera Image - flexible height
                     AsyncImage(url: URL(string: imageURL)) { image in
                         image
                             .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(height: 120)
+                            .aspectRatio(contentMode: .fit)
+                            .frame(height: 180)
                             .clipped()
                             .cornerRadius(8)
                             .onTapGesture {
@@ -51,7 +51,7 @@ struct CameraTileView: View {
                     } placeholder: {
                         Rectangle()
                             .fill(Color.gray.opacity(0.3))
-                            .frame(height: 120)
+                            .frame(height: 180)
                             .cornerRadius(8)
                             .overlay(
                                 VStack {
@@ -65,16 +65,16 @@ struct CameraTileView: View {
                             )
                     }
                     
-                    // Image info
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Latest Image")
-                                .font(.caption)
+                    // Compact info bar
+                    HStack(spacing: 8) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "clock")
+                                .font(.caption2)
                                 .foregroundColor(.secondary)
                             if let lastUpdated = lastUpdated {
                                 Text(lastUpdated, style: .time)
-                                    .font(.caption)
-                                    .fontWeight(.medium)
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
                             }
                         }
                         
@@ -94,9 +94,10 @@ struct CameraTileView: View {
                         .buttonStyle(.borderedProminent)
                         .controlSize(.mini)
                     }
+                    .padding(.top, 4)
                 } else {
-                    // No camera image available
-                    VStack(spacing: 8) {
+                    // No camera available - centered content
+                    VStack(spacing: 12) {
                         Image(systemName: "camera")
                             .font(.system(size: 32))
                             .foregroundColor(.secondary)
@@ -115,7 +116,7 @@ struct CameraTileView: View {
                         .buttonStyle(.bordered)
                         .controlSize(.small)
                     }
-                    .frame(height: 120)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
         }
@@ -187,22 +188,66 @@ struct FullScreenCameraView: View {
         ZStack {
             // Black background
             Color.black
-                .ignoresSafeArea()
+                .ignoresSafeArea(.all)
             
-            // Main content
+            // Image content - full screen
+            AsyncImage(url: URL(string: imageURL)) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .ignoresSafeArea(.all)
+                        
+                case .failure(_):
+                    VStack(spacing: 16) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.system(size: 48))
+                            .foregroundColor(.white)
+                        
+                        Text("Failed to load image")
+                            .foregroundColor(.white)
+                            .font(.headline)
+                    }
+                    
+                case .empty:
+                    VStack(spacing: 16) {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            .scaleEffect(1.5)
+                        
+                        Text("Loading camera image...")
+                            .foregroundColor(.white)
+                            .font(.headline)
+                    }
+                    
+                @unknown default:
+                    EmptyView()
+                }
+            }
+            
+            // Overlay navigation bar
             VStack {
-                // Navigation bar
                 HStack {
                     Button("Done") {
                         dismiss()
                     }
                     .foregroundColor(.white)
+                    .font(.system(size: 17, weight: .medium))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Color.black.opacity(0.6))
+                    .cornerRadius(8)
                     
                     Spacer()
                     
                     Text("Camera - \(stationName)")
                         .foregroundColor(.white)
                         .font(.headline)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.black.opacity(0.6))
+                        .cornerRadius(8)
                     
                     Spacer()
                     
@@ -210,45 +255,16 @@ struct FullScreenCameraView: View {
                         saveImage()
                     }
                     .foregroundColor(.blue)
+                    .font(.system(size: 17, weight: .medium))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Color.black.opacity(0.6))
+                    .cornerRadius(8)
                 }
-                .padding()
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
                 
-                // Image content
-                AsyncImage(url: URL(string: imageURL)) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            
-                    case .failure(_):
-                        VStack(spacing: 16) {
-                            Image(systemName: "exclamationmark.triangle")
-                                .font(.system(size: 48))
-                                .foregroundColor(.white)
-                            
-                            Text("Failed to load image")
-                                .foregroundColor(.white)
-                                .font(.headline)
-                        }
-                        
-                    case .empty:
-                        VStack(spacing: 16) {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                .scaleEffect(1.5)
-                            
-                            Text("Loading camera image...")
-                                .foregroundColor(.white)
-                                .font(.headline)
-                        }
-                        
-                    @unknown default:
-                        EmptyView()
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                Spacer()
             }
         }
     }
