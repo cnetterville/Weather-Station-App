@@ -100,7 +100,13 @@ class WeatherStationService: ObservableObject {
                         Task { await semaphore.signal() }
                     }
                     
+                    // Fetch current data
                     await self.fetchWeatherDataOptimized(for: station)
+                    
+                    // Also fetch today's historical data for high/low calculations (if not already cached)
+                    if !self.hasTodaysHistoricalData(for: station) {
+                        await self.fetchTodaysHistoricalData(for: station)
+                    }
                     
                     // Smaller delay for fewer stations
                     let delay = stationsToFetch.count <= 2 ? 100_000_000 : 250_000_000 // 0.1s vs 0.25s
@@ -386,6 +392,44 @@ class WeatherStationService: ObservableObject {
                 }
             }
         }
+    }
+    
+    // Helper method to check if we have today's historical data
+    private func hasTodaysHistoricalData(for station: WeatherStation) -> Bool {
+        guard let historical = historicalData[station.macAddress],
+              let outdoor = historical.outdoor,
+              let temperature = outdoor.temperature else {
+            return false
+        }
+        
+        // Check if we have any temperature data from today
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        
+        for (timestampString, _) in temperature.list {
+            if let timestamp = Double(timestampString) {
+                let readingDate = Date(timeIntervalSince1970: timestamp)
+                if calendar.isDate(readingDate, inSameDayAs: today) {
+                    return true
+                }
+            }
+        }
+        
+        return false
+    }
+    
+    // Fetch today's historical data for high/low temperature calculations
+    private func fetchTodaysHistoricalData(for station: WeatherStation) async {
+        print("📊 Fetching today's historical data for \(station.name)...")
+        
+        // Fetch hourly data for today to get good high/low resolution
+        await fetchHistoricalData(
+            for: station,
+            timeRange: .last24Hours,
+            sensors: ["outdoor"] // Just outdoor temperature for efficiency
+        )
+        
+        print("📊 Completed today's historical data fetch for: \(station.name)")
     }
     
     func fetchHistoricalData(for station: WeatherStation, timeRange: HistoricalTimeRange, sensors: [String] = ["outdoor", "indoor", "rainfall_piezo", "wind", "pressure"]) async {

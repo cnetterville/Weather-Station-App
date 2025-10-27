@@ -54,6 +54,7 @@ struct SensorLabels: Codable, Equatable {
     var airQualityCh2: String = "Air Quality Ch2 (PM2.5)"
     var airQualityCh3: String = "Air Quality Ch3 (PM2.5)"
     var uvIndex: String = "UV Index"
+    var solar: String = "Solar & UV"
     var lightning: String = "Lightning"
     var tempHumidityCh1: String = "Temp/Humidity Ch1"
     var tempHumidityCh2: String = "Temp/Humidity Ch2"
@@ -73,6 +74,7 @@ struct SensorPreferences: Codable, Equatable {
     var showAirQualityCh2: Bool = true
     var showAirQualityCh3: Bool = true
     var showUVIndex: Bool = true
+    var showSolar: Bool = true
     var showLightning: Bool = true
     var showTempHumidityCh1: Bool = false
     var showTempHumidityCh2: Bool = false

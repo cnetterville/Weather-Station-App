@@ -26,7 +26,7 @@ struct WeatherStationDetailView: View {
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: columns), spacing: 16) {
                             
                             // TEMPERATURE SENSORS SECTION - All grouped together
-                            // Outdoor Temperature Card
+                            // Outdoor Temperature Card with Daily High/Low
                             if station.sensorPreferences.showOutdoorTemp {
                                 EditableWeatherCard(
                                     title: .constant(station.customLabels.outdoorTemp),
@@ -36,12 +36,137 @@ struct WeatherStationDetailView: View {
                                         saveStation()
                                     }
                                 ) {
-                                    VStack(spacing: 8) {
-                                        Text(TemperatureConverter.formatTemperature(data.outdoor.temperature.value, originalUnit: data.outdoor.temperature.unit))
-                                            .font(.system(size: 32, weight: .bold, design: .rounded))
-                                        Text("Feels like \(TemperatureConverter.formatTemperature(data.outdoor.feelsLike.value, originalUnit: data.outdoor.feelsLike.unit))")
-                                            .font(.subheadline)
-                                            .foregroundColor(.secondary)
+                                    VStack(spacing: 12) {
+                                        // Current Temperature - Main Display
+                                        VStack(spacing: 4) {
+                                            Text(TemperatureConverter.formatTemperature(data.outdoor.temperature.value, originalUnit: data.outdoor.temperature.unit))
+                                                .font(.system(size: 36, weight: .bold, design: .rounded))
+                                            HStack(spacing: 12) {
+                                                Text("Feels like \(TemperatureConverter.formatTemperature(data.outdoor.feelsLike.value, originalUnit: data.outdoor.feelsLike.unit))")
+                                                    .font(.subheadline)
+                                                    .foregroundColor(.secondary)
+                                                
+                                                // Outdoor Humidity
+                                                HStack(spacing: 4) {
+                                                    Image(systemName: "humidity.fill")
+                                                        .foregroundColor(.blue)
+                                                        .font(.caption)
+                                                    Text("\(data.outdoor.humidity.value)\(data.outdoor.humidity.unit)")
+                                                        .font(.subheadline)
+                                                        .foregroundColor(.secondary)
+                                                }
+                                            }
+                                        }
+                                        
+                                        Divider()
+                                        
+                                        // Daily High/Low Section - Temperature
+                                        if let tempStats = getDailyTemperatureStats(for: station, data: data) {
+                                            VStack(spacing: 8) {
+                                                // Temperature High/Low
+                                                HStack(spacing: 16) {
+                                                    // Daily High Temp
+                                                    VStack(alignment: .leading, spacing: 2) {
+                                                        HStack(spacing: 4) {
+                                                            Image(systemName: "thermometer.sun.fill")
+                                                                .foregroundColor(.orange)
+                                                                .font(.caption2)
+                                                            Text("High")
+                                                                .font(.caption)
+                                                                .foregroundColor(.secondary)
+                                                        }
+                                                        Text(tempStats.formattedHigh)
+                                                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                                            .foregroundColor(.orange)
+                                                        if tempStats.isReliable && tempStats.highTempTime != nil {
+                                                            Text("at \(tempStats.formattedHighTime)")
+                                                                .font(.caption2)
+                                                                .foregroundColor(.secondary)
+                                                        }
+                                                    }
+                                                    
+                                                    Spacer()
+                                                    
+                                                    // Daily Low Temp
+                                                    VStack(alignment: .trailing, spacing: 2) {
+                                                        HStack(spacing: 4) {
+                                                            Text("Low")
+                                                                .font(.caption)
+                                                                .foregroundColor(.secondary)
+                                                            Image(systemName: "thermometer.snowflake")
+                                                                .foregroundColor(.blue)
+                                                                .font(.caption2)
+                                                        }
+                                                        Text(tempStats.formattedLow)
+                                                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                                            .foregroundColor(.blue)
+                                                        if tempStats.isReliable && tempStats.lowTempTime != nil {
+                                                            Text("at \(tempStats.formattedLowTime)")
+                                                                .font(.caption2)
+                                                                .foregroundColor(.secondary)
+                                                        }
+                                                    }
+                                                }
+                                                
+                                                // Humidity High/Low
+                                                if let humidityStats = getDailyHumidityStats(for: station, data: data) {
+                                                    HStack(spacing: 16) {
+                                                        // Daily High Humidity
+                                                        VStack(alignment: .leading, spacing: 2) {
+                                                            HStack(spacing: 4) {
+                                                                Image(systemName: "humidity.fill")
+                                                                    .foregroundColor(.teal)
+                                                                    .font(.caption2)
+                                                                Text("High")
+                                                                    .font(.caption)
+                                                                    .foregroundColor(.secondary)
+                                                            }
+                                                            Text(humidityStats.formattedHigh)
+                                                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                                                .foregroundColor(.teal)
+                                                            if humidityStats.isReliable && humidityStats.highHumidityTime != nil {
+                                                                Text("at \(humidityStats.formattedHighTime)")
+                                                                    .font(.caption2)
+                                                                    .foregroundColor(.secondary)
+                                                            }
+                                                        }
+                                                        
+                                                        Spacer()
+                                                        
+                                                        // Daily Low Humidity
+                                                        VStack(alignment: .trailing, spacing: 2) {
+                                                            HStack(spacing: 4) {
+                                                                Text("Low")
+                                                                    .font(.caption)
+                                                                    .foregroundColor(.secondary)
+                                                                Image(systemName: "humidity")
+                                                                    .foregroundColor(.brown)
+                                                                    .font(.caption2)
+                                                            }
+                                                            Text(humidityStats.formattedLow)
+                                                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                                                .foregroundColor(.brown)
+                                                            if humidityStats.isReliable && humidityStats.lowHumidityTime != nil {
+                                                                Text("at \(humidityStats.formattedLowTime)")
+                                                                    .font(.caption2)
+                                                                    .foregroundColor(.secondary)
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        } else {
+                                            // Fallback when no high/low data available
+                                            HStack {
+                                                Text("Daily High/Low:")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                                Spacer()
+                                                Text("Loading...")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -133,7 +258,7 @@ struct WeatherStationDetailView: View {
                             }
                             
                             // OTHER SENSORS SECTION
-                            // Wind Card
+                            // Enhanced Wind Card
                             if station.sensorPreferences.showWind {
                                 EditableWeatherCard(
                                     title: .constant(station.customLabels.wind),
@@ -143,15 +268,65 @@ struct WeatherStationDetailView: View {
                                         saveStation()
                                     }
                                 ) {
-                                    VStack(spacing: 8) {
-                                        Text(MeasurementConverter.formatWindSpeed(data.wind.windSpeed.value, originalUnit: data.wind.windSpeed.unit))
-                                            .font(.system(size: 24, weight: .bold, design: .rounded))
-                                        Text("Gusts: \(MeasurementConverter.formatWindSpeed(data.wind.windGust.value, originalUnit: data.wind.windGust.unit))")
-                                            .font(.subheadline)
-                                            .foregroundColor(.secondary)
-                                        Text("Direction: \(MeasurementConverter.formatWindDirectionWithCompass(data.wind.windDirection.value))")
-                                            .font(.subheadline)
-                                            .foregroundColor(.secondary)
+                                    VStack(spacing: 12) {
+                                        // Current Wind Speed - Larger, more prominent
+                                        HStack {
+                                            VStack(alignment: .leading) {
+                                                Text("Speed")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                                Text(MeasurementConverter.formatWindSpeed(data.wind.windSpeed.value, originalUnit: data.wind.windSpeed.unit))
+                                                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                                            }
+                                            Spacer()
+                                            
+                                            // Wind Direction with Compass
+                                            VStack(alignment: .trailing) {
+                                                Text("Direction")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                                Text(MeasurementConverter.formatWindDirectionWithCompass(data.wind.windDirection.value))
+                                                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                            }
+                                        }
+                                        
+                                        Divider()
+                                        
+                                        // Additional Wind Information
+                                        VStack(spacing: 6) {
+                                            HStack {
+                                                Text("Wind Gusts:")
+                                                    .font(.subheadline)
+                                                Spacer()
+                                                Text(MeasurementConverter.formatWindSpeed(data.wind.windGust.value, originalUnit: data.wind.windGust.unit))
+                                                    .font(.subheadline)
+                                                    .fontWeight(.semibold)
+                                                    .foregroundColor(.orange)
+                                            }
+                                            
+                                            HStack {
+                                                Text("10-Min Avg Direction:")
+                                                    .font(.subheadline)
+                                                Spacer()
+                                                Text(MeasurementConverter.formatWindDirectionWithCompass(data.wind.tenMinuteAverageWindDirection.value))
+                                                    .font(.subheadline)
+                                                    .fontWeight(.semibold)
+                                            }
+                                            
+                                            // Beaufort Scale
+                                            if let windSpeedValue = Double(data.wind.windSpeed.value) {
+                                                let beaufortScale = getBeaufortScale(windSpeedMph: windSpeedValue)
+                                                HStack {
+                                                    Text("Beaufort Scale:")
+                                                        .font(.subheadline)
+                                                    Spacer()
+                                                    Text("\(beaufortScale.number) - \(beaufortScale.description)")
+                                                        .font(.subheadline)
+                                                        .fontWeight(.semibold)
+                                                        .foregroundColor(.blue)
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -299,22 +474,68 @@ struct WeatherStationDetailView: View {
                                 }
                             }
                             
-                            // UV Index Card
-                            if station.sensorPreferences.showUVIndex {
+                            // Enhanced Solar & UV Index Card
+                            if station.sensorPreferences.showSolar {
                                 EditableWeatherCard(
-                                    title: .constant(station.customLabels.uvIndex),
+                                    title: .constant(station.customLabels.solar),
                                     systemImage: "sun.max.fill",
                                     onTitleChange: { newTitle in
-                                        station.customLabels.uvIndex = newTitle
+                                        station.customLabels.solar = newTitle
                                         saveStation()
                                     }
                                 ) {
-                                    VStack(spacing: 8) {
-                                        Text(data.solarAndUvi.uvi.value)
-                                            .font(.system(size: 32, weight: .bold, design: .rounded))
-                                        Text("Solar: \(data.solarAndUvi.solar.value) \(data.solarAndUvi.solar.unit)")
-                                            .font(.subheadline)
-                                            .foregroundColor(.secondary)
+                                    VStack(spacing: 12) {
+                                        // UV Index - Most prominent
+                                        VStack(spacing: 4) {
+                                            Text("UV Index")
+                                                .font(.headline)
+                                                .fontWeight(.semibold)
+                                            Text(data.solarAndUvi.uvi.value)
+                                                .font(.system(size: 32, weight: .bold, design: .rounded))
+                                                .foregroundColor(getUVIndexColor(data.solarAndUvi.uvi.value))
+                                            Text(getUVIndexDescription(data.solarAndUvi.uvi.value))
+                                                .font(.subheadline)
+                                                .foregroundColor(getUVIndexColor(data.solarAndUvi.uvi.value))
+                                        }
+                                        
+                                        Divider()
+                                        
+                                        // Solar Radiation Details
+                                        VStack(spacing: 8) {
+                                            HStack {
+                                                Text("Solar Radiation:")
+                                                    .font(.subheadline)
+                                                Spacer()
+                                                Text("\(data.solarAndUvi.solar.value) \(data.solarAndUvi.solar.unit)")
+                                                    .font(.subheadline)
+                                                    .fontWeight(.semibold)
+                                            }
+                                            
+                                            // Solar intensity description
+                                            if let solarValue = Double(data.solarAndUvi.solar.value) {
+                                                HStack {
+                                                    Text("Intensity:")
+                                                        .font(.subheadline)
+                                                    Spacer()
+                                                    Text(getSolarIntensityDescription(solarValue))
+                                                        .font(.subheadline)
+                                                        .fontWeight(.semibold)
+                                                        .foregroundColor(getSolarIntensityColor(solarValue))
+                                                }
+                                                
+                                                // Estimated solar panel efficiency (for fun)
+                                                let efficiency = estimateSolarPanelOutput(solarValue)
+                                                HStack {
+                                                    Text("Solar Panel Est.:")
+                                                        .font(.subheadline)
+                                                    Spacer()
+                                                    Text("\(String(format: "%.0f", efficiency))% of peak")
+                                                        .font(.subheadline)
+                                                        .fontWeight(.semibold)
+                                                        .foregroundColor(.green)
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -641,6 +862,93 @@ struct WeatherStationDetailView: View {
         }
         
         return sunTimes.isCurrentlyDaylight ? "sun.max.fill" : "moon.stars.fill"
+    }
+    
+    // Helper method to get daily temperature stats
+    private func getDailyTemperatureStats(for station: WeatherStation, data: WeatherStationData) -> DailyTemperatureStats? {
+        let historicalData = weatherService.historicalData[station.macAddress]
+        return DailyTemperatureCalculator.getDailyStats(
+            weatherData: data,
+            historicalData: historicalData,
+            station: station
+        )
+    }
+    
+    // Helper method to get daily humidity stats
+    private func getDailyHumidityStats(for station: WeatherStation, data: WeatherStationData) -> DailyHumidityStats? {
+        let historicalData = weatherService.historicalData[station.macAddress]
+        return DailyTemperatureCalculator.getDailyHumidityStats(
+            weatherData: data,
+            historicalData: historicalData,
+            station: station
+        )
+    }
+    
+    private func getBeaufortScale(windSpeedMph: Double) -> (number: Int, description: String) {
+        switch windSpeedMph {
+        case 0...1: return (0, "Calm")
+        case 1...3: return (1, "Light Air")
+        case 4...7: return (2, "Light Breeze")
+        case 8...12: return (3, "Gentle Breeze")
+        case 13...18: return (4, "Moderate Breeze")
+        case 19...24: return (5, "Fresh Breeze")
+        case 25...31: return (6, "Strong Breeze")
+        case 32...38: return (7, "Near Gale")
+        case 39...46: return (8, "Gale")
+        case 47...54: return (9, "Strong Gale")
+        case 55...63: return (10, "Storm")
+        case 64...72: return (11, "Violent Storm")
+        default: return (12, "Hurricane")
+        }
+    }
+    
+    private func getUVIndexColor(_ value: String) -> Color {
+        guard let uvi = Double(value) else { return .secondary }
+        switch uvi {
+        case 0...2: return .green
+        case 3...5: return .yellow
+        case 6...7: return .orange
+        case 8...10: return .red
+        default: return .purple
+        }
+    }
+    
+    private func getUVIndexDescription(_ value: String) -> String {
+        guard let uvi = Double(value) else { return "Unknown" }
+        switch uvi {
+        case 0...2: return "Low"
+        case 3...5: return "Moderate"
+        case 6...7: return "High"
+        case 8...10: return "Very High"
+        default: return "Extreme"
+        }
+    }
+    
+    private func getSolarIntensityDescription(_ value: Double) -> String {
+        switch value {
+        case 0...200: return "Very Low"
+        case 201...400: return "Low"
+        case 401...600: return "Moderate"
+        case 601...800: return "High"
+        case 801...1000: return "Very High"
+        default: return "Extreme"
+        }
+    }
+    
+    private func getSolarIntensityColor(_ value: Double) -> Color {
+        switch value {
+        case 0...200: return .gray
+        case 201...400: return .blue
+        case 401...600: return .green
+        case 601...800: return .orange
+        default: return .red
+        }
+    }
+    
+    private func estimateSolarPanelOutput(_ solarRadiation: Double) -> Double {
+        // Rough estimation: peak solar radiation is typically ~1000 W/m²
+        let peakRadiation = 1000.0
+        return min(100, (solarRadiation / peakRadiation) * 100)
     }
 }
 
