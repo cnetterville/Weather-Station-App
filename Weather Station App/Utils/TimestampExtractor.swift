@@ -212,7 +212,13 @@ struct TimestampExtractor {
         let formatter = DateFormatter()
         formatter.dateFormat = format
         formatter.timeZone = station.timeZone
-        return formatter.string(from: date)
+        
+        let formattedTime = formatter.string(from: date)
+        
+        // Add timezone abbreviation
+        let timezoneAbbreviation = station.timeZone.abbreviation(for: date) ?? station.timeZone.identifier
+        
+        return "\(formattedTime) (\(timezoneAbbreviation))"
     }
     
     /// Returns the age of data in a human-readable format
