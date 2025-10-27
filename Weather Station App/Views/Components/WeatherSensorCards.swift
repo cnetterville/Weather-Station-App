@@ -24,7 +24,7 @@ struct OutdoorTemperatureCard: View {
                 // Current Temperature - Main Display
                 VStack(alignment: .leading, spacing: 4) {
                     Text(TemperatureConverter.formatTemperature(data.outdoor.temperature.value, originalUnit: data.outdoor.temperature.unit))
-                        .font(.system(size: 36, weight: .bold, design: .rounded))
+                        .font(.system(size: 32, weight: .bold, design: .rounded))
                     HStack(spacing: 12) {
                         Text("Feels like \(TemperatureConverter.formatTemperature(data.outdoor.feelsLike.value, originalUnit: data.outdoor.feelsLike.unit))")
                             .font(.subheadline)
@@ -32,9 +32,9 @@ struct OutdoorTemperatureCard: View {
                         
                         // Outdoor Humidity
                         HStack(spacing: 4) {
-                            Image(systemName: "humidity.fill")
-                                .foregroundColor(.blue)
-                                .font(.caption)
+                            Text("Humidity")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
                             Text("\(data.outdoor.humidity.value)\(data.outdoor.humidity.unit)")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
@@ -234,7 +234,7 @@ struct ChannelTemperatureCard: View {
                 // Current Temperature - Main Display
                 VStack(alignment: .leading, spacing: 4) {
                     Text(TemperatureConverter.formatTemperature(data.temperature.value, originalUnit: data.temperature.unit))
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .font(.system(size: 32, weight: .bold, design: .rounded))
                     if let humidity = data.humidity {
                         Text("Humidity: \(humidity.value)\(humidity.unit)")
                             .font(.subheadline)
