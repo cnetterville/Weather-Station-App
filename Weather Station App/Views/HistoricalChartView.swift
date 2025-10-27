@@ -42,12 +42,8 @@ struct HistoricalChartView: View {
             return weatherService.getChartData(from: data.rainfallPiezo?.rainRate)
         case .rainDaily:
             return weatherService.getChartData(from: data.rainfallPiezo?.daily)
-        case .pm25Ch1:
+        case .pm25:
             return weatherService.getChartData(from: data.pm25Ch1?.pm25)
-        case .pm25Ch2:
-            return weatherService.getChartData(from: data.pm25Ch2?.pm25)
-        case .pm25Ch3:
-            return weatherService.getChartData(from: data.pm25Ch3?.pm25)
         case .uvIndex:
             return weatherService.getChartData(from: data.solarAndUvi?.uvi)
         case .solar:
@@ -277,9 +273,7 @@ enum HistoricalSensor: String, CaseIterable {
     case pressure = "pressure"
     case rainRate = "rain_rate"
     case rainDaily = "rain_daily"
-    case pm25Ch1 = "pm25_ch1"
-    case pm25Ch2 = "pm25_ch2"
-    case pm25Ch3 = "pm25_ch3"
+    case pm25 = "pm25"
     case uvIndex = "uv_index"
     case solar = "solar"
     
@@ -294,9 +288,7 @@ enum HistoricalSensor: String, CaseIterable {
         case .pressure: return "Atmospheric Pressure"
         case .rainRate: return "Rain Rate"
         case .rainDaily: return "Daily Rainfall"
-        case .pm25Ch1: return "PM2.5 Air Quality (Ch1)"
-        case .pm25Ch2: return "PM2.5 Air Quality (Ch2)"
-        case .pm25Ch3: return "PM2.5 Air Quality (Ch3)"
+        case .pm25: return "PM2.5 Air Quality"
         case .uvIndex: return "UV Index"
         case .solar: return "Solar Radiation"
         }
@@ -310,7 +302,7 @@ enum HistoricalSensor: String, CaseIterable {
         case .pressure: return "inHg"
         case .rainRate: return "in/h / mm/h"
         case .rainDaily: return "in / mm"
-        case .pm25Ch1, .pm25Ch2, .pm25Ch3: return "µg/m³"
+        case .pm25: return "µg/m³"
         case .uvIndex: return ""
         case .solar: return "W/m²"
         }
@@ -326,7 +318,7 @@ enum HistoricalSensor: String, CaseIterable {
         case .pressure: return "%.2f"
         case .rainRate, .rainDaily: return "%.2f"
         case .outdoorHumidity, .indoorHumidity: return "%.0f"
-        case .pm25Ch1, .pm25Ch2, .pm25Ch3: return "%.0f"
+        case .pm25: return "%.0f"
         case .uvIndex: return "%.0f"
         case .solar: return "%.1f"
         }
@@ -341,9 +333,7 @@ enum HistoricalSensor: String, CaseIterable {
         case .windSpeed, .windGust: return .green
         case .pressure: return .purple
         case .rainRate, .rainDaily: return .blue
-        case .pm25Ch1: return .brown
-        case .pm25Ch2: return .orange
-        case .pm25Ch3: return .red
+        case .pm25: return .brown
         case .uvIndex: return .yellow
         case .solar: return .orange
         }
@@ -356,9 +346,7 @@ enum HistoricalSensor: String, CaseIterable {
         case .windSpeed, .windGust: return ["wind"]
         case .pressure: return ["pressure"]
         case .rainRate, .rainDaily: return ["rainfall_piezo"]
-        case .pm25Ch1: return ["pm25_ch1"]
-        case .pm25Ch2: return ["pm25_ch2"]
-        case .pm25Ch3: return ["pm25_ch3"]
+        case .pm25: return ["pm25_ch1"]
         case .uvIndex, .solar: return ["solar_and_uvi"]
         }
     }
