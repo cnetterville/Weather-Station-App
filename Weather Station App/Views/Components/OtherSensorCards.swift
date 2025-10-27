@@ -167,6 +167,7 @@ struct PressureCard: View {
     let station: WeatherStation
     let data: WeatherStationData
     let onTitleChange: (String) -> Void
+    let getDailyPressureStats: () -> DailyPressureStats?
     
     var body: some View {
         EditableWeatherCard(
@@ -174,12 +175,113 @@ struct PressureCard: View {
             systemImage: "barometer",
             onTitleChange: onTitleChange
         ) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("\(data.pressure.relative.value) \(data.pressure.relative.unit)")
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
-                Text("Absolute: \(data.pressure.absolute.value) \(data.pressure.absolute.unit)")
-                    .font(.subheadline)
+            VStack(alignment: .leading, spacing: 12) {
+                // Current Pressure - Main Display
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(data.pressure.relative.value) \(data.pressure.relative.unit)")
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                    Text("Absolute: \(data.pressure.absolute.value) \(data.pressure.absolute.unit)")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                
+                Divider()
+                
+                // Daily High/Low Section - Pressure
+                if let pressureStats = getDailyPressureStats() {
+                    DailyPressureRangeView(
+                        pressureStats: pressureStats,
+                        currentPressure: Double(data.pressure.relative.value) ?? 0.0
+                    )
+                } else {
+                    // Fallback when no high/low data available
+                    HStack {
+                        Text("Daily High/Low:")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text("Loading...")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct DailyPressureRangeView: View {
+    let pressureStats: DailyPressureStats
+    let currentPressure: Double
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Today's Range")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .fontWeight(.semibold)
+            
+            // Pressure High/Low
+            HStack(spacing: 16) {
+                // Daily High Pressure
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .foregroundColor(.green)
+                            .font(.caption2)
+                        Text("High")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Text(pressureStats.formattedHigh)
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .foregroundColor(.green)
+                    if pressureStats.isReliable && pressureStats.highPressureTime != nil {
+                        Text("at \(pressureStats.formattedHighTime)")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
+                Spacer()
+                
+                // Daily Low Pressure
+                VStack(alignment: .trailing, spacing: 2) {
+                    HStack(spacing: 4) {
+                        Text("Low")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Image(systemName: "arrow.down.circle.fill")
+                            .foregroundColor(.red)
+                            .font(.caption2)
+                    }
+                    Text(pressureStats.formattedLow)
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .foregroundColor(.red)
+                    if pressureStats.isReliable && pressureStats.lowPressureTime != nil {
+                        Text("at \(pressureStats.formattedLowTime)")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            
+            // Pressure trend indicator
+            let pressureTrend = PressureHelpers.getPressureTrend(current: currentPressure, stats: pressureStats)
+            HStack {
+                Image(systemName: pressureTrend.icon)
+                    .foregroundColor(pressureTrend.color)
+                    .font(.caption)
+                Text(pressureTrend.description)
+                    .font(.caption)
                     .foregroundColor(.secondary)
+                Spacer()
+                if !pressureStats.isReliable {
+                    Text(pressureStats.confidenceDescription)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .italic()
+                }
             }
         }
     }

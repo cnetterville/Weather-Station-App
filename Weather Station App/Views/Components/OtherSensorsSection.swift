@@ -41,6 +41,13 @@ struct OtherSensorsSection: View {
                     onTitleChange: { newTitle in
                         station.customLabels.pressure = newTitle
                         weatherService.updateStation(station)
+                    },
+                    getDailyPressureStats: {
+                        DailyTemperatureCalculator.getDailyPressureStats(
+                            weatherData: data,
+                            historicalData: weatherService.historicalData[station.macAddress],
+                            station: station
+                        )
                     }
                 )
             }

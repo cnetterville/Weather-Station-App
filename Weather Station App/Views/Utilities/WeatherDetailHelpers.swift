@@ -173,3 +173,26 @@ struct SunHelpers {
         return sunTimes.isCurrentlyDaylight ? "sun.max.fill" : "moon.stars.fill"
     }
 }
+
+// MARK: - Pressure Helpers
+struct PressureHelpers {
+    static func getPressureTrend(current: Double, stats: DailyPressureStats) -> (icon: String, color: Color, description: String) {
+        let midRange = (stats.highPressure + stats.lowPressure) / 2
+        let range = stats.highPressure - stats.lowPressure
+        
+        // Determine trend based on current pressure relative to today's range
+        if current > stats.highPressure - (range * 0.1) {
+            // Near high - rising/high pressure
+            return ("arrow.up.circle", .green, "High pressure - stable weather likely")
+        } else if current < stats.lowPressure + (range * 0.1) {
+            // Near low - falling/low pressure
+            return ("arrow.down.circle", .orange, "Low pressure - weather changes possible")
+        } else if current > midRange {
+            // Above mid-range
+            return ("arrow.up.right.circle", .blue, "Above average - generally stable")
+        } else {
+            // Below mid-range
+            return ("arrow.down.right.circle", .yellow, "Below average - watch for changes")
+        }
+    }
+}
