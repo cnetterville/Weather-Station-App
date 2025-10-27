@@ -148,7 +148,10 @@ struct AdditionalWindInfoView: View {
             
             // Beaufort Scale
             if let windSpeedValue = Double(data.wind.windSpeed.value) {
-                let beaufortScale = WindHelpers.getBeaufortScale(windSpeedMph: windSpeedValue)
+                // Convert wind speed to MPH for Beaufort Scale calculation
+                let convertedSpeeds = MeasurementConverter.convertWindSpeed(data.wind.windSpeed.value, from: data.wind.windSpeed.unit)
+                let windSpeedMph = Double(convertedSpeeds.mph) ?? windSpeedValue
+                let beaufortScale = WindHelpers.getBeaufortScale(windSpeedMph: windSpeedMph)
                 HStack {
                     Text("Beaufort Scale:")
                         .font(.subheadline)
