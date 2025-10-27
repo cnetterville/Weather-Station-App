@@ -636,7 +636,6 @@ class DailyTemperatureCalculator {
     
     static func calculateDailyPM25Stats(from historicalData: HistoricalPM25Data?, for date: Date = Date(), timeZone: TimeZone = .current) -> DailyPM25Stats? {
         guard let pm25Data = historicalData?.pm25 else {
-            print("DEBUG: No PM2.5 historical data found")
             return nil
         }
         
@@ -647,12 +646,9 @@ class DailyTemperatureCalculator {
         let targetDay = calendar.startOfDay(for: date)
         let nextDay = calendar.date(byAdding: .day, value: 1, to: targetDay) ?? targetDay
         
-        print("DEBUG: Processing PM2.5 data - \(pm25Data.list.count) total readings")
-        
         for (timestampString, valueString) in pm25Data.list {
             guard let timestamp = Double(timestampString),
                   let pm25Value = Double(valueString) else {
-                print("DEBUG: Failed to parse PM2.5 reading: \(timestampString) -> \(valueString)")
                 continue
             }
             
@@ -665,10 +661,7 @@ class DailyTemperatureCalculator {
             }
         }
         
-        print("DEBUG: Found \(pm25Readings.count) PM2.5 readings for target day")
-        
         guard !pm25Readings.isEmpty else {
-            print("DEBUG: No PM2.5 readings found for target day")
             return nil
         }
         
@@ -681,9 +674,6 @@ class DailyTemperatureCalculator {
         let sortedByAQI = pm25Readings.sorted { $0.aqi < $1.aqi }
         let lowestAQIReading = sortedByAQI.first!
         let highestAQIReading = sortedByAQI.last!
-        
-        print("DEBUG: PM2.5 Range: \(lowestPM25Reading.pm25) - \(highestPM25Reading.pm25)")
-        print("DEBUG: AQI Range: \(lowestAQIReading.aqi) - \(highestAQIReading.aqi)")
         
         return DailyPM25Stats(
             highPM25: highestPM25Reading.pm25,
@@ -835,42 +825,24 @@ class DailyTemperatureCalculator {
     }
     
     static func getDailyPM25Ch1Stats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyPM25Stats? {
-        print("DEBUG: getDailyPM25Ch1Stats called")
         guard let historical = historicalData else { 
-            print("DEBUG: No historical data available")
             return nil 
-        }
-        
-        if historical.pm25Ch1 == nil {
-            print("DEBUG: No PM2.5 Ch1 data in historical structure")
         }
         
         return calculateDailyPM25Stats(from: historical.pm25Ch1, for: date, timeZone: station.timeZone)
     }
     
     static func getDailyPM25Ch2Stats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyPM25Stats? {
-        print("DEBUG: getDailyPM25Ch2Stats called")
         guard let historical = historicalData else { 
-            print("DEBUG: No historical data available for Ch2")
             return nil 
-        }
-        
-        if historical.pm25Ch2 == nil {
-            print("DEBUG: No PM2.5 Ch2 data in historical structure")
         }
         
         return calculateDailyPM25Stats(from: historical.pm25Ch2, for: date, timeZone: station.timeZone)
     }
     
     static func getDailyPM25Ch3Stats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyPM25Stats? {
-        print("DEBUG: getDailyPM25Ch3Stats called")
         guard let historical = historicalData else { 
-            print("DEBUG: No historical data available for Ch3")
             return nil 
-        }
-        
-        if historical.pm25Ch3 == nil {
-            print("DEBUG: No PM2.5 Ch3 data in historical structure")
         }
         
         return calculateDailyPM25Stats(from: historical.pm25Ch3, for: date, timeZone: station.timeZone)
