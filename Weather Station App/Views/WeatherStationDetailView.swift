@@ -1619,8 +1619,11 @@ struct WeatherCard<Content: View>: View {
             }
             
             content
+            
+            Spacer(minLength: 0)
         }
         .padding()
+        .frame(minHeight: 280, maxHeight: 280)
         .background(Color(NSColor.controlBackgroundColor))
         .cornerRadius(12)
         .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
@@ -1685,8 +1688,11 @@ struct EditableWeatherCard<Content: View>: View {
             }
             
             content
+            
+            Spacer(minLength: 0)
         }
         .padding()
+        .frame(minHeight: 280, maxHeight: 280)
         .background(Color(NSColor.controlBackgroundColor))
         .cornerRadius(12)
         .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
