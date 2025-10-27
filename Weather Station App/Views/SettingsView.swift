@@ -98,44 +98,6 @@ struct SettingsView: View {
                                 Text("Unit System:")
                                     .font(.headline)
                                 
-                                HStack(spacing: 8) {
-                                    ForEach(UnitSystemDisplayMode.allCases, id: \.self) { mode in
-                                        Button(mode.displayName) {
-                                            unitSystemDisplayMode = mode
-                                            UserDefaults.standard.unitSystemDisplayMode = mode
-                                        }
-                                        .buttonStyle(.bordered)
-                                        .controlSize(.small)
-                                        .background(unitSystemDisplayMode == mode ? Color.accentColor : Color.clear)
-                                        .foregroundColor(unitSystemDisplayMode == mode ? .white : .primary)
-                                        .cornerRadius(6)
-                                    }
-                                }
-                                
-                                HStack {
-                                    Image(systemName: "info.circle")
-                                        .foregroundColor(.blue)
-                                    Text("Choose how temperature values are displayed throughout the app")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                        }
-                        .padding()
-                        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
-                        .cornerRadius(8)
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("Display Preferences")
-                            .font(.title2)
-                            .fontWeight(.semibold)
-                        
-                        VStack(alignment: .leading, spacing: 12) {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Unit System:")
-                                    .font(.headline)
-                                
                                 VStack(alignment: .leading, spacing: 8) {
                                     ForEach(UnitSystemDisplayMode.allCases, id: \.self) { mode in
                                         Button(action: {

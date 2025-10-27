@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct CameraTileView: View {
     let station: WeatherStation
@@ -181,34 +182,45 @@ struct FullScreenCameraView: View {
     let stationName: String
     
     @Environment(\.dismiss) private var dismiss
-    @State private var displaySize: CGSize = CGSize(width: 600, height: 400)
-    @State private var hasCalculatedSize = false
     
     var body: some View {
-        NavigationView {
-            ZStack {
-                Color.black.ignoresSafeArea()
+        ZStack {
+            // Black background
+            Color.black
+                .ignoresSafeArea()
+            
+            // Main content
+            VStack {
+                // Navigation bar
+                HStack {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .foregroundColor(.white)
+                    
+                    Spacer()
+                    
+                    Text("Camera - \(stationName)")
+                        .foregroundColor(.white)
+                        .font(.headline)
+                    
+                    Spacer()
+                    
+                    Button("Save Image") {
+                        saveImage()
+                    }
+                    .foregroundColor(.blue)
+                }
+                .padding()
                 
+                // Image content
                 AsyncImage(url: URL(string: imageURL)) { phase in
                     switch phase {
                     case .success(let image):
                         image
                             .resizable()
                             .aspectRatio(contentMode: .fit)
-                            .background(
-                                GeometryReader { geometry in
-                                    Color.clear
-                                        .onAppear {
-                                            if !hasCalculatedSize {
-                                                updateDisplaySize(for: geometry.size)
-                                                hasCalculatedSize = true
-                                            }
-                                        }
-                                        .onChange(of: geometry.size) { _, newSize in
-                                            updateDisplaySize(for: newSize)
-                                        }
-                                }
-                            )
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                             
                     case .failure(_):
                         VStack(spacing: 16) {
@@ -220,7 +232,6 @@ struct FullScreenCameraView: View {
                                 .foregroundColor(.white)
                                 .font(.headline)
                         }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                         
                     case .empty:
                         VStack(spacing: 16) {
@@ -232,61 +243,47 @@ struct FullScreenCameraView: View {
                                 .foregroundColor(.white)
                                 .font(.headline)
                         }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                         
                     @unknown default:
                         EmptyView()
                     }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .navigationTitle("Camera - \(stationName)")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                    .foregroundColor(.white)
-                }
-                
-                ToolbarItem(placement: .primaryAction) {
-                    Button("Save Image") {
-                        saveImage()
-                    }
-                    .foregroundColor(.white)
-                }
-            }
-        }
-        .frame(width: displaySize.width, height: displaySize.height)
-        .background(Color.black)
-        .animation(.easeInOut(duration: 0.3), value: displaySize)
-    }
-    
-    private func updateDisplaySize(for imageSize: CGSize) {
-        // Only update if we have a meaningful image size
-        guard imageSize.width > 50 && imageSize.height > 50 else { return }
-        
-        let navigationHeight: CGFloat = 100
-        let padding: CGFloat = 40
-        let maxWidth: CGFloat = NSScreen.main?.frame.width ?? 1200
-        let maxHeight: CGFloat = NSScreen.main?.frame.height ?? 800
-        let minWidth: CGFloat = 500
-        let minHeight: CGFloat = 350
-        
-        // Calculate proposed size with padding for UI elements
-        let proposedWidth = min(max(imageSize.width + padding, minWidth), maxWidth * 0.9)
-        let proposedHeight = min(max(imageSize.height + navigationHeight, minHeight), maxHeight * 0.9)
-        
-        let newSize = CGSize(width: proposedWidth, height: proposedHeight)
-        
-        // Only update if the size changed significantly
-        if abs(newSize.width - displaySize.width) > 20 || abs(newSize.height - displaySize.height) > 20 {
-            displaySize = newSize
         }
     }
     
     private func saveImage() {
-        print("Save image functionality would be implemented here")
+        // Save image functionality
+        guard let url = URL(string: imageURL) else { return }
+        
+        Task {
+            do {
+                let (data, _) = try await URLSession.shared.data(from: url)
+                if NSImage(data: data) != nil {
+                    let savePanel = NSSavePanel()
+                    savePanel.allowedContentTypes = [UTType.jpeg, UTType.png]
+                    savePanel.nameFieldStringValue = "\(stationName)_camera_\(DateFormatter.filename.string(from: Date()))"
+                    
+                    let response = await savePanel.begin()
+                    if response == .OK, let saveURL = savePanel.url {
+                        try data.write(to: saveURL)
+                    }
+                }
+            } catch {
+                print("Failed to save image: \(error)")
+            }
+        }
     }
+}
+
+// MARK: - Extensions
+extension DateFormatter {
+    static let filename: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
+        return formatter
+    }()
 }
 
 #Preview {
