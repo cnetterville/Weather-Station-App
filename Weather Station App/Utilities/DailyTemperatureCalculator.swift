@@ -153,6 +153,50 @@ class DailyTemperatureCalculator {
         )
     }
     
+    static func calculateIndoorDailyStats(from historicalData: HistoricalIndoorData?, for date: Date = Date(), timeZone: TimeZone = .current) -> DailyTemperatureStats? {
+        guard let temperatureData = historicalData?.temperature else {
+            return nil
+        }
+        
+        let unit = temperatureData.unit
+        var tempReadings: [(temp: Double, time: Date)] = []
+        
+        let calendar = Calendar.current
+        let targetDay = calendar.startOfDay(for: date)
+        let nextDay = calendar.date(byAdding: .day, value: 1, to: targetDay) ?? targetDay
+        
+        for (timestampString, valueString) in temperatureData.list {
+            guard let timestamp = Double(timestampString),
+                  let temperature = Double(valueString) else {
+                continue
+            }
+            
+            let readingDate = Date(timeIntervalSince1970: timestamp)
+            
+            if readingDate >= targetDay && readingDate < nextDay {
+                tempReadings.append((temp: temperature, time: readingDate))
+            }
+        }
+        
+        guard !tempReadings.isEmpty else {
+            return nil
+        }
+        
+        let sortedByTemp = tempReadings.sorted { $0.temp < $1.temp }
+        let lowestReading = sortedByTemp.first!
+        let highestReading = sortedByTemp.last!
+        
+        return DailyTemperatureStats(
+            highTemp: highestReading.temp,
+            lowTemp: lowestReading.temp,
+            highTempTime: highestReading.time,
+            lowTempTime: lowestReading.time,
+            unit: unit,
+            dataPointCount: tempReadings.count,
+            isFromHistoricalData: true
+        )
+    }
+    
     static func estimateFromCurrentData(currentTemp: String, unit: String, station: WeatherStation) -> DailyTemperatureStats? {
         guard let temp = Double(currentTemp) else { return nil }
         
@@ -209,6 +253,50 @@ class DailyTemperatureCalculator {
     // MARK: - Humidity Calculations
     
     static func calculateDailyHumidityStats(from historicalData: HistoricalOutdoorData?, for date: Date = Date(), timeZone: TimeZone = .current) -> DailyHumidityStats? {
+        guard let humidityData = historicalData?.humidity else {
+            return nil
+        }
+        
+        let unit = humidityData.unit
+        var humidityReadings: [(humidity: Double, time: Date)] = []
+        
+        let calendar = Calendar.current
+        let targetDay = calendar.startOfDay(for: date)
+        let nextDay = calendar.date(byAdding: .day, value: 1, to: targetDay) ?? targetDay
+        
+        for (timestampString, valueString) in humidityData.list {
+            guard let timestamp = Double(timestampString),
+                  let humidity = Double(valueString) else {
+                continue
+            }
+            
+            let readingDate = Date(timeIntervalSince1970: timestamp)
+            
+            if readingDate >= targetDay && readingDate < nextDay {
+                humidityReadings.append((humidity: humidity, time: readingDate))
+            }
+        }
+        
+        guard !humidityReadings.isEmpty else {
+            return nil
+        }
+        
+        let sortedByHumidity = humidityReadings.sorted { $0.humidity < $1.humidity }
+        let lowestReading = sortedByHumidity.first!
+        let highestReading = sortedByHumidity.last!
+        
+        return DailyHumidityStats(
+            highHumidity: highestReading.humidity,
+            lowHumidity: lowestReading.humidity,
+            highHumidityTime: highestReading.time,
+            lowHumidityTime: lowestReading.time,
+            unit: unit,
+            dataPointCount: humidityReadings.count,
+            isFromHistoricalData: true
+        )
+    }
+    
+    static func calculateIndoorDailyHumidityStats(from historicalData: HistoricalIndoorData?, for date: Date = Date(), timeZone: TimeZone = .current) -> DailyHumidityStats? {
         guard let humidityData = historicalData?.humidity else {
             return nil
         }
@@ -333,5 +421,112 @@ class DailyTemperatureCalculator {
             unit: weatherData.outdoor.humidity.unit,
             station: station
         )
+    }
+    
+    // MARK: - Indoor Temperature Stats
+    
+    static func getIndoorDailyStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyTemperatureStats? {
+        if let historical = historicalData,
+           let stats = calculateIndoorDailyStats(from: historical.indoor, for: date, timeZone: station.timeZone) {
+            return stats
+        }
+        
+        return estimateFromCurrentData(
+            currentTemp: weatherData.indoor.temperature.value,
+            unit: weatherData.indoor.temperature.unit,
+            station: station
+        )
+    }
+    
+    static func getIndoorDailyHumidityStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyHumidityStats? {
+        if let historical = historicalData,
+           let stats = calculateIndoorDailyHumidityStats(from: historical.indoor, for: date, timeZone: station.timeZone) {
+            return stats
+        }
+        
+        return estimateHumidityFromCurrentData(
+            currentHumidity: weatherData.indoor.humidity.value,
+            unit: weatherData.indoor.humidity.unit,
+            station: station
+        )
+    }
+    
+    // MARK: - Channel Temperature Stats (Estimated only, no historical data available)
+    
+    static func getTempHumidityCh1DailyStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyTemperatureStats? {
+        // Note: Channel sensors typically don't have historical data in the API
+        // So we'll estimate based on current conditions
+        return estimateFromCurrentData(
+            currentTemp: weatherData.tempAndHumidityCh1.temperature.value,
+            unit: weatherData.tempAndHumidityCh1.temperature.unit,
+            station: station
+        )
+    }
+    
+    static func getTempHumidityCh1DailyHumidityStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyHumidityStats? {
+        // Note: Channel sensors typically don't have historical data in the API
+        // So we'll estimate based on current conditions
+        if let humidity = weatherData.tempAndHumidityCh1.humidity {
+            return estimateHumidityFromCurrentData(
+                currentHumidity: humidity.value,
+                unit: humidity.unit,
+                station: station
+            )
+        }
+        
+        return nil
+    }
+    
+    static func getTempHumidityCh2DailyStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyTemperatureStats? {
+        // Note: Channel sensors typically don't have historical data in the API
+        // So we'll estimate based on current conditions
+        return estimateFromCurrentData(
+            currentTemp: weatherData.tempAndHumidityCh2.temperature.value,
+            unit: weatherData.tempAndHumidityCh2.temperature.unit,
+            station: station
+        )
+    }
+    
+    static func getTempHumidityCh2DailyHumidityStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyHumidityStats? {
+        // Note: Channel sensors typically don't have historical data in the API
+        // So we'll estimate based on current conditions
+        if let humidity = weatherData.tempAndHumidityCh2.humidity {
+            return estimateHumidityFromCurrentData(
+                currentHumidity: humidity.value,
+                unit: humidity.unit,
+                station: station
+            )
+        }
+        
+        return nil
+    }
+    
+    static func getTempHumidityCh3DailyStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyTemperatureStats? {
+        // Note: Channel sensors typically don't have historical data in the API
+        // So we'll estimate based on current conditions
+        if let tempHumCh3 = weatherData.tempAndHumidityCh3 {
+            return estimateFromCurrentData(
+                currentTemp: tempHumCh3.temperature.value,
+                unit: tempHumCh3.temperature.unit,
+                station: station
+            )
+        }
+        
+        return nil
+    }
+    
+    static func getTempHumidityCh3DailyHumidityStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyHumidityStats? {
+        // Note: Channel sensors typically don't have historical data in the API
+        // So we'll estimate based on current conditions
+        if let tempHumCh3 = weatherData.tempAndHumidityCh3,
+           let humidity = tempHumCh3.humidity {
+            return estimateHumidityFromCurrentData(
+                currentHumidity: humidity.value,
+                unit: humidity.unit,
+                station: station
+            )
+        }
+        
+        return nil
     }
 }
