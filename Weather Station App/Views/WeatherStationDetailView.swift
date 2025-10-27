@@ -23,7 +23,8 @@ struct WeatherStationDetailView: View {
                     
                     if let data = weatherData {
                         let columns = calculateColumns(for: geometry.size.width)
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: columns), spacing: 16) {
+                        let tileSize = calculateTileSize(for: geometry.size.width, columns: columns)
+                        LazyVGrid(columns: Array(repeating: GridItem(.fixed(tileSize), spacing: 16), count: columns), spacing: 16) {
                             
                             // TEMPERATURE SENSORS SECTION - All grouped together
                             // Outdoor Temperature Card with Daily High/Low
@@ -36,9 +37,9 @@ struct WeatherStationDetailView: View {
                                         saveStation()
                                     }
                                 ) {
-                                    VStack(spacing: 12) {
+                                    VStack(alignment: .leading, spacing: 12) {
                                         // Current Temperature - Main Display
-                                        VStack(spacing: 4) {
+                                        VStack(alignment: .leading, spacing: 4) {
                                             Text(TemperatureConverter.formatTemperature(data.outdoor.temperature.value, originalUnit: data.outdoor.temperature.unit))
                                                 .font(.system(size: 36, weight: .bold, design: .rounded))
                                             HStack(spacing: 12) {
@@ -62,7 +63,7 @@ struct WeatherStationDetailView: View {
                                         
                                         // Daily High/Low Section - Temperature
                                         if let tempStats = getDailyTemperatureStats(for: station, data: data) {
-                                            VStack(spacing: 8) {
+                                            VStack(alignment: .leading, spacing: 8) {
                                                 // Temperature High/Low
                                                 HStack(spacing: 16) {
                                                     // Daily High Temp
@@ -181,9 +182,9 @@ struct WeatherStationDetailView: View {
                                         saveStation()
                                     }
                                 ) {
-                                    VStack(spacing: 12) {
+                                    VStack(alignment: .leading, spacing: 12) {
                                         // Current Temperature - Main Display
-                                        VStack(spacing: 4) {
+                                        VStack(alignment: .leading, spacing: 4) {
                                             Text(TemperatureConverter.formatTemperature(data.indoor.temperature.value, originalUnit: data.indoor.temperature.unit))
                                                 .font(.system(size: 32, weight: .bold, design: .rounded))
                                             Text("Humidity \(data.indoor.humidity.value)\(data.indoor.humidity.unit)")
@@ -195,7 +196,7 @@ struct WeatherStationDetailView: View {
                                         
                                         // Daily High/Low Section - Temperature
                                         if let tempStats = getIndoorDailyTemperatureStats(for: station, data: data) {
-                                            VStack(spacing: 8) {
+                                            VStack(alignment: .leading, spacing: 8) {
                                                 // Temperature High/Low
                                                 HStack(spacing: 16) {
                                                     // Daily High Temp
@@ -314,9 +315,9 @@ struct WeatherStationDetailView: View {
                                         saveStation()
                                     }
                                 ) {
-                                    VStack(spacing: 12) {
+                                    VStack(alignment: .leading, spacing: 12) {
                                         // Current Temperature - Main Display
-                                        VStack(spacing: 4) {
+                                        VStack(alignment: .leading, spacing: 4) {
                                             Text(TemperatureConverter.formatTemperature(data.tempAndHumidityCh1.temperature.value, originalUnit: data.tempAndHumidityCh1.temperature.unit))
                                                 .font(.system(size: 24, weight: .bold, design: .rounded))
                                             if let humidity = data.tempAndHumidityCh1.humidity {
@@ -330,7 +331,7 @@ struct WeatherStationDetailView: View {
                                         
                                         // Daily High/Low Section - Temperature
                                         if let tempStats = getTempHumidityCh1DailyTemperatureStats(for: station, data: data) {
-                                            VStack(spacing: 8) {
+                                            VStack(alignment: .leading, spacing: 8) {
                                                 // Temperature High/Low
                                                 HStack(spacing: 16) {
                                                     // Daily High Temp
@@ -449,9 +450,9 @@ struct WeatherStationDetailView: View {
                                         saveStation()
                                     }
                                 ) {
-                                    VStack(spacing: 12) {
+                                    VStack(alignment: .leading, spacing: 12) {
                                         // Current Temperature - Main Display
-                                        VStack(spacing: 4) {
+                                        VStack(alignment: .leading, spacing: 4) {
                                             Text(TemperatureConverter.formatTemperature(data.tempAndHumidityCh2.temperature.value, originalUnit: data.tempAndHumidityCh2.temperature.unit))
                                                 .font(.system(size: 24, weight: .bold, design: .rounded))
                                             if let humidity = data.tempAndHumidityCh2.humidity {
@@ -465,7 +466,7 @@ struct WeatherStationDetailView: View {
                                         
                                         // Daily High/Low Section - Temperature
                                         if let tempStats = getTempHumidityCh2DailyTemperatureStats(for: station, data: data) {
-                                            VStack(spacing: 8) {
+                                            VStack(alignment: .leading, spacing: 8) {
                                                 // Temperature High/Low
                                                 HStack(spacing: 16) {
                                                     // Daily High Temp
@@ -584,9 +585,9 @@ struct WeatherStationDetailView: View {
                                         saveStation()
                                     }
                                 ) {
-                                    VStack(spacing: 12) {
+                                    VStack(alignment: .leading, spacing: 12) {
                                         // Current Temperature - Main Display
-                                        VStack(spacing: 4) {
+                                        VStack(alignment: .leading, spacing: 4) {
                                             Text(TemperatureConverter.formatTemperature(tempHumCh3.temperature.value, originalUnit: tempHumCh3.temperature.unit))
                                                 .font(.system(size: 24, weight: .bold, design: .rounded))
                                             if let humidity = tempHumCh3.humidity {
@@ -600,7 +601,7 @@ struct WeatherStationDetailView: View {
                                         
                                         // Daily High/Low Section - Temperature
                                         if let tempStats = getTempHumidityCh3DailyTemperatureStats(for: station, data: data) {
-                                            VStack(spacing: 8) {
+                                            VStack(alignment: .leading, spacing: 8) {
                                                 // Temperature High/Low
                                                 HStack(spacing: 16) {
                                                     // Daily High Temp
@@ -720,7 +721,7 @@ struct WeatherStationDetailView: View {
                                         saveStation()
                                     }
                                 ) {
-                                    VStack(spacing: 12) {
+                                    VStack(alignment: .leading, spacing: 12) {
                                         // Current Wind Speed - Larger, more prominent
                                         HStack {
                                             VStack(alignment: .leading) {
@@ -793,7 +794,7 @@ struct WeatherStationDetailView: View {
                                         saveStation()
                                     }
                                 ) {
-                                    VStack(spacing: 8) {
+                                    VStack(alignment: .leading, spacing: 8) {
                                         Text("\(data.pressure.relative.value) \(data.pressure.relative.unit)")
                                             .font(.system(size: 24, weight: .bold, design: .rounded))
                                         Text("Absolute: \(data.pressure.absolute.value) \(data.pressure.absolute.unit)")
@@ -872,7 +873,7 @@ struct WeatherStationDetailView: View {
                                         saveStation()
                                     }
                                 ) {
-                                    VStack(spacing: 8) {
+                                    VStack(alignment: .leading, spacing: 8) {
                                         Text("\(data.pm25Ch1.pm25.value) \(data.pm25Ch1.pm25.unit)")
                                             .font(.system(size: 24, weight: .bold, design: .rounded))
                                         Text("AQI: \(data.pm25Ch1.realTimeAqi.value)")
@@ -894,7 +895,7 @@ struct WeatherStationDetailView: View {
                                         saveStation()
                                     }
                                 ) {
-                                    VStack(spacing: 8) {
+                                    VStack(alignment: .leading, spacing: 8) {
                                         Text("\(pm25Ch2.pm25.value) \(pm25Ch2.pm25.unit)")
                                             .font(.system(size: 24, weight: .bold, design: .rounded))
                                         Text("AQI: \(pm25Ch2.realTimeAqi.value)")
@@ -916,7 +917,7 @@ struct WeatherStationDetailView: View {
                                         saveStation()
                                     }
                                 ) {
-                                    VStack(spacing: 8) {
+                                    VStack(alignment: .leading, spacing: 8) {
                                         Text("\(pm25Ch3.pm25.value) \(pm25Ch3.pm25.unit)")
                                             .font(.system(size: 24, weight: .bold, design: .rounded))
                                         Text("AQI: \(pm25Ch3.realTimeAqi.value)")
@@ -936,9 +937,9 @@ struct WeatherStationDetailView: View {
                                         saveStation()
                                     }
                                 ) {
-                                    VStack(spacing: 12) {
+                                    VStack(alignment: .leading, spacing: 12) {
                                         // UV Index - Most prominent
-                                        VStack(spacing: 4) {
+                                        VStack(alignment: .leading, spacing: 4) {
                                             Text("UV Index")
                                                 .font(.headline)
                                                 .fontWeight(.semibold)
@@ -953,7 +954,7 @@ struct WeatherStationDetailView: View {
                                         Divider()
                                         
                                         // Solar Radiation Details
-                                        VStack(spacing: 8) {
+                                        VStack(alignment: .leading, spacing: 8) {
                                             HStack {
                                                 Text("Solar Radiation:")
                                                     .font(.subheadline)
@@ -1002,7 +1003,7 @@ struct WeatherStationDetailView: View {
                                         saveStation()
                                     }
                                 ) {
-                                    VStack(spacing: 8) {
+                                    VStack(alignment: .leading, spacing: 8) {
                                         Text(MeasurementConverter.formatDistance(data.lightning.distance.value, originalUnit: data.lightning.distance.unit))
                                             .font(.system(size: 24, weight: .bold, design: .rounded))
                                         Text("Count: \(data.lightning.count.value)")
@@ -1248,17 +1249,25 @@ struct WeatherStationDetailView: View {
     
     // Dynamic column calculation based on window width
     private func calculateColumns(for width: CGFloat) -> Int {
-        let cardMinWidth: CGFloat = 300  // Minimum width for each card
-        let padding: CGFloat = 32       // Total horizontal padding
-        let spacing: CGFloat = 16       // Spacing between columns
-        
-        let availableWidth = width - padding
-        
-        // Calculate maximum possible columns
-        let maxColumns = max(1, Int((availableWidth + spacing) / (cardMinWidth + spacing)))
-        
-        // Cap at reasonable maximum for readability
-        return min(maxColumns, 5)
+        switch width {
+        case 0..<600:
+            return 1
+        case 600..<900:
+            return 2
+        case 900..<1200:
+            return 3
+        case 1200..<1600:
+            return 4
+        default:
+            return 5
+        }
+    }
+    
+    private func calculateTileSize(for width: CGFloat, columns: Int) -> CGFloat {
+        let spacing: CGFloat = 16
+        let totalSpacing = spacing * CGFloat(columns - 1)
+        let availableWidth = width - totalSpacing - 32 // 32 for padding
+        return availableWidth / CGFloat(columns)
     }
     
     private func saveStation() {
@@ -1625,7 +1634,7 @@ struct WeatherCard<Content: View>: View {
             Spacer(minLength: 0)
         }
         .padding()
-        .frame(minHeight: 280, maxHeight: 280)
+        .frame(minHeight: 200, maxHeight: 220)
         .background(Color(NSColor.controlBackgroundColor))
         .cornerRadius(12)
         .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
@@ -1635,11 +1644,11 @@ struct WeatherCard<Content: View>: View {
 struct EditableWeatherCard<Content: View>: View {
     @Binding var title: String
     let systemImage: String
-    let content: Content
     let onTitleChange: (String) -> Void
+    let content: Content
     
     @State private var isEditing = false
-    @State private var editText = ""
+    @State private var editedTitle = ""
     
     init(title: Binding<String>, systemImage: String, onTitleChange: @escaping (String) -> Void, @ViewBuilder content: () -> Content) {
         self._title = title
@@ -1649,56 +1658,88 @@ struct EditableWeatherCard<Content: View>: View {
     }
     
     var body: some View {
-        VStack(spacing: 12) {
-            HStack {
+        VStack(alignment: .leading, spacing: 12) {
+            // Header with icon and title
+            HStack(spacing: 8) {
+                Image(systemName: systemImage)
+                    .foregroundColor(.blue)
+                    .font(.system(size: 16, weight: .medium))
+                    .frame(width: 20, height: 20)
+                
                 if isEditing {
-                    Spacer()
-                    TextField("Sensor Label", text: $editText)
-                        .textFieldStyle(.roundedBorder)
-                        .multilineTextAlignment(.center)
+                    TextField("Card title", text: $editedTitle)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .font(.headline)
+                        .fontWeight(.semibold)
                         .onSubmit {
-                            title = editText
-                            onTitleChange(editText)
+                            onTitleChange(editedTitle)
+                            title = editedTitle
                             isEditing = false
                         }
                         .onAppear {
-                            editText = title
+                            editedTitle = title
                         }
-                    Spacer()
-                    
-                    Button("Done") {
-                        title = editText
-                        onTitleChange(editText)
-                        isEditing = false
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.mini)
                 } else {
-                    Spacer()
-                    Image(systemName: systemImage)
-                        .foregroundColor(.blue)
                     Text(title)
                         .font(.headline)
                         .fontWeight(.semibold)
-                        .multilineTextAlignment(.center)
+                        .foregroundColor(.primary)
                         .onTapGesture {
-                            editText = title
+                            editedTitle = title
                             isEditing = true
                         }
-                        .help("Click to edit label")
-                    Spacer()
                 }
+                
+                Spacer()
             }
             
-            content
+            // Content with scrollable area for overflow
+            ScrollView {
+                content
+            }
+            .frame(maxHeight: 180) // Fixed content height for uniformity
             
             Spacer(minLength: 0)
         }
-        .padding()
-        .frame(minHeight: 280, maxHeight: 280)
-        .background(Color(NSColor.controlBackgroundColor))
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+        .frame(height: 250) // Fixed card height
+        .padding(20)
+        .background {
+            // Modern multi-layer background effect
+            ZStack {
+                // Base background with subtle transparency
+                Color(NSColor.controlBackgroundColor)
+                    .opacity(0.8)
+                
+                // Subtle gradient overlay for depth
+                LinearGradient(
+                    gradient: Gradient(colors: [
+                        Color.white.opacity(0.1),
+                        Color.clear,
+                        Color.black.opacity(0.05)
+                    ]),
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
+        }
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 2)
+        .shadow(color: .black.opacity(0.04), radius: 2, x: 0, y: 1)
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(.linearGradient(
+                    colors: [
+                        Color.white.opacity(0.3),
+                        Color.white.opacity(0.1),
+                        Color.clear
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ), lineWidth: 0.5)
+        )
+        .scaleEffect(1.0)
+        .animation(.easeInOut(duration: 0.2), value: isEditing)
     }
 }
 
