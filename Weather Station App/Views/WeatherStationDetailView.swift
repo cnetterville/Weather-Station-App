@@ -181,12 +181,125 @@ struct WeatherStationDetailView: View {
                                         saveStation()
                                     }
                                 ) {
-                                    VStack(spacing: 8) {
-                                        Text(TemperatureConverter.formatTemperature(data.indoor.temperature.value, originalUnit: data.indoor.temperature.unit))
-                                            .font(.system(size: 32, weight: .bold, design: .rounded))
-                                        Text("Humidity \(data.indoor.humidity.value)\(data.indoor.humidity.unit)")
-                                            .font(.subheadline)
-                                            .foregroundColor(.secondary)
+                                    VStack(spacing: 12) {
+                                        // Current Temperature - Main Display
+                                        VStack(spacing: 4) {
+                                            Text(TemperatureConverter.formatTemperature(data.indoor.temperature.value, originalUnit: data.indoor.temperature.unit))
+                                                .font(.system(size: 32, weight: .bold, design: .rounded))
+                                            Text("Humidity \(data.indoor.humidity.value)\(data.indoor.humidity.unit)")
+                                                .font(.subheadline)
+                                                .foregroundColor(.secondary)
+                                        }
+                                        
+                                        Divider()
+                                        
+                                        // Daily High/Low Section - Temperature
+                                        if let tempStats = getIndoorDailyTemperatureStats(for: station, data: data) {
+                                            VStack(spacing: 8) {
+                                                // Temperature High/Low
+                                                HStack(spacing: 16) {
+                                                    // Daily High Temp
+                                                    VStack(alignment: .leading, spacing: 2) {
+                                                        HStack(spacing: 4) {
+                                                            Image(systemName: "thermometer.sun.fill")
+                                                                .foregroundColor(.orange)
+                                                                .font(.caption2)
+                                                            Text("High")
+                                                                .font(.caption)
+                                                                .foregroundColor(.secondary)
+                                                        }
+                                                        Text(tempStats.formattedHigh)
+                                                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                                            .foregroundColor(.orange)
+                                                        if tempStats.isReliable && tempStats.highTempTime != nil {
+                                                            Text("at \(tempStats.formattedHighTime)")
+                                                                .font(.caption2)
+                                                                .foregroundColor(.secondary)
+                                                        }
+                                                    }
+                                                    
+                                                    Spacer()
+                                                    
+                                                    // Daily Low Temp
+                                                    VStack(alignment: .trailing, spacing: 2) {
+                                                        HStack(spacing: 4) {
+                                                            Text("Low")
+                                                                .font(.caption)
+                                                                .foregroundColor(.secondary)
+                                                            Image(systemName: "thermometer.snowflake")
+                                                                .foregroundColor(.blue)
+                                                                .font(.caption2)
+                                                        }
+                                                        Text(tempStats.formattedLow)
+                                                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                                            .foregroundColor(.blue)
+                                                        if tempStats.isReliable && tempStats.lowTempTime != nil {
+                                                            Text("at \(tempStats.formattedLowTime)")
+                                                                .font(.caption2)
+                                                                .foregroundColor(.secondary)
+                                                        }
+                                                    }
+                                                }
+                                                
+                                                // Humidity High/Low
+                                                if let humidityStats = getIndoorDailyHumidityStats(for: station, data: data) {
+                                                    HStack(spacing: 16) {
+                                                        // Daily High Humidity
+                                                        VStack(alignment: .leading, spacing: 2) {
+                                                            HStack(spacing: 4) {
+                                                                Image(systemName: "humidity.fill")
+                                                                    .foregroundColor(.teal)
+                                                                    .font(.caption2)
+                                                                Text("High")
+                                                                    .font(.caption)
+                                                                    .foregroundColor(.secondary)
+                                                            }
+                                                            Text(humidityStats.formattedHigh)
+                                                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                                                .foregroundColor(.teal)
+                                                            if humidityStats.isReliable && humidityStats.highHumidityTime != nil {
+                                                                Text("at \(humidityStats.formattedHighTime)")
+                                                                    .font(.caption2)
+                                                                    .foregroundColor(.secondary)
+                                                            }
+                                                        }
+                                                        
+                                                        Spacer()
+                                                        
+                                                        // Daily Low Humidity
+                                                        VStack(alignment: .trailing, spacing: 2) {
+                                                            HStack(spacing: 4) {
+                                                                Text("Low")
+                                                                    .font(.caption)
+                                                                    .foregroundColor(.secondary)
+                                                                Image(systemName: "humidity")
+                                                                    .foregroundColor(.brown)
+                                                                    .font(.caption2)
+                                                            }
+                                                            Text(humidityStats.formattedLow)
+                                                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                                                .foregroundColor(.brown)
+                                                            if humidityStats.isReliable && humidityStats.lowHumidityTime != nil {
+                                                                Text("at \(humidityStats.formattedLowTime)")
+                                                                    .font(.caption2)
+                                                                    .foregroundColor(.secondary)
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        } else {
+                                            // Fallback when no high/low data available
+                                            HStack {
+                                                Text("Daily High/Low:")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                                Spacer()
+                                                Text("Loading...")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -201,13 +314,126 @@ struct WeatherStationDetailView: View {
                                         saveStation()
                                     }
                                 ) {
-                                    VStack(spacing: 8) {
-                                        Text(TemperatureConverter.formatTemperature(data.tempAndHumidityCh1.temperature.value, originalUnit: data.tempAndHumidityCh1.temperature.unit))
-                                            .font(.system(size: 24, weight: .bold, design: .rounded))
-                                        if let humidity = data.tempAndHumidityCh1.humidity {
-                                            Text("Humidity: \(humidity.value)\(humidity.unit)")
-                                                .font(.subheadline)
-                                                .foregroundColor(.secondary)
+                                    VStack(spacing: 12) {
+                                        // Current Temperature - Main Display
+                                        VStack(spacing: 4) {
+                                            Text(TemperatureConverter.formatTemperature(data.tempAndHumidityCh1.temperature.value, originalUnit: data.tempAndHumidityCh1.temperature.unit))
+                                                .font(.system(size: 24, weight: .bold, design: .rounded))
+                                            if let humidity = data.tempAndHumidityCh1.humidity {
+                                                Text("Humidity: \(humidity.value)\(humidity.unit)")
+                                                    .font(.subheadline)
+                                                    .foregroundColor(.secondary)
+                                            }
+                                        }
+                                        
+                                        Divider()
+                                        
+                                        // Daily High/Low Section - Temperature
+                                        if let tempStats = getTempHumidityCh1DailyTemperatureStats(for: station, data: data) {
+                                            VStack(spacing: 8) {
+                                                // Temperature High/Low
+                                                HStack(spacing: 16) {
+                                                    // Daily High Temp
+                                                    VStack(alignment: .leading, spacing: 2) {
+                                                        HStack(spacing: 4) {
+                                                            Image(systemName: "thermometer.sun.fill")
+                                                                .foregroundColor(.orange)
+                                                                .font(.caption2)
+                                                            Text("High")
+                                                                .font(.caption)
+                                                                .foregroundColor(.secondary)
+                                                        }
+                                                        Text(tempStats.formattedHigh)
+                                                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                                            .foregroundColor(.orange)
+                                                        if tempStats.isReliable && tempStats.highTempTime != nil {
+                                                            Text("at \(tempStats.formattedHighTime)")
+                                                                .font(.caption2)
+                                                                .foregroundColor(.secondary)
+                                                        }
+                                                    }
+                                                    
+                                                    Spacer()
+                                                    
+                                                    // Daily Low Temp
+                                                    VStack(alignment: .trailing, spacing: 2) {
+                                                        HStack(spacing: 4) {
+                                                            Text("Low")
+                                                                .font(.caption)
+                                                                .foregroundColor(.secondary)
+                                                            Image(systemName: "thermometer.snowflake")
+                                                                .foregroundColor(.blue)
+                                                                .font(.caption2)
+                                                        }
+                                                        Text(tempStats.formattedLow)
+                                                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                                            .foregroundColor(.blue)
+                                                        if tempStats.isReliable && tempStats.lowTempTime != nil {
+                                                            Text("at \(tempStats.formattedLowTime)")
+                                                                .font(.caption2)
+                                                                .foregroundColor(.secondary)
+                                                        }
+                                                    }
+                                                }
+                                                
+                                                // Humidity High/Low
+                                                if let humidityStats = getTempHumidityCh1DailyHumidityStats(for: station, data: data) {
+                                                    HStack(spacing: 16) {
+                                                        // Daily High Humidity
+                                                        VStack(alignment: .leading, spacing: 2) {
+                                                            HStack(spacing: 4) {
+                                                                Image(systemName: "humidity.fill")
+                                                                    .foregroundColor(.teal)
+                                                                    .font(.caption2)
+                                                                Text("High")
+                                                                    .font(.caption)
+                                                                    .foregroundColor(.secondary)
+                                                            }
+                                                            Text(humidityStats.formattedHigh)
+                                                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                                                .foregroundColor(.teal)
+                                                            if humidityStats.isReliable && humidityStats.highHumidityTime != nil {
+                                                                Text("at \(humidityStats.formattedHighTime)")
+                                                                    .font(.caption2)
+                                                                    .foregroundColor(.secondary)
+                                                            }
+                                                        }
+                                                        
+                                                        Spacer()
+                                                        
+                                                        // Daily Low Humidity
+                                                        VStack(alignment: .trailing, spacing: 2) {
+                                                            HStack(spacing: 4) {
+                                                                Text("Low")
+                                                                    .font(.caption)
+                                                                    .foregroundColor(.secondary)
+                                                                Image(systemName: "humidity")
+                                                                    .foregroundColor(.brown)
+                                                                    .font(.caption2)
+                                                            }
+                                                            Text(humidityStats.formattedLow)
+                                                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                                                .foregroundColor(.brown)
+                                                            if humidityStats.isReliable && humidityStats.lowHumidityTime != nil {
+                                                                Text("at \(humidityStats.formattedLowTime)")
+                                                                    .font(.caption2)
+                                                                    .foregroundColor(.secondary)
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        } else {
+                                            // Fallback when no high/low data available
+                                            HStack {
+                                                Text("Daily High/Low:")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                                Spacer()
+                                                Text("Estimated from current")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                            }
                                         }
                                     }
                                 }
@@ -223,13 +449,126 @@ struct WeatherStationDetailView: View {
                                         saveStation()
                                     }
                                 ) {
-                                    VStack(spacing: 8) {
-                                        Text(TemperatureConverter.formatTemperature(data.tempAndHumidityCh2.temperature.value, originalUnit: data.tempAndHumidityCh2.temperature.unit))
-                                            .font(.system(size: 24, weight: .bold, design: .rounded))
-                                        if let humidity = data.tempAndHumidityCh2.humidity {
-                                            Text("Humidity: \(humidity.value)\(humidity.unit)")
-                                                .font(.subheadline)
-                                                .foregroundColor(.secondary)
+                                    VStack(spacing: 12) {
+                                        // Current Temperature - Main Display
+                                        VStack(spacing: 4) {
+                                            Text(TemperatureConverter.formatTemperature(data.tempAndHumidityCh2.temperature.value, originalUnit: data.tempAndHumidityCh2.temperature.unit))
+                                                .font(.system(size: 24, weight: .bold, design: .rounded))
+                                            if let humidity = data.tempAndHumidityCh2.humidity {
+                                                Text("Humidity: \(humidity.value)\(humidity.unit)")
+                                                    .font(.subheadline)
+                                                    .foregroundColor(.secondary)
+                                            }
+                                        }
+                                        
+                                        Divider()
+                                        
+                                        // Daily High/Low Section - Temperature
+                                        if let tempStats = getTempHumidityCh2DailyTemperatureStats(for: station, data: data) {
+                                            VStack(spacing: 8) {
+                                                // Temperature High/Low
+                                                HStack(spacing: 16) {
+                                                    // Daily High Temp
+                                                    VStack(alignment: .leading, spacing: 2) {
+                                                        HStack(spacing: 4) {
+                                                            Image(systemName: "thermometer.sun.fill")
+                                                                .foregroundColor(.orange)
+                                                                .font(.caption2)
+                                                            Text("High")
+                                                                .font(.caption)
+                                                                .foregroundColor(.secondary)
+                                                        }
+                                                        Text(tempStats.formattedHigh)
+                                                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                                            .foregroundColor(.orange)
+                                                        if tempStats.isReliable && tempStats.highTempTime != nil {
+                                                            Text("at \(tempStats.formattedHighTime)")
+                                                                .font(.caption2)
+                                                                .foregroundColor(.secondary)
+                                                        }
+                                                    }
+                                                    
+                                                    Spacer()
+                                                    
+                                                    // Daily Low Temp
+                                                    VStack(alignment: .trailing, spacing: 2) {
+                                                        HStack(spacing: 4) {
+                                                            Text("Low")
+                                                                .font(.caption)
+                                                                .foregroundColor(.secondary)
+                                                            Image(systemName: "thermometer.snowflake")
+                                                                .foregroundColor(.blue)
+                                                                .font(.caption2)
+                                                        }
+                                                        Text(tempStats.formattedLow)
+                                                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                                            .foregroundColor(.blue)
+                                                        if tempStats.isReliable && tempStats.lowTempTime != nil {
+                                                            Text("at \(tempStats.formattedLowTime)")
+                                                                .font(.caption2)
+                                                                .foregroundColor(.secondary)
+                                                        }
+                                                    }
+                                                }
+                                                
+                                                // Humidity High/Low
+                                                if let humidityStats = getTempHumidityCh2DailyHumidityStats(for: station, data: data) {
+                                                    HStack(spacing: 16) {
+                                                        // Daily High Humidity
+                                                        VStack(alignment: .leading, spacing: 2) {
+                                                            HStack(spacing: 4) {
+                                                                Image(systemName: "humidity.fill")
+                                                                    .foregroundColor(.teal)
+                                                                    .font(.caption2)
+                                                                Text("High")
+                                                                    .font(.caption)
+                                                                    .foregroundColor(.secondary)
+                                                            }
+                                                            Text(humidityStats.formattedHigh)
+                                                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                                                .foregroundColor(.teal)
+                                                            if humidityStats.isReliable && humidityStats.highHumidityTime != nil {
+                                                                Text("at \(humidityStats.formattedHighTime)")
+                                                                    .font(.caption2)
+                                                                    .foregroundColor(.secondary)
+                                                            }
+                                                        }
+                                                        
+                                                        Spacer()
+                                                        
+                                                        // Daily Low Humidity
+                                                        VStack(alignment: .trailing, spacing: 2) {
+                                                            HStack(spacing: 4) {
+                                                                Text("Low")
+                                                                    .font(.caption)
+                                                                    .foregroundColor(.secondary)
+                                                                Image(systemName: "humidity")
+                                                                    .foregroundColor(.brown)
+                                                                    .font(.caption2)
+                                                            }
+                                                            Text(humidityStats.formattedLow)
+                                                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                                                .foregroundColor(.brown)
+                                                            if humidityStats.isReliable && humidityStats.lowHumidityTime != nil {
+                                                                Text("at \(humidityStats.formattedLowTime)")
+                                                                    .font(.caption2)
+                                                                    .foregroundColor(.secondary)
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        } else {
+                                            // Fallback when no high/low data available
+                                            HStack {
+                                                Text("Daily High/Low:")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                                Spacer()
+                                                Text("Estimated from current")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                            }
                                         }
                                     }
                                 }
@@ -245,13 +584,126 @@ struct WeatherStationDetailView: View {
                                         saveStation()
                                     }
                                 ) {
-                                    VStack(spacing: 8) {
-                                        Text(TemperatureConverter.formatTemperature(tempHumCh3.temperature.value, originalUnit: tempHumCh3.temperature.unit))
-                                            .font(.system(size: 24, weight: .bold, design: .rounded))
-                                        if let humidity = tempHumCh3.humidity {
-                                            Text("Humidity: \(humidity.value)\(humidity.unit)")
-                                                .font(.subheadline)
-                                                .foregroundColor(.secondary)
+                                    VStack(spacing: 12) {
+                                        // Current Temperature - Main Display
+                                        VStack(spacing: 4) {
+                                            Text(TemperatureConverter.formatTemperature(tempHumCh3.temperature.value, originalUnit: tempHumCh3.temperature.unit))
+                                                .font(.system(size: 24, weight: .bold, design: .rounded))
+                                            if let humidity = tempHumCh3.humidity {
+                                                Text("Humidity: \(humidity.value)\(humidity.unit)")
+                                                    .font(.subheadline)
+                                                    .foregroundColor(.secondary)
+                                            }
+                                        }
+                                        
+                                        Divider()
+                                        
+                                        // Daily High/Low Section - Temperature
+                                        if let tempStats = getTempHumidityCh3DailyTemperatureStats(for: station, data: data) {
+                                            VStack(spacing: 8) {
+                                                // Temperature High/Low
+                                                HStack(spacing: 16) {
+                                                    // Daily High Temp
+                                                    VStack(alignment: .leading, spacing: 2) {
+                                                        HStack(spacing: 4) {
+                                                            Image(systemName: "thermometer.sun.fill")
+                                                                .foregroundColor(.orange)
+                                                                .font(.caption2)
+                                                            Text("High")
+                                                                .font(.caption)
+                                                                .foregroundColor(.secondary)
+                                                        }
+                                                        Text(tempStats.formattedHigh)
+                                                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                                            .foregroundColor(.orange)
+                                                        if tempStats.isReliable && tempStats.highTempTime != nil {
+                                                            Text("at \(tempStats.formattedHighTime)")
+                                                                .font(.caption2)
+                                                                .foregroundColor(.secondary)
+                                                        }
+                                                    }
+                                                    
+                                                    Spacer()
+                                                    
+                                                    // Daily Low Temp
+                                                    VStack(alignment: .trailing, spacing: 2) {
+                                                        HStack(spacing: 4) {
+                                                            Text("Low")
+                                                                .font(.caption)
+                                                                .foregroundColor(.secondary)
+                                                            Image(systemName: "thermometer.snowflake")
+                                                                .foregroundColor(.blue)
+                                                                .font(.caption2)
+                                                        }
+                                                        Text(tempStats.formattedLow)
+                                                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                                            .foregroundColor(.blue)
+                                                        if tempStats.isReliable && tempStats.lowTempTime != nil {
+                                                            Text("at \(tempStats.formattedLowTime)")
+                                                                .font(.caption2)
+                                                                .foregroundColor(.secondary)
+                                                        }
+                                                    }
+                                                }
+                                                
+                                                // Humidity High/Low
+                                                if let humidityStats = getTempHumidityCh3DailyHumidityStats(for: station, data: data) {
+                                                    HStack(spacing: 16) {
+                                                        // Daily High Humidity
+                                                        VStack(alignment: .leading, spacing: 2) {
+                                                            HStack(spacing: 4) {
+                                                                Image(systemName: "humidity.fill")
+                                                                    .foregroundColor(.teal)
+                                                                    .font(.caption2)
+                                                                Text("High")
+                                                                    .font(.caption)
+                                                                    .foregroundColor(.secondary)
+                                                            }
+                                                            Text(humidityStats.formattedHigh)
+                                                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                                                .foregroundColor(.teal)
+                                                            if humidityStats.isReliable && humidityStats.highHumidityTime != nil {
+                                                                Text("at \(humidityStats.formattedHighTime)")
+                                                                    .font(.caption2)
+                                                                    .foregroundColor(.secondary)
+                                                            }
+                                                        }
+                                                        
+                                                        Spacer()
+                                                        
+                                                        // Daily Low Humidity
+                                                        VStack(alignment: .trailing, spacing: 2) {
+                                                            HStack(spacing: 4) {
+                                                                Text("Low")
+                                                                    .font(.caption)
+                                                                    .foregroundColor(.secondary)
+                                                                Image(systemName: "humidity")
+                                                                    .foregroundColor(.brown)
+                                                                    .font(.caption2)
+                                                            }
+                                                            Text(humidityStats.formattedLow)
+                                                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                                                .foregroundColor(.brown)
+                                                            if humidityStats.isReliable && humidityStats.lowHumidityTime != nil {
+                                                                Text("at \(humidityStats.formattedLowTime)")
+                                                                    .font(.caption2)
+                                                                    .foregroundColor(.secondary)
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        } else {
+                                            // Fallback when no high/low data available
+                                            HStack {
+                                                Text("Daily High/Low:")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                                Spacer()
+                                                Text("Estimated from current")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                            }
                                         }
                                     }
                                 }
@@ -884,6 +1336,78 @@ struct WeatherStationDetailView: View {
         )
     }
     
+    private func getIndoorDailyTemperatureStats(for station: WeatherStation, data: WeatherStationData) -> DailyTemperatureStats? {
+        let historicalData = weatherService.historicalData[station.macAddress]
+        return DailyTemperatureCalculator.getIndoorDailyStats(
+            weatherData: data,
+            historicalData: historicalData,
+            station: station
+        )
+    }
+    
+    private func getIndoorDailyHumidityStats(for station: WeatherStation, data: WeatherStationData) -> DailyHumidityStats? {
+        let historicalData = weatherService.historicalData[station.macAddress]
+        return DailyTemperatureCalculator.getIndoorDailyHumidityStats(
+            weatherData: data,
+            historicalData: historicalData,
+            station: station
+        )
+    }
+    
+    private func getTempHumidityCh1DailyTemperatureStats(for station: WeatherStation, data: WeatherStationData) -> DailyTemperatureStats? {
+        let historicalData = weatherService.historicalData[station.macAddress]
+        return DailyTemperatureCalculator.getTempHumidityCh1DailyStats(
+            weatherData: data,
+            historicalData: historicalData,
+            station: station
+        )
+    }
+    
+    private func getTempHumidityCh1DailyHumidityStats(for station: WeatherStation, data: WeatherStationData) -> DailyHumidityStats? {
+        let historicalData = weatherService.historicalData[station.macAddress]
+        return DailyTemperatureCalculator.getTempHumidityCh1DailyHumidityStats(
+            weatherData: data,
+            historicalData: historicalData,
+            station: station
+        )
+    }
+    
+    private func getTempHumidityCh2DailyTemperatureStats(for station: WeatherStation, data: WeatherStationData) -> DailyTemperatureStats? {
+        let historicalData = weatherService.historicalData[station.macAddress]
+        return DailyTemperatureCalculator.getTempHumidityCh2DailyStats(
+            weatherData: data,
+            historicalData: historicalData,
+            station: station
+        )
+    }
+    
+    private func getTempHumidityCh2DailyHumidityStats(for station: WeatherStation, data: WeatherStationData) -> DailyHumidityStats? {
+        let historicalData = weatherService.historicalData[station.macAddress]
+        return DailyTemperatureCalculator.getTempHumidityCh2DailyHumidityStats(
+            weatherData: data,
+            historicalData: historicalData,
+            station: station
+        )
+    }
+    
+    private func getTempHumidityCh3DailyTemperatureStats(for station: WeatherStation, data: WeatherStationData) -> DailyTemperatureStats? {
+        let historicalData = weatherService.historicalData[station.macAddress]
+        return DailyTemperatureCalculator.getTempHumidityCh3DailyStats(
+            weatherData: data,
+            historicalData: historicalData,
+            station: station
+        )
+    }
+    
+    private func getTempHumidityCh3DailyHumidityStats(for station: WeatherStation, data: WeatherStationData) -> DailyHumidityStats? {
+        let historicalData = weatherService.historicalData[station.macAddress]
+        return DailyTemperatureCalculator.getTempHumidityCh3DailyHumidityStats(
+            weatherData: data,
+            historicalData: historicalData,
+            station: station
+        )
+    }
+    
     private func getBeaufortScale(windSpeedMph: Double) -> (number: Int, description: String) {
         switch windSpeedMph {
         case 0...1: return (0, "Calm")
@@ -1169,7 +1693,6 @@ struct EditableWeatherCard<Content: View>: View {
     }
 }
 
-// Helper for temp/humidity battery status
 private func tempHumidityBatteryStatusText(_ value: String) -> String {
     switch value {
     case "0": return "Normal"
@@ -1178,11 +1701,10 @@ private func tempHumidityBatteryStatusText(_ value: String) -> String {
     }
 }
 
-#Preview {
-    NavigationView {
-        WeatherStationDetailView(
-            station: .constant(WeatherStation(name: "Test Station", macAddress: "A0:A3:B3:7B:28:8B")), 
-            weatherData: nil
-        )
+struct PreviewWeatherStationDetailView: PreviewProvider {
+    static var previews: some View {
+        NavigationView {
+            WeatherStationDetailView(station: .constant(WeatherStation(name: "Test Station", macAddress: "A0:A3:B3:7B:28:8B")), weatherData: nil)
+        }
     }
 }
