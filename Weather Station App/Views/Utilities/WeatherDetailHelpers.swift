@@ -55,15 +55,7 @@ struct WeatherStatusHelpers {
     }
     
     static func aqiColor(for value: String) -> Color {
-        guard let intValue = Int(value) else { return .secondary }
-        switch intValue {
-        case 0...50: return .green
-        case 51...100: return .yellow
-        case 101...150: return .orange
-        case 151...200: return .red
-        case 201...300: return .purple
-        default: return .black
-        }
+        return AirQualityHelpers.getAQIColorForValue(aqi: value)
     }
     
     static func batteryLevelText(_ value: String) -> String {
@@ -194,5 +186,51 @@ struct PressureHelpers {
             // Below mid-range
             return ("arrow.down.right.circle", .yellow, "Below average - watch for changes")
         }
+    }
+}
+
+// MARK: - Air Quality Helpers
+struct AirQualityHelpers {
+    static func getAQICategory(aqi: Int) -> (category: String, color: Color, healthImpact: String) {
+        switch aqi {
+        case 0...50:
+            return ("Good", .green, "Air quality is satisfactory")
+        case 51...100:
+            return ("Moderate", .yellow, "Acceptable for most people")
+        case 101...150:
+            return ("Unhealthy for Sensitive", .orange, "Sensitive groups may experience symptoms")
+        case 151...200:
+            return ("Unhealthy", .red, "Everyone may experience health effects")
+        case 201...300:
+            return ("Very Unhealthy", .purple, "Health alert for everyone")
+        default:
+            return ("Hazardous", .black, "Emergency conditions - avoid outdoor activity")
+        }
+    }
+    
+    static func getPM25Trend(current: Double, currentAQI: Int, stats: DailyPM25Stats) -> (icon: String, color: Color, description: String) {
+        let midRangePM25 = (stats.highPM25 + stats.lowPM25) / 2
+        let rangePM25 = stats.highPM25 - stats.lowPM25
+        let currentCategory = getAQICategory(aqi: currentAQI)
+        
+        // Determine trend based on current PM2.5 relative to today's range
+        if current > stats.highPM25 - (rangePM25 * 0.1) {
+            // Near daily high
+            return ("arrow.up.circle", .red, "Near daily high - \(currentCategory.healthImpact.lowercased())")
+        } else if current < stats.lowPM25 + (rangePM25 * 0.1) {
+            // Near daily low
+            return ("arrow.down.circle", .green, "Near daily low - cleaner air today")
+        } else if current > midRangePM25 {
+            // Above mid-range
+            return ("arrow.up.right.circle", currentCategory.color, "Above average - \(currentCategory.healthImpact.lowercased())")
+        } else {
+            // Below mid-range
+            return ("arrow.down.right.circle", .blue, "Below average - better air quality")
+        }
+    }
+    
+    static func getAQIColorForValue(aqi: String) -> Color {
+        guard let intValue = Int(aqi) else { return .secondary }
+        return getAQICategory(aqi: intValue).color
     }
 }

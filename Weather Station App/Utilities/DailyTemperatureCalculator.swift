@@ -203,6 +203,81 @@ struct DailyPressureStats {
     }
 }
 
+struct DailyPM25Stats {
+    let highPM25: Double
+    let lowPM25: Double
+    let highPM25Time: Date?
+    let lowPM25Time: Date?
+    let highAQI: Int
+    let lowAQI: Int
+    let highAQITime: Date?
+    let lowAQITime: Date?
+    let unit: String
+    let dataPointCount: Int
+    let isFromHistoricalData: Bool
+    
+    var formattedHighPM25: String {
+        String(format: "%.1f", highPM25) + " " + unit
+    }
+    
+    var formattedLowPM25: String {
+        String(format: "%.1f", lowPM25) + " " + unit
+    }
+    
+    var formattedHighPM25Time: String {
+        guard let time = highPM25Time else { return "Unknown" }
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter.string(from: time)
+    }
+    
+    var formattedLowPM25Time: String {
+        guard let time = lowPM25Time else { return "Unknown" }
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter.string(from: time)
+    }
+    
+    var formattedHighAQI: String {
+        String(highAQI)
+    }
+    
+    var formattedLowAQI: String {
+        String(lowAQI)
+    }
+    
+    var formattedHighAQITime: String {
+        guard let time = highAQITime else { return "Unknown" }
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter.string(from: time)
+    }
+    
+    var formattedLowAQITime: String {
+        guard let time = lowAQITime else { return "Unknown" }
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter.string(from: time)
+    }
+    
+    var isReliable: Bool {
+        return isFromHistoricalData && dataPointCount >= 2
+    }
+    
+    var confidenceDescription: String {
+        if isFromHistoricalData {
+            switch dataPointCount {
+            case 0...1: return "Limited data"
+            case 2...5: return "Based on \(dataPointCount) readings"
+            case 6...12: return "Good data coverage"
+            default: return "Excellent data coverage"
+            }
+        } else {
+            return "Estimated from current conditions"
+        }
+    }
+}
+
 struct LastLightningStats {
     let lastDetectionTime: Date?
     let isFromHistoricalData: Bool
@@ -557,6 +632,88 @@ class DailyTemperatureCalculator {
         )
     }
     
+    // MARK: - Air Quality (PM2.5) Calculations
+    
+    static func calculateDailyPM25Stats(from historicalData: HistoricalPM25Data?, for date: Date = Date(), timeZone: TimeZone = .current) -> DailyPM25Stats? {
+        guard let pm25Data = historicalData?.pm25 else {
+            return nil
+        }
+        
+        let unit = pm25Data.unit
+        var pm25Readings: [(pm25: Double, aqi: Int, time: Date)] = []
+        
+        let calendar = Calendar.current
+        let targetDay = calendar.startOfDay(for: date)
+        let nextDay = calendar.date(byAdding: .day, value: 1, to: targetDay) ?? targetDay
+        
+        for (timestampString, valueString) in pm25Data.list {
+            guard let timestamp = Double(timestampString),
+                  let pm25Value = Double(valueString) else {
+                continue
+            }
+            
+            let readingDate = Date(timeIntervalSince1970: timestamp)
+            
+            if readingDate >= targetDay && readingDate < nextDay {
+                // Calculate AQI from PM2.5 value
+                let aqiValue = calculateAQIFromPM25(pm25Value)
+                pm25Readings.append((pm25: pm25Value, aqi: aqiValue, time: readingDate))
+            }
+        }
+        
+        guard !pm25Readings.isEmpty else {
+            return nil
+        }
+        
+        // Find highest and lowest PM2.5 readings
+        let sortedByPM25 = pm25Readings.sorted { $0.pm25 < $1.pm25 }
+        let lowestPM25Reading = sortedByPM25.first!
+        let highestPM25Reading = sortedByPM25.last!
+        
+        // Find highest and lowest AQI readings
+        let sortedByAQI = pm25Readings.sorted { $0.aqi < $1.aqi }
+        let lowestAQIReading = sortedByAQI.first!
+        let highestAQIReading = sortedByAQI.last!
+        
+        return DailyPM25Stats(
+            highPM25: highestPM25Reading.pm25,
+            lowPM25: lowestPM25Reading.pm25,
+            highPM25Time: highestPM25Reading.time,
+            lowPM25Time: lowestPM25Reading.time,
+            highAQI: highestAQIReading.aqi,
+            lowAQI: lowestAQIReading.aqi,
+            highAQITime: highestAQIReading.time,
+            lowAQITime: lowestAQIReading.time,
+            unit: unit,
+            dataPointCount: pm25Readings.count,
+            isFromHistoricalData: true
+        )
+    }
+    
+    // Helper function to calculate AQI from PM2.5 value
+    private static func calculateAQIFromPM25(_ pm25: Double) -> Int {
+        // EPA AQI calculation for PM2.5 (24-hour average)
+        // These breakpoints are for 24-hour PM2.5 concentrations
+        switch pm25 {
+        case 0...12.0:
+            return Int((pm25 / 12.0) * 50)
+        case 12.1...35.4:
+            return Int(51 + ((pm25 - 12.1) / (35.4 - 12.1)) * (100 - 51))
+        case 35.5...55.4:
+            return Int(101 + ((pm25 - 35.5) / (55.4 - 35.5)) * (150 - 101))
+        case 55.5...150.4:
+            return Int(151 + ((pm25 - 55.5) / (150.4 - 55.5)) * (200 - 151))
+        case 150.5...250.4:
+            return Int(201 + ((pm25 - 150.5) / (250.4 - 150.5)) * (300 - 201))
+        case 250.5...350.4:
+            return Int(301 + ((pm25 - 250.5) / (350.4 - 250.5)) * (400 - 301))
+        case 350.5...500.4:
+            return Int(401 + ((pm25 - 350.5) / (500.4 - 350.5)) * (500 - 401))
+        default:
+            return 500 // Hazardous
+        }
+    }
+    
     // MARK: - Lightning Calculations
     
     static func calculateLastLightningDetection(from historicalData: HistoricalWeatherData?, currentLightningCount: String, daysToSearch: Int = 7) -> LastLightningStats? {
@@ -665,6 +822,16 @@ class DailyTemperatureCalculator {
     static func getDailyPressureStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyPressureStats? {
         guard let historical = historicalData else { return nil }
         return calculateDailyPressureStats(from: historical, for: date, timeZone: station.timeZone)
+    }
+    
+    static func getDailyPM25Ch1Stats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyPM25Stats? {
+        guard let historical = historicalData else { return nil }
+        return calculateDailyPM25Stats(from: historical.pm25Ch1, for: date, timeZone: station.timeZone)
+    }
+    
+    static func getDailyPM25Ch2Stats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyPM25Stats? {
+        guard let historical = historicalData else { return nil }
+        return calculateDailyPM25Stats(from: historical.pm25Ch2, for: date, timeZone: station.timeZone)
     }
     
     static func getLastLightningStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, daysToSearch: Int = 7) -> LastLightningStats? {

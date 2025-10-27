@@ -149,6 +149,13 @@ struct AirQualitySensorCards: View {
                     onTitleChange: { newTitle in
                         station.customLabels.airQualityCh1 = newTitle
                         weatherService.updateStation(station)
+                    },
+                    getDailyPM25Stats: {
+                        DailyTemperatureCalculator.getDailyPM25Ch1Stats(
+                            weatherData: data,
+                            historicalData: weatherService.historicalData[station.macAddress],
+                            station: station
+                        )
                     }
                 )
             }
@@ -164,6 +171,13 @@ struct AirQualitySensorCards: View {
                     onTitleChange: { newTitle in
                         station.customLabels.airQualityCh2 = newTitle
                         weatherService.updateStation(station)
+                    },
+                    getDailyPM25Stats: {
+                        DailyTemperatureCalculator.getDailyPM25Ch2Stats(
+                            weatherData: data,
+                            historicalData: weatherService.historicalData[station.macAddress],
+                            station: station
+                        )
                     }
                 )
             }
@@ -179,6 +193,11 @@ struct AirQualitySensorCards: View {
                     onTitleChange: { newTitle in
                         station.customLabels.airQualityCh3 = newTitle
                         weatherService.updateStation(station)
+                    },
+                    getDailyPM25Stats: {
+                        // Note: There's no pm25Ch3 in HistoricalWeatherData yet, 
+                        // so this will return nil until historical data structure is updated
+                        nil
                     }
                 )
             }

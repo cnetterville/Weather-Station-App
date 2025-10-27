@@ -363,6 +363,7 @@ struct AirQualityCard: View {
     let data: PM25Data
     let systemImage: String
     let onTitleChange: (String) -> Void
+    let getDailyPM25Stats: () -> DailyPM25Stats?
     
     var body: some View {
         EditableWeatherCard(
@@ -370,12 +371,171 @@ struct AirQualityCard: View {
             systemImage: systemImage,
             onTitleChange: onTitleChange
         ) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("\(data.pm25.value) \(data.pm25.unit)")
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
-                Text("AQI: \(data.realTimeAqi.value)")
-                    .font(.subheadline)
-                    .foregroundColor(WeatherStatusHelpers.aqiColor(for: data.realTimeAqi.value))
+            VStack(alignment: .leading, spacing: 12) {
+                // Current Air Quality - Main Display
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(data.pm25.value) \(data.pm25.unit)")
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                    
+                    let currentAQI = Int(data.realTimeAqi.value) ?? 0
+                    let aqiCategory = AirQualityHelpers.getAQICategory(aqi: currentAQI)
+                    
+                    HStack(spacing: 8) {
+                        Text("AQI: \(data.realTimeAqi.value)")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(aqiCategory.color)
+                        
+                        Text("(\(aqiCategory.category))")
+                            .font(.subheadline)
+                            .foregroundColor(aqiCategory.color)
+                    }
+                }
+                
+                Divider()
+                
+                // Daily High/Low Section - Air Quality
+                if let pm25Stats = getDailyPM25Stats() {
+                    DailyAirQualityRangeView(
+                        pm25Stats: pm25Stats,
+                        currentPM25: Double(data.pm25.value) ?? 0.0,
+                        currentAQI: Int(data.realTimeAqi.value) ?? 0
+                    )
+                } else {
+                    // Fallback when no high/low data available
+                    HStack {
+                        Text("Daily High/Low:")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text("Loading...")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct DailyAirQualityRangeView: View {
+    let pm25Stats: DailyPM25Stats
+    let currentPM25: Double
+    let currentAQI: Int
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Today's Range")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .fontWeight(.semibold)
+            
+            // PM2.5 High/Low
+            HStack(spacing: 16) {
+                // Daily High PM2.5
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .foregroundColor(.red)
+                            .font(.caption2)
+                        Text("High PM2.5")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Text(pm25Stats.formattedHighPM25)
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .foregroundColor(.red)
+                    if pm25Stats.isReliable && pm25Stats.highPM25Time != nil {
+                        Text("at \(pm25Stats.formattedHighPM25Time)")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
+                Spacer()
+                
+                // Daily Low PM2.5
+                VStack(alignment: .trailing, spacing: 2) {
+                    HStack(spacing: 4) {
+                        Text("Low PM2.5")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Image(systemName: "arrow.down.circle.fill")
+                            .foregroundColor(.green)
+                            .font(.caption2)
+                    }
+                    Text(pm25Stats.formattedLowPM25)
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .foregroundColor(.green)
+                    if pm25Stats.isReliable && pm25Stats.lowPM25Time != nil {
+                        Text("at \(pm25Stats.formattedLowPM25Time)")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            
+            // AQI High/Low
+            HStack(spacing: 16) {
+                // Daily High AQI
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.orange)
+                            .font(.caption2)
+                        Text("High AQI")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Text(pm25Stats.formattedHighAQI)
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .foregroundColor(AirQualityHelpers.getAQICategory(aqi: pm25Stats.highAQI).color)
+                    if pm25Stats.isReliable && pm25Stats.highAQITime != nil {
+                        Text("at \(pm25Stats.formattedHighAQITime)")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
+                Spacer()
+                
+                // Daily Low AQI
+                VStack(alignment: .trailing, spacing: 2) {
+                    HStack(spacing: 4) {
+                        Text("Low AQI")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                            .font(.caption2)
+                    }
+                    Text(pm25Stats.formattedLowAQI)
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .foregroundColor(AirQualityHelpers.getAQICategory(aqi: pm25Stats.lowAQI).color)
+                    if pm25Stats.isReliable && pm25Stats.lowAQITime != nil {
+                        Text("at \(pm25Stats.formattedLowAQITime)")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            
+            // Air quality trend indicator
+            let airQualityTrend = AirQualityHelpers.getPM25Trend(current: currentPM25, currentAQI: currentAQI, stats: pm25Stats)
+            HStack {
+                Image(systemName: airQualityTrend.icon)
+                    .foregroundColor(airQualityTrend.color)
+                    .font(.caption)
+                Text(airQualityTrend.description)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+                if !pm25Stats.isReliable {
+                    Text(pm25Stats.confidenceDescription)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .italic()
+                }
             }
         }
     }
