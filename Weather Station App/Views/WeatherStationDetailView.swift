@@ -1608,13 +1608,15 @@ struct WeatherCard<Content: View>: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(spacing: 12) {
             HStack {
+                Spacer()
                 Image(systemName: systemImage)
                     .foregroundColor(.blue)
                 Text(title)
                     .font(.headline)
                     .fontWeight(.semibold)
+                    .multilineTextAlignment(.center)
                 Spacer()
             }
             
@@ -1647,14 +1649,13 @@ struct EditableWeatherCard<Content: View>: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(spacing: 12) {
             HStack {
-                Image(systemName: systemImage)
-                    .foregroundColor(.blue)
-                
                 if isEditing {
+                    Spacer()
                     TextField("Sensor Label", text: $editText)
                         .textFieldStyle(.roundedBorder)
+                        .multilineTextAlignment(.center)
                         .onSubmit {
                             title = editText
                             onTitleChange(editText)
@@ -1663,20 +1664,8 @@ struct EditableWeatherCard<Content: View>: View {
                         .onAppear {
                             editText = title
                         }
-                } else {
-                    Text(title)
-                        .font(.headline)
-                        .fontWeight(.semibold)
-                        .onTapGesture {
-                            editText = title
-                            isEditing = true
-                        }
-                        .help("Click to edit label")
-                }
-                
-                Spacer()
-                
-                if isEditing {
+                    Spacer()
+                    
                     Button("Done") {
                         title = editText
                         onTitleChange(editText)
@@ -1684,6 +1673,20 @@ struct EditableWeatherCard<Content: View>: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.mini)
+                } else {
+                    Spacer()
+                    Image(systemName: systemImage)
+                        .foregroundColor(.blue)
+                    Text(title)
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .multilineTextAlignment(.center)
+                        .onTapGesture {
+                            editText = title
+                            isEditing = true
+                        }
+                        .help("Click to edit label")
+                    Spacer()
                 }
             }
             
