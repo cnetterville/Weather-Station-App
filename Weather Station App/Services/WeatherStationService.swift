@@ -452,17 +452,96 @@ class WeatherStationService: ObservableObject {
             sensors: ["outdoor", "indoor", "temp_and_humidity_ch1", "temp_and_humidity_ch2", "temp_and_humidity_ch3", "wind", "pressure", "lightning", "pm25_ch1", "pm25_ch2", "pm25_ch3"] 
         )
         
-        // If we don't have enough lightning data, fetch more for better last lightning detection
-        if !hasRecentLightningHistoricalData(for: station) {
-            print(" Fetching additional lightning historical data for \(station.name)...")
-            await fetchHistoricalData(
-                for: station,
-                timeRange: .last7Days,
-                sensors: ["lightning"] 
-            )
-        }
+        // Fetch extended lightning data separately and merge it
+        print(" Fetching extended lightning historical data for \(station.name)...")
+        await fetchExtendedLightningData(for: station)
         
         print(" Completed today's historical data fetch for: \(station.name)")
+    }
+    
+    private func fetchExtendedLightningData(for station: WeatherStation) async {
+        guard credentials.isValid else {
+            return
+        }
+
+        // Use 7 days with 4hour cycle for better lightning data retention
+        let timeRange = HistoricalTimeRange.last7Days
+        let sensors = ["lightning"]
+        
+        let calendar = Calendar.current
+        let now = Date()
+        let endDate = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: now) ?? now
+        let startDate = calendar.date(byAdding: .day, value: -6, to: calendar.startOfDay(for: now)) ?? now
+
+        // Format dates exactly as API example: 2022-01-01 00:00:00
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        dateFormatter.timeZone = TimeZone.current
+        
+        let startDateString = dateFormatter.string(from: startDate)
+        let endDateString = dateFormatter.string(from: endDate)
+        let callBack = sensors.joined(separator: ",")
+        
+        // Build historical data URL
+        let urlString = "\(historyURL)?application_key=\(credentials.applicationKey)&api_key=\(credentials.apiKey)&mac=\(station.macAddress)&start_date=\(startDateString)&end_date=\(endDateString)&cycle_type=\(timeRange.cycleType)&call_back=\(callBack)"
+        
+        guard let url = URL(string: urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "") else {
+            return
+        }
+        
+        print(" [Extended Lightning: \(station.name)] Requesting \(timeRange.rawValue)")
+        print(" Date range: \(startDateString) to \(endDateString)")
+        print(" Cycle type: \(timeRange.cycleType)")
+        
+        do {
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+            request.cachePolicy = .reloadIgnoringLocalCacheData
+            request.timeoutInterval = 60.0
+            request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+            request.setValue("application/json", forHTTPHeaderField: "Accept")
+            
+            let (data, response) = try await session.data(for: request)
+            
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+                let decoder = JSONDecoder()
+                let historicalResponse = try decoder.decode(HistoricalWeatherResponse.self, from: data)
+                
+                await MainActor.run {
+                    if historicalResponse.code == 0 {
+                        // Merge lightning data into existing historical data instead of replacing it
+                        if let existingData = historicalData[station.macAddress] {
+                            // Create new HistoricalWeatherData with updated lightning data
+                            let mergedData = HistoricalWeatherData(
+                                outdoor: existingData.outdoor,
+                                indoor: existingData.indoor,
+                                solarAndUvi: existingData.solarAndUvi,
+                                rainfall: existingData.rainfall,
+                                rainfallPiezo: existingData.rainfallPiezo,
+                                wind: existingData.wind,
+                                pressure: existingData.pressure,
+                                lightning: historicalResponse.data.lightning,
+                                pm25Ch1: existingData.pm25Ch1,
+                                pm25Ch2: existingData.pm25Ch2,
+                                pm25Ch3: existingData.pm25Ch3,
+                                tempAndHumidityCh1: existingData.tempAndHumidityCh1,
+                                tempAndHumidityCh2: existingData.tempAndHumidityCh2,
+                                tempAndHumidityCh3: existingData.tempAndHumidityCh3
+                            )
+                            historicalData[station.macAddress] = mergedData
+                            print(" [Extended Lightning: \(station.name)] Successfully merged extended lightning data")
+                        } else {
+                            // If no existing data, just store the lightning data
+                            historicalData[station.macAddress] = historicalResponse.data
+                            print(" [Extended Lightning: \(station.name)] Successfully stored lightning data")
+                        }
+                    }
+                }
+            }
+            
+        } catch {
+            print(" [Extended Lightning: \(station.name)] Error: \(error.localizedDescription)")
+        }
     }
     
     func fetchHistoricalData(for station: WeatherStation, timeRange: HistoricalTimeRange, sensors: [String] = ["outdoor", "indoor", "temp_and_humidity_ch1", "temp_and_humidity_ch2", "temp_and_humidity_ch3", "rainfall_piezo", "wind", "pressure", "pm25_ch1", "pm25_ch2", "pm25_ch3"]) async {
@@ -1087,7 +1166,7 @@ class WeatherStationService: ObservableObject {
                     
                     // Update the station with the new info
                     await MainActor.run {
-                        if let index = weatherStations.firstIndex(where: { $0.macAddress == station.macAddress }) {
+                        if let index = weatherStations.firstIndex(where: { $0.id == station.id }) {
                             var updatedStation = weatherStations[index]
                             
                             if let lat = latitude { updatedStation.latitude = lat }
