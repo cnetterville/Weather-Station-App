@@ -56,11 +56,114 @@ struct SunTimes {
     }
 }
 
+struct SunTimesCache {
+    let cacheKey: String
+    let sunTimes: SunTimes
+    let calculatedDate: Date
+    
+    init(cacheKey: String, sunTimes: SunTimes) {
+        self.cacheKey = cacheKey
+        self.sunTimes = sunTimes
+        self.calculatedDate = Date()
+    }
+}
+
 class SunCalculator {
     
+    // Cache for storing calculated sun times
+    private static var sunTimesCache: [String: SunTimesCache] = [:]
+    private static let cacheQueue = DispatchQueue(label: "sun.calculator.cache", attributes: .concurrent)
+    
+    /// Generate cache key for a specific location, date, and timezone
+    private static func generateCacheKey(date: Date, latitude: Double, longitude: Double, timeZone: TimeZone) -> String {
+        let calendar = Calendar.current
+        let dateComponents = calendar.dateComponents([.year, .month, .day], from: date)
+        let dateString = String(format: "%04d%02d%02d", dateComponents.year ?? 0, dateComponents.month ?? 0, dateComponents.day ?? 0)
+        
+        // Round coordinates to 4 decimal places for cache key (about 11m precision)
+        let latString = String(format: "%.4f", latitude)
+        let lngString = String(format: "%.4f", longitude)
+        
+        return "\(dateString)_\(latString)_\(lngString)_\(timeZone.identifier)"
+    }
+    
+    /// Get cached SunTimes or calculate new ones if not cached
+    private static func getCachedOrCalculateSunTimes(for date: Date, latitude: Double, longitude: Double, timeZone: TimeZone) -> SunTimes? {
+        let cacheKey = generateCacheKey(date: date, latitude: latitude, longitude: longitude, timeZone: timeZone)
+        
+        // Check cache first (thread-safe read)
+        return cacheQueue.sync {
+            if let cachedResult = sunTimesCache[cacheKey] {
+                // Check if cache entry is still valid (within same day and not too old)
+                let now = Date()
+                let cacheAge = now.timeIntervalSince(cachedResult.calculatedDate)
+                
+                // Cache is valid for the same day and up to 1 hour old
+                if cacheAge < 3600 {
+                    return cachedResult.sunTimes
+                } else {
+                    // Remove stale cache entry
+                    sunTimesCache.removeValue(forKey: cacheKey)
+                }
+            }
+            return nil
+        }
+    }
+    
+    /// Store calculated SunTimes in cache
+    private static func cacheSunTimes(_ sunTimes: SunTimes, for date: Date, latitude: Double, longitude: Double, timeZone: TimeZone) {
+        let cacheKey = generateCacheKey(date: date, latitude: latitude, longitude: longitude, timeZone: timeZone)
+        let cacheEntry = SunTimesCache(cacheKey: cacheKey, sunTimes: sunTimes)
+        
+        cacheQueue.async(flags: .barrier) {
+            sunTimesCache[cacheKey] = cacheEntry
+            
+            // Clean up old cache entries (keep only last 50 entries)
+            if sunTimesCache.count > 50 {
+                let sortedKeys = sunTimesCache.keys.sorted()
+                let keysToRemove = sortedKeys.prefix(sunTimesCache.count - 40) // Keep last 40
+                for key in keysToRemove {
+                    sunTimesCache.removeValue(forKey: key)
+                }
+            }
+        }
+    }
+    
+    /// Clear the entire cache (useful for testing or memory management)
+    static func clearCache() {
+        cacheQueue.async(flags: .barrier) {
+            sunTimesCache.removeAll()
+        }
+    }
+    
+    /// Get cache statistics for debugging
+    static func getCacheInfo() -> (count: Int, keys: [String]) {
+        return cacheQueue.sync {
+            return (count: sunTimesCache.count, keys: Array(sunTimesCache.keys))
+        }
+    }
+    
     /// Calculate sunrise and sunset times using the accurate astronomical formula
-    /// Based on NOAA's sunrise/sunset calculation algorithm
+    /// Based on NOAA's sunrise/sunset calculation algorithm with caching
     static func calculateSunTimes(for date: Date, latitude: Double, longitude: Double, timeZone: TimeZone = TimeZone.current) -> SunTimes? {
+        // Try to get cached result first
+        if let cachedResult = getCachedOrCalculateSunTimes(for: date, latitude: latitude, longitude: longitude, timeZone: timeZone) {
+            return cachedResult
+        }
+        
+        // Calculate new result
+        let sunTimes = performSunTimesCalculation(for: date, latitude: latitude, longitude: longitude, timeZone: timeZone)
+        
+        // Cache the result if calculation was successful
+        if let result = sunTimes {
+            cacheSunTimes(result, for: date, latitude: latitude, longitude: longitude, timeZone: timeZone)
+        }
+        
+        return sunTimes
+    }
+    
+    /// Perform the actual sun times calculation (moved from original calculateSunTimes)
+    private static func performSunTimesCalculation(for date: Date, latitude: Double, longitude: Double, timeZone: TimeZone) -> SunTimes? {
         // Use GMT calendar for calculations
         var calendar = Calendar.current
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
@@ -149,7 +252,7 @@ class SunCalculator {
     /// Calculate next event (sunrise or sunset) for a given location
     static func getNextSunEvent(latitude: Double, longitude: Double, timeZone: TimeZone = TimeZone.current) -> (event: String, time: Date, isCurrentlyDaylight: Bool) {
         let now = Date()
-        let today = SunCalculator.calculateSunTimes(for: now, latitude: latitude, longitude: longitude, timeZone: timeZone)
+        let today = calculateSunTimes(for: now, latitude: latitude, longitude: longitude, timeZone: timeZone) // Now uses cache
         
         guard let sunTimes = today else {
             return ("Unknown", now, false)
@@ -163,7 +266,7 @@ class SunCalculator {
             // After sunset, get tomorrow's sunrise
             let calendar = Calendar.current
             let tomorrow = calendar.date(byAdding: .day, value: 1, to: now) ?? now
-            let tomorrowSunTimes = SunCalculator.calculateSunTimes(for: tomorrow, latitude: latitude, longitude: longitude, timeZone: timeZone)
+            let tomorrowSunTimes = calculateSunTimes(for: tomorrow, latitude: latitude, longitude: longitude, timeZone: timeZone) // Now uses cache
             return ("Sunrise", tomorrowSunTimes?.sunrise ?? sunTimes.sunrise, false)
         }
     }

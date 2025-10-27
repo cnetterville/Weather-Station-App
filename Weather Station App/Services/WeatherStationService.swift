@@ -42,8 +42,13 @@ class WeatherStationService: ObservableObject {
     private var dataFreshnessDuration: TimeInterval = 120 // 2 minutes freshness
     private var lastRequestTimes: [String: Date] = [:]
     private var pendingRequests: Set<String> = []
+    private var pendingRequestTasks: [String: Task<Void, Never>] = [:] // Track actual tasks for deduplication
     private let requestQueue = DispatchQueue(label: "weatherstation.requests", qos: .userInitiated)
     private var maxConcurrentRequests = 3
+    
+    // Request deduplication - share results between identical concurrent requests
+    private var sharedRequestResults: [String: Task<WeatherStationResponse?, Never>] = [:]
+    private let sharedRequestQueue = DispatchQueue(label: "weatherstation.shared.requests", attributes: .concurrent)
     
     private init() {
         loadCredentials()
@@ -59,7 +64,10 @@ class WeatherStationService: ObservableObject {
         }
         
         let activeStations = weatherStations.filter { $0.isActive }
-        print("📊 Fetching data for \(activeStations.count) active stations (concurrent: \(maxConcurrentRequests))")
+        
+        // Dynamically adjust concurrent requests based on number of stations
+        let optimalConcurrency = min(maxConcurrentRequests, max(1, activeStations.count))
+        print("📊 Fetching data for \(activeStations.count) active stations (concurrent: \(optimalConcurrency))")
         
         // Filter stations that actually need fresh data
         let stationsToFetch: [WeatherStation]
@@ -81,9 +89,9 @@ class WeatherStationService: ObservableObject {
         
         print("📊 \(stationsToFetch.count) stations need fresh data")
         
-        // Use TaskGroup for concurrent requests with rate limiting
+        // Use TaskGroup for concurrent requests with optimal concurrency
         await withTaskGroup(of: Void.self) { group in
-            let semaphore = AsyncSemaphore(value: maxConcurrentRequests)
+            let semaphore = AsyncSemaphore(value: optimalConcurrency)
             
             for station in stationsToFetch {
                 group.addTask {
@@ -94,8 +102,9 @@ class WeatherStationService: ObservableObject {
                     
                     await self.fetchWeatherDataOptimized(for: station)
                     
-                    // Small delay to be respectful to the API
-                    try? await Task.sleep(nanoseconds: 250_000_000) // 0.25 seconds
+                    // Smaller delay for fewer stations
+                    let delay = stationsToFetch.count <= 2 ? 100_000_000 : 250_000_000 // 0.1s vs 0.25s
+                    try? await Task.sleep(nanoseconds: UInt64(delay))
                 }
             }
         }
@@ -127,15 +136,12 @@ class WeatherStationService: ObservableObject {
     }
     
     private func fetchWeatherDataOptimized(for station: WeatherStation) async {
-        guard credentials.isValid else {
-            await MainActor.run {
-                print("❌ Credentials invalid for \(station.name)")
-                errorMessage = "API credentials are not configured"
-            }
+        // Check if we should skip this request entirely
+        if !shouldFetchFreshData(for: station) {
             return
         }
         
-        // Request deduplication
+        // Mark request as pending for deduplication tracking
         _ = await requestQueue.run {
             self.pendingRequests.insert(station.macAddress)
         }
@@ -148,28 +154,106 @@ class WeatherStationService: ObservableObject {
             }
         }
         
-        // Use the working "all" parameter for now to avoid parsing issues
-        // We can optimize the callback parameter later once parsing is more robust
+        // Use shared request deduplication
+        guard let sharedTask = getOrCreateSharedRequest(for: station) else {
+            print("❌ [Station: \(station.name)] Failed to create request task")
+            return
+        }
+        
+        // Await the shared result
+        let weatherResponse = await sharedTask.value
+        
+        // Process the result
+        if let response = weatherResponse {
+            if response.code == 0 {
+                await MainActor.run {
+                    weatherData[station.macAddress] = response.data
+                    updateStationLastUpdated(station, weatherData: response.data)
+                    print("✅ [Station: \(station.name)] Data updated successfully")
+                    
+                    // Clear any error for this station
+                    if let currentError = errorMessage, currentError.contains(station.name) {
+                        errorMessage = nil
+                    }
+                }
+            } else {
+                await MainActor.run {
+                    errorMessage = "API Error for \(station.name): \(response.msg) (Code: \(response.code))"
+                }
+            }
+        } else {
+            await MainActor.run {
+                errorMessage = "Failed to get response for \(station.name)"
+            }
+        }
+    }
+    
+    // MARK: - Enhanced Request Deduplication
+    
+    /// Generate a unique request key for deduplication
+    private func generateRequestKey(for station: WeatherStation) -> String {
+        return "\(credentials.applicationKey)_\(credentials.apiKey)_\(station.macAddress)"
+    }
+    
+    /// Get or create a shared request task for a station to prevent duplicate concurrent requests
+    private func getOrCreateSharedRequest(for station: WeatherStation) -> Task<WeatherStationResponse?, Never>? {
+        let requestKey = generateRequestKey(for: station)
+        
+        return sharedRequestQueue.sync {
+            // Check if there's already a request in progress for this station
+            if let existingTask = sharedRequestResults[requestKey] {
+                print("🔄 [Station: \(station.name)] Reusing existing request task")
+                return existingTask
+            }
+            
+            // Create new shared request task
+            let newTask = Task<WeatherStationResponse?, Never> {
+                defer {
+                    // Clean up when task completes
+                    sharedRequestQueue.async(flags: .barrier) {
+                        self.sharedRequestResults.removeValue(forKey: requestKey)
+                    }
+                }
+                
+                return await self.performActualWeatherRequest(for: station)
+            }
+            
+            sharedRequestResults[requestKey] = newTask
+            print("🔄 [Station: \(station.name)] Created new shared request task")
+            return newTask
+        }
+    }
+    
+    /// Perform the actual network request (separated from deduplication logic)
+    private func performActualWeatherRequest(for station: WeatherStation) async -> WeatherStationResponse? {
+        guard credentials.isValid else {
+            await MainActor.run {
+                print("❌ Credentials invalid for \(station.name)")
+                errorMessage = "API credentials are not configured"
+            }
+            return nil
+        }
+        
         let urlString = "\(realTimeURL)?application_key=\(credentials.applicationKey)&api_key=\(credentials.apiKey)&mac=\(station.macAddress)&call_back=all"
         
         guard let url = URL(string: urlString) else {
             await MainActor.run {
                 errorMessage = "Invalid URL for \(station.name): \(urlString)"
             }
-            return
+            return nil
         }
         
-        print("🌐 [Station: \(station.name)] Requesting data")
+        print("🌐 [Station: \(station.name)] Performing actual network request")
         
         do {
             var request = URLRequest(url: url)
             request.httpMethod = "GET"
-            request.timeoutInterval = 15.0 // Shorter timeout for responsiveness
+            request.timeoutInterval = 15.0
             request.setValue("application/json", forHTTPHeaderField: "Accept")
-            request.setValue("gzip", forHTTPHeaderField: "Accept-Encoding") // Enable compression
+            request.setValue("gzip", forHTTPHeaderField: "Accept-Encoding")
             
-            // Allow caching for recent requests
-            if let lastRequest = lastRequestTimes[station.macAddress],
+            // Intelligent caching
+            if let lastRequest = await requestQueue.run({ self.lastRequestTimes[station.macAddress] }),
                Date().timeIntervalSince(lastRequest) < 60 {
                 request.cachePolicy = .returnCacheDataElseLoad
             } else {
@@ -188,48 +272,29 @@ class WeatherStationService: ObservableObject {
             
             if let httpResponse = response as? HTTPURLResponse {
                 if httpResponse.statusCode == 429 {
-                    // Rate limited - back off
                     print("⚠️ Rate limited, reducing concurrent requests")
                     maxConcurrentRequests = max(1, maxConcurrentRequests - 1)
                     await MainActor.run {
                         errorMessage = "API rate limited, reducing request speed"
                     }
-                    return
+                    return nil
                 } else if httpResponse.statusCode != 200 {
                     await MainActor.run {
                         errorMessage = "HTTP \(httpResponse.statusCode) for \(station.name)"
                     }
-                    return
+                    return nil
                 }
             }
             
-            // Try safe parsing first
+            // Parse response
             if let weatherResponse = parseWeatherResponseSafely(from: data, for: station) {
                 if weatherResponse.code == 0 {
-                    await MainActor.run {
-                        weatherData[station.macAddress] = weatherResponse.data
-                        updateStationLastUpdated(station, weatherData: weatherResponse.data)
-                        print("✅ [Station: \(station.name)] Data updated successfully")
-                        
-                        // Clear any error for this station
-                        if let currentError = errorMessage, currentError.contains(station.name) {
-                            errorMessage = nil
-                        }
-                    }
-                    
-                    // Increase concurrent requests if we're successful
+                    // Increase concurrent requests if successful
                     if maxConcurrentRequests < 6 {
                         maxConcurrentRequests += 1
                     }
-                } else {
-                    await MainActor.run {
-                        errorMessage = "API Error for \(station.name): \(weatherResponse.msg) (Code: \(weatherResponse.code))"
-                    }
                 }
-            } else {
-                await MainActor.run {
-                    errorMessage = "Failed to parse response for \(station.name)"
-                }
+                return weatherResponse
             }
             
         } catch let networkError {
@@ -239,6 +304,8 @@ class WeatherStationService: ObservableObject {
                 errorMessage = detailedError
             }
         }
+        
+        return nil
     }
     
     // Legacy method for backward compatibility
@@ -1238,6 +1305,22 @@ class WeatherStationService: ObservableObject {
         }
         
         return extractedData
+    }
+    
+    /// Clean up stale shared requests (call periodically)
+    private func cleanupStaleSharedRequests() {
+        sharedRequestQueue.async(flags: .barrier) {
+            self.sharedRequestResults = self.sharedRequestResults.filter { _, task in
+                !task.isCancelled
+            }
+        }
+    }
+    
+    /// Get request optimization statistics
+    func getRequestOptimizationStats() -> (pendingCount: Int, sharedCount: Int, maxConcurrency: Int) {
+        let pending = pendingRequests.count
+        let shared = sharedRequestQueue.sync { sharedRequestResults.count }
+        return (pendingCount: pending, sharedCount: shared, maxConcurrency: maxConcurrentRequests)
     }
 }
 
