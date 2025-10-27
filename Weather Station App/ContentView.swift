@@ -54,11 +54,18 @@ struct ContentView: View {
                 
                 // Station List
                 List(weatherService.weatherStations, selection: Binding<WeatherStation.ID?>(
-                    get: { selectedTab < weatherService.weatherStations.count ? weatherService.weatherStations[selectedTab].id : nil },
+                    get: { 
+                        guard selectedTab < weatherService.weatherStations.count && selectedTab >= 0 else { 
+                            return nil 
+                        }
+                        return weatherService.weatherStations[selectedTab].id
+                    },
                     set: { newValue in
                         if let newValue = newValue,
                            let index = weatherService.weatherStations.firstIndex(where: { $0.id == newValue }) {
                             selectedTab = index
+                        } else if weatherService.weatherStations.isEmpty {
+                            selectedTab = 0
                         }
                     }
                 )) { station in
@@ -103,15 +110,31 @@ struct ContentView: View {
         } detail: {
             if weatherService.weatherStations.isEmpty {
                 EmptyStateView(showingSettings: $showingSettings)
-            } else if selectedTab < weatherService.weatherStations.count {
+            } else if selectedTab < weatherService.weatherStations.count && selectedTab >= 0 {
                 let selectedStationBinding = Binding<WeatherStation>(
-                    get: { weatherService.weatherStations[selectedTab] },
-                    set: { weatherService.weatherStations[selectedTab] = $0 }
+                    get: { 
+                        guard selectedTab < weatherService.weatherStations.count && selectedTab >= 0 else {
+                            return weatherService.weatherStations.first ?? WeatherStation(name: "Error", macAddress: "00:00:00:00:00:00")
+                        }
+                        return weatherService.weatherStations[selectedTab] 
+                    },
+                    set: { 
+                        guard selectedTab < weatherService.weatherStations.count && selectedTab >= 0 else { return }
+                        weatherService.weatherStations[selectedTab] = $0 
+                    }
                 )
                 WeatherStationDetailView(
                     station: selectedStationBinding,
-                    weatherData: weatherService.weatherData[weatherService.weatherStations[selectedTab].macAddress]
+                    weatherData: weatherService.weatherData[selectedTab < weatherService.weatherStations.count && selectedTab >= 0 ? weatherService.weatherStations[selectedTab].macAddress : ""]
                 )
+            } else {
+                // Fallback view when selectedTab is out of bounds
+                VStack {
+                    Text("Please select a weather station")
+                        .font(.title2)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .sheet(isPresented: $showingSettings) {
@@ -136,8 +159,14 @@ struct ContentView: View {
             }
         }
         .onChange(of: weatherService.weatherStations) { _, newStations in
+            // Adjust selectedTab if it's out of bounds after stations are removed
+            if selectedTab >= newStations.count {
+                selectedTab = max(0, newStations.count - 1)
+            }
+            
             // Start/stop auto-refresh based on whether we have stations
             if newStations.isEmpty {
+                selectedTab = 0 // Reset to 0 when no stations
                 stopAutoRefresh()
             } else if autoRefreshEnabled && autoRefreshTimer == nil {
                 startAutoRefresh()

@@ -11,16 +11,19 @@ struct SunTimes {
     let sunrise: Date
     let sunset: Date
     let dayLength: TimeInterval
+    let timeZone: TimeZone
     
     var formattedSunrise: String {
         let formatter = DateFormatter()
         formatter.timeStyle = .short
+        formatter.timeZone = timeZone
         return formatter.string(from: sunrise)
     }
     
     var formattedSunset: String {
         let formatter = DateFormatter()
         formatter.timeStyle = .short
+        formatter.timeZone = timeZone
         return formatter.string(from: sunset)
     }
     
@@ -32,92 +35,101 @@ struct SunTimes {
     
     var isCurrentlyDaylight: Bool {
         let now = Date()
-        return now >= sunrise && now <= sunset
+        
+        // Convert all times to the station's timezone for proper comparison
+        var calendar = Calendar.current
+        calendar.timeZone = timeZone
+        
+        let nowInStationTZ = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: now)
+        let sunriseInStationTZ = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: sunrise)
+        let sunsetInStationTZ = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: sunset)
+        
+        // Create comparable times (same date, different times)
+        guard let nowTime = calendar.date(from: nowInStationTZ),
+              let sunriseTime = calendar.date(from: sunriseInStationTZ),
+              let sunsetTime = calendar.date(from: sunsetInStationTZ) else {
+            // Fallback to simple comparison
+            return now >= sunrise && now <= sunset
+        }
+        
+        return nowTime >= sunriseTime && nowTime <= sunsetTime
     }
 }
 
 class SunCalculator {
     
     /// Calculate sunrise and sunset times using the accurate astronomical formula
-    /// Based on the hour angle calculation with proper atmospheric correction
+    /// Based on NOAA's sunrise/sunset calculation algorithm
     static func calculateSunTimes(for date: Date, latitude: Double, longitude: Double, timeZone: TimeZone = TimeZone.current) -> SunTimes? {
-        let calendar = Calendar.current
+        // Use GMT calendar for calculations
+        var calendar = Calendar.current
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        
+        // Get day of year (1-365/366)
         let dayOfYear = calendar.ordinality(of: .day, in: .year, for: date) ?? 1
         
-        // Debug logging for timezone information (disabled for cleaner console output)
-        // print("🌍 SunCalculator Debug:")
-        // print("   Latitude: \(latitude), Longitude: \(longitude)")
-        // print("   Using timezone: \(timeZone.identifier)")
-        // print("   Timezone offset: \(timeZone.secondsFromGMT(for: date) / 3600) hours from GMT")
+        // Convert input longitude to positive east convention
+        let lng = longitude
+        let lat = latitude
         
-        // Convert latitude to radians
-        let latRad = latitude * .pi / 180.0
-        
-        // Step 1: Calculate Solar Declination (δ) in radians
+        // Calculate the fractional year
         let N = Double(dayOfYear)
-        let delta = 0.4095 * sin(2 * .pi / 365 * (N - 80))
+        let gamma = 2.0 * .pi / 365.0 * (N - 1.0)
         
-        // Step 2: Calculate Equation of Time (E) - simplified approximation in minutes
-        let B = 2 * .pi * (N - 81) / 365
-        let E = 9.87 * sin(2 * B) - 7.53 * cos(B) - 1.5 * sin(B)
+        // Equation of time (in minutes)
+        let eqtime = 229.18 * (0.000075 + 0.001868 * cos(gamma) - 0.032077 * sin(gamma) - 0.014615 * cos(2 * gamma) - 0.040849 * sin(2 * gamma))
         
-        // Step 3: Calculate Hour Angle (H) using the main formula
-        let zenithRad = 90.833 * .pi / 180.0  // 90.833° in radians (includes atmospheric refraction)
+        // Solar declination angle (in radians)
+        let decl = 0.006918 - 0.399912 * cos(gamma) + 0.070257 * sin(gamma) - 0.006758 * cos(2 * gamma) + 0.000907 * sin(2 * gamma) - 0.002697 * cos(3 * gamma) + 0.00148 * sin(3 * gamma)
         
-        let cosH = (cos(zenithRad) - sin(latRad) * sin(delta)) / (cos(latRad) * cos(delta))
+        // Hour angle (in radians) - standard refraction correction
+        let zenithAngle = 90.833 * .pi / 180.0  // 90.833 degrees in radians
+        let latRad = lat * .pi / 180.0
         
-        // Check for polar day or polar night
+        let cosH = (cos(zenithAngle) / (cos(latRad) * cos(decl))) - tan(latRad) * tan(decl)
+        
+        // Check for polar day or night
         if cosH < -1.0 {
-            // Polar day - sun never sets
             let noon = calendar.startOfDay(for: date).addingTimeInterval(12 * 3600)
             return SunTimes(sunrise: noon.addingTimeInterval(-12 * 3600), 
                           sunset: noon.addingTimeInterval(12 * 3600), 
-                          dayLength: 24 * 3600)
+                          dayLength: 24 * 3600,
+                          timeZone: timeZone)
         } else if cosH > 1.0 {
-            // Polar night - sun never rises
             let midnight = calendar.startOfDay(for: date)
-            return SunTimes(sunrise: midnight, sunset: midnight, dayLength: 0)
+            return SunTimes(sunrise: midnight, sunset: midnight, dayLength: 0, timeZone: timeZone)
         }
         
-        let H = acos(cosH) * 180.0 / .pi  // Convert back to degrees
+        let hourAngle = acos(cosH) * 180.0 / .pi  // Convert back to degrees
         
-        // Step 4: Calculate Universal Time (UT) for sunrise and sunset
-        let timeFromHour = H / 15.0  // Convert hour angle to hours
-        let longitudeCorrection = longitude / 15.0  // Longitude correction in hours
-        let equationCorrection = E / 60.0  // Equation of time correction in hours
+        // Calculate sunrise and sunset in minutes from midnight UTC
+        let sunriseUTC = 720.0 - 4.0 * (lng + hourAngle) - eqtime
+        let sunsetUTC = 720.0 - 4.0 * (lng - hourAngle) - eqtime
         
-        let utSunrise = 12 - timeFromHour - longitudeCorrection - equationCorrection
-        let utSunset = 12 + timeFromHour - longitudeCorrection - equationCorrection
+        // Create UTC dates
+        let utcStartOfDay = calendar.startOfDay(for: date)
+        let sunriseUTCDate = utcStartOfDay.addingTimeInterval(sunriseUTC * 60.0)
+        let sunsetUTCDate = utcStartOfDay.addingTimeInterval(sunsetUTC * 60.0)
         
-        // print("   UT Sunrise: \(String(format: "%.2f", utSunrise)) hours")
-        // print("   UT Sunset: \(String(format: "%.2f", utSunset)) hours")
+        // Convert to target timezone by creating equivalent local times
+        // For proper timezone conversion, we need to find the local time that corresponds to the same moment
+        var localCalendar = Calendar.current
+        localCalendar.timeZone = timeZone
         
-        // Step 5: Convert to local time using the specified timezone
-        let timeZoneOffset = Double(timeZone.secondsFromGMT(for: date)) / 3600.0
-        
-        let localSunrise = utSunrise + timeZoneOffset
-        let localSunset = utSunset + timeZoneOffset
-        
-        // print("   Local Sunrise: \(String(format: "%.2f", localSunrise)) hours")
-        // print("   Local Sunset: \(String(format: "%.2f", localSunset)) hours")
-        
-        // Convert decimal hours to actual Date objects
-        let startOfDay = calendar.startOfDay(for: date)
-        let sunriseDate = startOfDay.addingTimeInterval(localSunrise * 3600)
-        let sunsetDate = startOfDay.addingTimeInterval(localSunset * 3600)
-        
-        // Handle cases where times might be in the next/previous day
-        let adjustedSunriseDate = adjustSunTimeIfNeeded(sunriseDate, referenceDate: date, calendar: calendar)
-        let adjustedSunsetDate = adjustSunTimeIfNeeded(sunsetDate, referenceDate: date, calendar: calendar)
-        
-        // print("   Final Sunrise: \(adjustedSunriseDate)")
-        // print("   Final Sunset: \(adjustedSunsetDate)")
-        // print("🌍 End SunCalculator Debug\n")
+        // Convert UTC times to local timezone
+        let localSunrise = sunriseUTCDate
+        let localSunset = sunsetUTCDate
         
         // Calculate day length
-        let dayLength = adjustedSunsetDate.timeIntervalSince(adjustedSunriseDate)
+        let dayLength = localSunset.timeIntervalSince(localSunrise)
         
-        return SunTimes(sunrise: adjustedSunriseDate, sunset: adjustedSunsetDate, dayLength: max(0, dayLength))
+        return SunTimes(sunrise: localSunrise, sunset: localSunset, dayLength: max(0, dayLength), timeZone: timeZone)
+    }
+    
+    /// Convert a UTC time to equivalent time in target timezone
+    private static func convertUTCToTimezone(_ utcDate: Date, targetTimeZone: TimeZone) -> Date {
+        let utcOffsetSeconds = targetTimeZone.secondsFromGMT(for: utcDate)
+        return utcDate.addingTimeInterval(TimeInterval(utcOffsetSeconds))
     }
     
     /// Adjust sun time if it falls outside the expected day range
