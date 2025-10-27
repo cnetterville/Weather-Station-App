@@ -225,6 +225,11 @@ struct WeatherStationDetailView: View {
                                             Spacer()
                                             Text(MeasurementConverter.formatRainfall(rainfallData.monthly.value, originalUnit: rainfallData.monthly.unit))
                                         }
+                                        HStack {
+                                            Text("Yearly:")
+                                            Spacer()
+                                            Text(MeasurementConverter.formatRainfall(rainfallData.yearly.value, originalUnit: rainfallData.yearly.unit))
+                                        }
                                     }
                                     .font(.subheadline)
                                 }
