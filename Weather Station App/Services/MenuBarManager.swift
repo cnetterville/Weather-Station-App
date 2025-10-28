@@ -89,6 +89,33 @@ class MenuBarManager: ObservableObject {
             }
         }
     }
+    
+    @Published var showRainIcon: Bool = true {
+        didSet {
+            UserDefaults.standard.set(showRainIcon, forKey: "MenuBarShowRainIcon")
+            DispatchQueue.main.async {
+                self.updateMenuBarTitle()
+            }
+        }
+    }
+    
+    @Published var showUVIcon: Bool = true {
+        didSet {
+            UserDefaults.standard.set(showUVIcon, forKey: "MenuBarShowUVIcon")
+            DispatchQueue.main.async {
+                self.updateMenuBarTitle()
+            }
+        }
+    }
+    
+    @Published var showNightIcon: Bool = false {
+        didSet {
+            UserDefaults.standard.set(showNightIcon, forKey: "MenuBarShowNightIcon")
+            DispatchQueue.main.async {
+                self.updateMenuBarTitle()
+            }
+        }
+    }
 
     // For cycling through stations
     private var currentCycleIndex = 0
@@ -142,6 +169,9 @@ class MenuBarManager: ObservableObject {
         showStationName = UserDefaults.standard.bool(forKey: "MenuBarShowStationName")
         cycleInterval = UserDefaults.standard.object(forKey: "MenuBarCycleInterval") as? TimeInterval ?? 10.0
         showDecimals = UserDefaults.standard.bool(forKey: "MenuBarShowDecimals")
+        showRainIcon = UserDefaults.standard.object(forKey: "MenuBarShowRainIcon") as? Bool ?? true
+        showUVIcon = UserDefaults.standard.object(forKey: "MenuBarShowUVIcon") as? Bool ?? true
+        showNightIcon = UserDefaults.standard.bool(forKey: "MenuBarShowNightIcon")
         
         if let modeRawValue = UserDefaults.standard.object(forKey: "MenuBarTemperatureMode") as? String,
            let mode = MenuBarTemperatureMode(rawValue: modeRawValue) {
@@ -327,13 +357,17 @@ class MenuBarManager: ObservableObject {
         }
         
         let tempString = formatTemperature(temp)
+        let weatherIcon = getWeatherIcon(for: weatherData)
         
+        let baseTitle: String
         if showStationName && weatherService.weatherStations.count > 1 {
             let displayLabel = station.displayLabelForMenuBar
-            return "\(displayLabel): \(tempString)"
+            baseTitle = "\(displayLabel): \(tempString)"
+        } else {
+            baseTitle = tempString
         }
         
-        return tempString
+        return weatherIcon.isEmpty ? baseTitle : "\(weatherIcon) \(baseTitle)"
     }
     
     private func getAllStationsTitle() -> String {
@@ -344,6 +378,10 @@ class MenuBarManager: ObservableObject {
         }
         
         var tempStrings: [String] = []
+        var hasRainCondition = false
+        var hasUVCondition = false
+        var hasNightCondition = false
+        
         for station in stations {
             if let weatherData = weatherService.weatherData[station.macAddress],
                let temp = Double(weatherData.outdoor.temperature.value) {
@@ -353,6 +391,15 @@ class MenuBarManager: ObservableObject {
                 let shortLabel = displayLabel.count > 4 ? 
                     String(displayLabel.prefix(4)) + ":" : displayLabel + ":"
                 tempStrings.append("\(shortLabel)\(tempString)")
+                
+                // Check for weather conditions (rain > UV > night priority)
+                if !hasRainCondition && isRaining(weatherData) {
+                    hasRainCondition = true
+                } else if !hasRainCondition && !hasUVCondition && hasSignificantUV(weatherData) {
+                    hasUVCondition = true
+                } else if !hasRainCondition && !hasUVCondition && !hasNightCondition && isNightTime(weatherData) {
+                    hasNightCondition = true
+                }
             }
         }
         
@@ -362,7 +409,20 @@ class MenuBarManager: ObservableObject {
         
         // Join with separator and truncate if too long
         let combined = tempStrings.joined(separator: " | ")
-        return combined.count > 50 ? String(combined.prefix(47)) + "…" : combined
+        let baseTitle = combined.count > 50 ? String(combined.prefix(47)) + "…" : combined
+        
+        // Add weather icon based on priority
+        let weatherIcon = if hasRainCondition {
+            getRainIconString()
+        } else if hasUVCondition {
+            getUVIconString()
+        } else if hasNightCondition {
+            getNightIconString()
+        } else {
+            ""
+        }
+        
+        return weatherIcon.isEmpty ? baseTitle : "\(weatherIcon) \(baseTitle)"
     }
     
     private func getCycleStationTitle() -> String {
@@ -385,13 +445,17 @@ class MenuBarManager: ObservableObject {
         }
         
         let tempString = formatTemperature(temp)
+        let weatherIcon = getWeatherIcon(for: weatherData)
         
+        let baseTitle: String
         if showStationName {
             let displayLabel = station.displayLabelForMenuBar
-            return "\(displayLabel): \(tempString)"
+            baseTitle = "\(displayLabel): \(tempString)"
+        } else {
+            baseTitle = tempString
         }
         
-        return tempString
+        return weatherIcon.isEmpty ? baseTitle : "\(weatherIcon) \(baseTitle)"
     }
     
     private func formatTemperature(_ tempF: Double) -> String {
@@ -457,6 +521,88 @@ class MenuBarManager: ObservableObject {
     // Get available stations for selection
     var availableStations: [WeatherStation] {
         return weatherService.weatherStations.filter { $0.isActive }
+    }
+    
+    // MARK: - Rain Detection Helpers
+    
+    private func getRainIcon(for weatherData: WeatherStationData) -> String {
+        guard showRainIcon && isRaining(weatherData) else { return "" }
+        return getRainIconString()
+    }
+    
+    private func getRainIconString() -> String {
+        return "💧" // Raindrop emoji
+    }
+    
+    private func getUVIconString() -> String {
+        return "☀️" // Sun emoji
+    }
+    
+    private func getNightIconString() -> String {
+        return "🌙" // Moon emoji
+    }
+    
+    private func isRaining(_ weatherData: WeatherStationData) -> Bool {
+        // Check piezo rain gauge rate - if it's > 0, it's currently raining
+        let rainRateString = weatherData.rainfallPiezo.rainRate.value
+        guard let rainRate = Double(rainRateString) else {
+            return false
+        }
+        
+        // Consider it raining if rain rate is greater than 0
+        // Rain rate is typically in inches/hour or mm/hour
+        return rainRate > 0.0
+    }
+    
+    private func hasHighUV(_ weatherData: WeatherStationData) -> Bool {
+        return hasSignificantUV(weatherData)
+    }
+    
+    private func hasSignificantUV(_ weatherData: WeatherStationData) -> Bool {
+        let uviString = weatherData.solarAndUvi.uvi.value
+        guard let uviValue = Double(uviString) else {
+            return false
+        }
+        
+        // Use UV index 3+ (Moderate and above) as threshold
+        // This avoids showing sun icon at night when UV is 0
+        // and focuses on times when UV protection is recommended
+        return uviValue >= 3.0
+    }
+    
+    private func isNightTime(_ weatherData: WeatherStationData) -> Bool {
+        let uviString = weatherData.solarAndUvi.uvi.value
+        let solarString = weatherData.solarAndUvi.solar.value
+        
+        guard let uviValue = Double(uviString),
+              let solarValue = Double(solarString) else {
+            return false
+        }
+        
+        // Consider it nighttime if both UV index is 0 AND solar radiation is very low
+        // This helps distinguish true nighttime from cloudy/indoor conditions
+        return uviValue == 0.0 && solarValue < 10.0 // Very low solar radiation threshold
+    }
+    
+    // MARK: - Weather Icon Helpers (Priority-based)
+    
+    private func getWeatherIcon(for weatherData: WeatherStationData) -> String {
+        // Priority 1: Rain (highest priority)
+        if showRainIcon && isRaining(weatherData) {
+            return getRainIconString()
+        }
+        
+        // Priority 2: High UV (only during daytime)
+        if showUVIcon && hasSignificantUV(weatherData) {
+            return getUVIconString()
+        }
+        
+        // Priority 3: Night time (lowest priority)
+        if showNightIcon && isNightTime(weatherData) {
+            return getNightIconString()
+        }
+        
+        return ""
     }
     
     private func setupCyclingTimer() {

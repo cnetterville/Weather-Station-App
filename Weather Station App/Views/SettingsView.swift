@@ -200,6 +200,15 @@ struct SettingsView: View {
                                         Toggle("Show decimal places", isOn: $menuBarManager.showDecimals)
                                             .toggleStyle(.checkbox)
                                         
+                                        Toggle("Show rain icon when raining", isOn: $menuBarManager.showRainIcon)
+                                            .toggleStyle(.checkbox)
+                                        
+                                        Toggle("Show sun icon for high UV (3+)", isOn: $menuBarManager.showUVIcon)
+                                            .toggleStyle(.checkbox)
+                                        
+                                        Toggle("Show moon icon at night", isOn: $menuBarManager.showNightIcon)
+                                            .toggleStyle(.checkbox)
+                                        
                                         // Custom menubar labels section
                                         if !menuBarManager.availableStations.isEmpty {
                                             Divider()
@@ -309,7 +318,7 @@ struct SettingsView: View {
                                             HStack {
                                                 Image(systemName: unitSystemDisplayMode == mode ? "checkmark.circle.fill" : "circle")
                                                     .foregroundColor(unitSystemDisplayMode == mode ? .blue : .secondary)
-												
+                                                
                                                 VStack(alignment: .leading, spacing: 2) {
                                                     Text(mode.shortName)
                                                         .font(.headline)
@@ -318,7 +327,7 @@ struct SettingsView: View {
                                                         .font(.caption)
                                                         .foregroundColor(.secondary)
                                                 }
-												
+                                                
                                                 Spacer()
                                             }
                                             .padding(.vertical, 4)
@@ -361,7 +370,7 @@ struct SettingsView: View {
                                 VStack(alignment: .leading, spacing: 8) {
                                     Text("Refresh Interval:")
                                         .font(.headline)
-									
+                                   
                                     // Use a more compact layout for the picker
                                     VStack(alignment: .leading, spacing: 8) {
                                         // First row
@@ -400,7 +409,7 @@ struct SettingsView: View {
                                             })
                                         }
                                     }
-									
+                                   
                                     HStack {
                                         Image(systemName: "info.circle")
                                             .foregroundColor(.blue)
@@ -725,11 +734,23 @@ struct SettingsView: View {
         let activeStations = menuBarManager.availableStations
         let sampleTemp = menuBarManager.showDecimals ? "72.3°F" : "72°F"
         
+        // Show sample icons based on settings and priority (rain > UV > night)
+        let weatherIcon = if menuBarManager.showRainIcon {
+            "💧 " // Rain has highest priority in preview
+        } else if menuBarManager.showUVIcon {
+            "☀️ " // UV second priority
+        } else if menuBarManager.showNightIcon {
+            "🌙 " // Night lowest priority
+        } else {
+            ""
+        }
+        
         switch menuBarManager.displayMode {
         case .singleStation:
             if let station = activeStations.first {
                 let label = station.displayLabelForMenuBar
-                return menuBarManager.showStationName ? "\(label): \(sampleTemp)" : sampleTemp
+                let baseTemp = menuBarManager.showStationName ? "\(label): \(sampleTemp)" : sampleTemp
+                return "\(weatherIcon)\(baseTemp)"
             }
         case .allStations:
             if activeStations.count > 0 {
@@ -739,12 +760,14 @@ struct SettingsView: View {
                     return "\(shortLabel)\(sampleTemp)"
                 }
                 let preview = samples.joined(separator: " | ")
-                return activeStations.count > 3 ? preview + " | ..." : preview
+                let basePreview = activeStations.count > 3 ? preview + " | ..." : preview
+                return "\(weatherIcon)\(basePreview)"
             }
         case .cycleThrough:
             if let station = activeStations.first {
                 let label = station.displayLabelForMenuBar
-                return menuBarManager.showStationName ? "\(label): \(sampleTemp)" : sampleTemp
+                let baseTemp = menuBarManager.showStationName ? "\(label): \(sampleTemp)" : sampleTemp
+                return "\(weatherIcon)\(baseTemp)"
             }
         }
         
