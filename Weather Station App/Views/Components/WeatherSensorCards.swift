@@ -21,25 +21,46 @@ struct OutdoorTemperatureCard: View {
             onTitleChange: onTitleChange
         ) {
             VStack(alignment: .leading, spacing: 12) {
-                // Current Temperature - Main Display
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(TemperatureConverter.formatTemperature(data.outdoor.temperature.value, originalUnit: data.outdoor.temperature.unit))
-                        .font(.system(size: 32, weight: .bold, design: .rounded))
-                    HStack(spacing: 12) {
-                        Text("Feels like \(TemperatureConverter.formatTemperature(data.outdoor.feelsLike.value, originalUnit: data.outdoor.feelsLike.unit))")
-                            .font(.subheadline)
+                // Current Temperature with Glass Thermometer Gauge
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Temperature")
+                            .font(.caption)
                             .foregroundColor(.secondary)
-                        
-                        // Outdoor Humidity
-                        HStack(spacing: 4) {
-                            Text("Humidity")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                            Text("\(data.outdoor.humidity.value)\(data.outdoor.humidity.unit)")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
+                        Text(TemperatureConverter.formatTemperature(data.outdoor.temperature.value, originalUnit: data.outdoor.temperature.unit))
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
                     }
+                    
+                    Spacer()
+                    
+                    // Glass Thermometer Gauge
+                    ThermometerGauge(
+                        temperature: Double(data.outdoor.temperature.value) ?? 0,
+                        feelsLike: Double(data.outdoor.feelsLike.value) ?? 0
+                    )
+                    .frame(width: 100, height: 35)
+                    
+                    Spacer()
+                    
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Text("Feels Like")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text(TemperatureConverter.formatTemperature(data.outdoor.feelsLike.value, originalUnit: data.outdoor.feelsLike.unit))
+                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    }
+                }
+                
+                // Humidity display
+                HStack {
+                    Text("Humidity:")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text("\(data.outdoor.humidity.value)\(data.outdoor.humidity.unit)")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.blue)
                 }
                 
                 Divider()
@@ -63,6 +84,135 @@ struct OutdoorTemperatureCard: View {
                     }
                 }
             }
+        }
+    }
+}
+
+struct ThermometerGauge: View {
+    let temperature: Double
+    let feelsLike: Double
+    
+    @State private var animatedLevel: Double = 0.0
+    @State private var animatedFeelsLikeLevel: Double = 0.0
+    
+    private func getTemperatureColor(_ temp: Double) -> Color {
+        switch temp {
+        case ..<32: return .blue      // Freezing
+        case 32..<60: return .cyan    // Cold
+        case 60..<75: return .green   // Comfortable
+        case 75..<85: return .yellow  // Warm
+        case 85..<95: return .orange  // Hot
+        default: return .red          // Very hot
+        }
+    }
+    
+    // Convert temperature to gauge level (0.0 to 1.0)
+    private func temperatureToLevel(_ temp: Double) -> Double {
+        let minTemp = 0.0   // Minimum gauge temperature
+        let maxTemp = 100.0 // Maximum gauge temperature
+        let clampedTemp = max(minTemp, min(maxTemp, temp))
+        return (clampedTemp - minTemp) / (maxTemp - minTemp)
+    }
+    
+    var body: some View {
+        ZStack {
+            // Horizontal glass tube
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.white.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                )
+                .shadow(color: Color.black.opacity(0.1), radius: 2, x: 1, y: 1)
+            
+            // Temperature scale marks (vertical lines for horizontal thermometer)
+            HStack {
+                ForEach([0, 25, 50, 75, 100], id: \.self) { temp in
+                    VStack {
+                        Rectangle()
+                            .fill(Color.secondary.opacity(0.4))
+                            .frame(width: 0.5, height: 4)
+                        Spacer()
+                        if temp % 50 == 0 { // Only show labels for 0, 50, 100
+                            Text("\(temp)°")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        } else {
+                            Spacer()
+                        }
+                    }
+                    if temp != 100 {
+                        Spacer()
+                    }
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            
+            // Horizontal mercury column
+            HStack {
+                ZStack {
+                    // Main mercury
+                    Rectangle()
+                        .fill(getTemperatureColor(temperature))
+                        .frame(width: 75 * animatedLevel) // Increased from 60 to 75 for larger frame
+                        .frame(height: 10) // Slightly taller mercury column
+                        .clipShape(RoundedRectangle(cornerRadius: 5))
+                    
+                    // Glass reflection on mercury
+                    Rectangle()
+                        .fill(Color.white.opacity(0.4))
+                        .frame(width: 75 * animatedLevel)
+                        .frame(height: 2)
+                        .clipShape(RoundedRectangle(cornerRadius: 1))
+                        .offset(y: -3) // Adjusted offset for taller mercury
+                }
+                .animation(.easeInOut(duration: 1.2), value: animatedLevel)
+                Spacer()
+            }
+            .padding(.leading, 10) // Slightly more padding for larger size
+            
+            // Feels-like temperature indicator (vertical line)
+            HStack {
+                Rectangle()
+                    .fill(Color.orange)
+                    .frame(width: 2, height: 15) // Taller indicator line
+                    .offset(x: 75 * animatedFeelsLikeLevel) // Updated to match new mercury width
+                    .animation(.easeInOut(duration: 1.2), value: animatedFeelsLikeLevel)
+                Spacer()
+            }
+            .padding(.leading, 10) // Match the mercury padding
+            
+            // Thermometer bulb on the left side
+            HStack {
+                Circle()
+                    .fill(getTemperatureColor(temperature))
+                    .frame(width: 16, height: 16) // Slightly larger bulb
+                    .overlay(
+                        Circle()
+                            .fill(Color.white.opacity(0.3))
+                            .frame(width: 4, height: 4) // Larger highlight
+                            .offset(x: -2, y: -1)
+                    )
+                    .padding(.leading, 2)
+                Spacer()
+            }
+        }
+        .onAppear {
+            updateGauge()
+        }
+        .onChange(of: temperature) { _, _ in
+            updateGauge()
+        }
+        .onChange(of: feelsLike) { _, _ in
+            updateGauge()
+        }
+    }
+    
+    private func updateGauge() {
+        withAnimation(.easeInOut(duration: 1.2)) {
+            animatedLevel = temperatureToLevel(temperature)
+            animatedFeelsLikeLevel = temperatureToLevel(feelsLike)
         }
     }
 }
