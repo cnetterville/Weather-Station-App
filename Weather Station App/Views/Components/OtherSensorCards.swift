@@ -312,14 +312,25 @@ struct RainfallCard: View {
             onTitleChange: onTitleChange
         ) {
             let rainfallData = data.rainfallPiezo
-            VStack(alignment: .leading, spacing: 4) {
-                // Rain Status
+            VStack(alignment: .leading, spacing: 8) {
+                // Rain Status with Animation
                 HStack {
                     Text("Status:")
                     Spacer()
-                    Text(WeatherStatusHelpers.rainStatusText(rainfallData.state.value))
-                        .fontWeight(.semibold)
-                        .foregroundColor(WeatherStatusHelpers.rainStatusColor(rainfallData.state.value))
+                    HStack(spacing: 8) {
+                        Text(WeatherStatusHelpers.rainStatusText(rainfallData.state.value))
+                            .fontWeight(.semibold)
+                            .foregroundColor(WeatherStatusHelpers.rainStatusColor(rainfallData.state.value))
+                        
+                        // Rain Animation
+                        if rainfallData.state.value == "1" {
+                            RainIntensityAnimation(
+                                rainRate: Double(rainfallData.rainRate.value) ?? 0.0,
+                                isRaining: true
+                            )
+                            .frame(width: 30, height: 20)
+                        }
+                    }
                 }
                 
                 Divider()
@@ -350,7 +361,18 @@ struct RainfallDataView: View {
             HStack {
                 Text("Rate:")
                 Spacer()
-                Text(MeasurementConverter.formatRainRate(rainfallData.rainRate.value, originalUnit: rainfallData.rainRate.unit))
+                HStack(spacing: 4) {
+                    Text(MeasurementConverter.formatRainRate(rainfallData.rainRate.value, originalUnit: rainfallData.rainRate.unit))
+                    
+                    // Small rain intensity indicator next to rate
+                    if rainfallData.state.value == "1" {
+                        RainIntensityAnimation(
+                            rainRate: Double(rainfallData.rainRate.value) ?? 0.0,
+                            isRaining: true
+                        )
+                        .frame(width: 20, height: 12)
+                    }
+                }
             }
             HStack {
                 Text("Weekly:")
@@ -366,6 +388,146 @@ struct RainfallDataView: View {
                 Text("Yearly:")
                 Spacer()
                 Text(MeasurementConverter.formatRainfall(rainfallData.yearly.value, originalUnit: rainfallData.yearly.unit))
+            }
+        }
+    }
+}
+
+struct RainIntensityAnimation: View {
+    let rainRate: Double
+    let isRaining: Bool
+    
+    @State private var animationOffset: CGFloat = 0
+    @State private var dropletOpacity: Double = 0.7
+    
+    private var rainIntensity: RainIntensity {
+        if !isRaining { return .none }
+        switch rainRate {
+        case 0..<0.1: return .light
+        case 0.1..<0.5: return .moderate
+        case 0.5..<2.0: return .heavy
+        default: return .extreme
+        }
+    }
+    
+    private enum RainIntensity: CaseIterable {
+        case none, light, moderate, heavy, extreme
+        
+        var dropletCount: Int {
+            switch self {
+            case .none: return 0
+            case .light: return 3
+            case .moderate: return 5
+            case .heavy: return 8
+            case .extreme: return 12
+            }
+        }
+        
+        var animationSpeed: Double {
+            switch self {
+            case .none: return 0
+            case .light: return 2.0
+            case .moderate: return 1.5
+            case .heavy: return 1.0
+            case .extreme: return 0.7
+            }
+        }
+        
+        var dropletOpacity: Double {
+            switch self {
+            case .none: return 0
+            case .light: return 0.4
+            case .moderate: return 0.6
+            case .heavy: return 0.8
+            case .extreme: return 1.0
+            }
+        }
+    }
+    
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                // Multiple animated raindrops
+                ForEach(0..<rainIntensity.dropletCount, id: \.self) { index in
+                    RainDroplet(
+                        index: index,
+                        totalDroplets: rainIntensity.dropletCount,
+                        containerSize: geometry.size,
+                        animationSpeed: rainIntensity.animationSpeed,
+                        opacity: rainIntensity.dropletOpacity
+                    )
+                }
+            }
+        }
+        .clipped()
+        .onAppear {
+            if isRaining {
+                startAnimation()
+            }
+        }
+        .onChange(of: isRaining) { newValue in
+            if newValue {
+                startAnimation()
+            }
+        }
+    }
+    
+    private func startAnimation() {
+        withAnimation(.linear(duration: rainIntensity.animationSpeed).repeatForever(autoreverses: false)) {
+            animationOffset = 1.0
+        }
+    }
+}
+
+struct RainDroplet: View {
+    let index: Int
+    let totalDroplets: Int
+    let containerSize: CGSize
+    let animationSpeed: Double
+    let opacity: Double
+    
+    @State private var yOffset: CGFloat = 0
+    @State private var isAnimating = false
+    
+    private var xPosition: CGFloat {
+        let spacing = containerSize.width / CGFloat(max(totalDroplets, 1))
+        return spacing * CGFloat(index) + spacing * 0.5
+    }
+    
+    private var animationDelay: Double {
+        Double(index) * 0.1
+    }
+    
+    var body: some View {
+        RoundedRectangle(cornerRadius: 1)
+            .fill(
+                LinearGradient(
+                    gradient: Gradient(colors: [.blue.opacity(opacity), .cyan.opacity(opacity * 0.7)]),
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .frame(width: 2, height: 6)
+            .position(
+                x: xPosition,
+                y: yOffset
+            )
+            .onAppear {
+                startDropletAnimation()
+            }
+    }
+    
+    private func startDropletAnimation() {
+        // Start from above the container
+        yOffset = -10
+        
+        // Add staggered delay for natural rainfall effect
+        DispatchQueue.main.asyncAfter(deadline: .now() + animationDelay) {
+            withAnimation(
+                .linear(duration: animationSpeed)
+                .repeatForever(autoreverses: false)
+            ) {
+                yOffset = containerSize.height + 10
             }
         }
     }
