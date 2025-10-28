@@ -367,7 +367,7 @@ class MenuBarManager: ObservableObject {
         }
         
         let tempString = formatTemperature(temp)
-        let weatherIcon = getWeatherIcon(for: weatherData)
+        let weatherIcon = getWeatherIconForStation(weatherData, station: station)
         
         let baseTitle: String
         if showStationName && weatherService.weatherStations.count > 1 {
@@ -393,7 +393,7 @@ class MenuBarManager: ObservableObject {
             if let weatherData = weatherService.weatherData[station.macAddress],
                let temp = Double(weatherData.outdoor.temperature.value) {
                 let tempString = formatTemperature(temp)
-                let weatherIcon = getWeatherIcon(for: weatherData)
+                let weatherIcon = getWeatherIconForStation(weatherData, station: station)
                 let displayLabel = station.displayLabelForMenuBar
                 
                 // Use even shorter labels for "all stations" mode
@@ -432,7 +432,7 @@ class MenuBarManager: ObservableObject {
         }
         
         let tempString = formatTemperature(temp)
-        let weatherIcon = getWeatherIcon(for: weatherData)
+        let weatherIcon = getWeatherIconForStation(weatherData, station: station)
         
         let baseTitle: String
         if showStationName {
@@ -443,6 +443,31 @@ class MenuBarManager: ObservableObject {
         }
         
         return baseTitle
+    }
+    
+    // Helper method to get weather icon for a specific station
+    private func getWeatherIconForStation(_ weatherData: WeatherStationData, station: WeatherStation) -> String {
+        // Priority 1: Rain (highest priority)
+        if showRainIcon && isRaining(weatherData) {
+            return getRainIconString()
+        }
+        
+        // Priority 2: High UV (sunny conditions)
+        if showUVIcon && hasSignificantUV(weatherData) {
+            return getUVIconString()
+        }
+        
+        // Priority 3: Cloudy daytime (overcast but still daylight)
+        if showCloudyIcon && isCloudyDaytime(weatherData) {
+            return getCloudyIconString()
+        }
+        
+        // Priority 4: Night time (lowest priority) - now using actual sunset/sunrise
+        if showNightIcon && isNightTime(weatherData, for: station) {
+            return getNightIconString()
+        }
+        
+        return ""
     }
     
     private func formatTemperature(_ tempF: Double) -> String {
@@ -561,15 +586,29 @@ class MenuBarManager: ObservableObject {
         return solarValue >= 600.0
     }
     
-    private func isNightTime(_ weatherData: WeatherStationData) -> Bool {
-        let solarString = weatherData.solarAndUvi.solar.value
+    private func isNightTime(_ weatherData: WeatherStationData, for station: WeatherStation) -> Bool {
+        // Use actual sunrise/sunset calculation if coordinates are available
+        if let latitude = station.latitude,
+           let longitude = station.longitude {
+            
+            let sunTimes = SunCalculator.calculateSunTimes(
+                for: Date(),
+                latitude: latitude,
+                longitude: longitude,
+                timeZone: station.timeZone
+            )
+            
+            // Return true if it's currently NOT daylight (i.e., between sunset and sunrise)
+            return sunTimes?.isCurrentlyDaylight == false
+        }
         
+        // Fallback to solar radiation if coordinates are not available
+        let solarString = weatherData.solarAndUvi.solar.value
         guard let solarValue = Double(solarString) else {
             return false
         }
         
-        // Use solar radiation for nighttime detection
-        // Very low solar radiation indicates true nighttime
+        // Very low solar radiation indicates nighttime
         return solarValue < 50.0 // Nighttime threshold
     }
     
@@ -586,9 +625,10 @@ class MenuBarManager: ObservableObject {
         return solarValue >= 50.0 && solarValue < 600.0
     }
     
-    // MARK: - Weather Icon Helpers (Priority-based)
+    // MARK: - Updated Weather Icon Helpers
     
-    private func getWeatherIcon(for weatherData: WeatherStationData) -> String {
+    // Fallback method for when we can't determine the station
+    private func getWeatherIconWithoutStation(for weatherData: WeatherStationData) -> String {
         // Priority 1: Rain (highest priority)
         if showRainIcon && isRaining(weatherData) {
             return getRainIconString()
@@ -604,12 +644,24 @@ class MenuBarManager: ObservableObject {
             return getCloudyIconString()
         }
         
-        // Priority 4: Night time (lowest priority)
-        if showNightIcon && isNightTime(weatherData) {
+        // Priority 4: Night time (lowest priority) - fallback to solar radiation
+        if showNightIcon && isNightTimeFallback(weatherData) {
             return getNightIconString()
         }
         
         return ""
+    }
+    
+    private func isNightTimeFallback(_ weatherData: WeatherStationData) -> Bool {
+        let solarString = weatherData.solarAndUvi.solar.value
+        
+        guard let solarValue = Double(solarString) else {
+            return false
+        }
+        
+        // Use solar radiation for nighttime detection as fallback
+        // Very low solar radiation indicates true nighttime
+        return solarValue < 50.0 // Nighttime threshold
     }
     
     private func setupCyclingTimer() {

@@ -209,7 +209,7 @@ struct SettingsView: View {
                                         Toggle("Show cloud icon for moderate solar", isOn: $menuBarManager.showCloudyIcon)
                                             .toggleStyle(.checkbox)
                                         
-                                        Toggle("Show moon icon at night (<50 W/m²)", isOn: $menuBarManager.showNightIcon)
+                                        Toggle("Show moon icon between sunset and sunrise", isOn: $menuBarManager.showNightIcon)
                                             .toggleStyle(.checkbox)
                                         
                                         // Custom menubar labels section
@@ -746,7 +746,6 @@ struct SettingsView: View {
         ].compactMap { $0 }
         
         let weatherIcon = sampleIcons.first ?? ""
-        let displayIcon = weatherIcon.isEmpty ? "" : "\(weatherIcon) "
         
         switch menuBarManager.displayMode {
         case .singleStation:
