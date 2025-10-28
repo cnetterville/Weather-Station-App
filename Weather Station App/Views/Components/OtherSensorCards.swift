@@ -20,7 +20,7 @@ struct WindCard: View {
             onTitleChange: onTitleChange
         ) {
             VStack(alignment: .leading, spacing: 12) {
-                // Current Wind Speed - Larger, more prominent
+                // Current Wind Speed and Direction with Compass
                 HStack {
                     VStack(alignment: .leading) {
                         Text("Speed")
@@ -29,6 +29,16 @@ struct WindCard: View {
                         Text(MeasurementConverter.formatWindSpeed(data.wind.windSpeed.value, originalUnit: data.wind.windSpeed.unit))
                             .font(.system(size: 24, weight: .bold, design: .rounded))
                     }
+                    
+                    Spacer()
+                    
+                    // Animated Wind Compass in center
+                    WindCompass(
+                        direction: Double(data.wind.windDirection.value) ?? 0,
+                        speed: Double(data.wind.windSpeed.value) ?? 0
+                    )
+                    .frame(width: 45, height: 45)
+                    
                     Spacer()
                     
                     // Wind Direction with Compass
@@ -51,6 +61,107 @@ struct WindCard: View {
                 
                 // Additional Wind Information
                 AdditionalWindInfoView(data: data)
+            }
+        }
+    }
+}
+
+struct WindCompass: View {
+    let direction: Double // Wind direction in degrees (0-360)
+    let speed: Double // Wind speed for animation intensity
+    
+    @State private var rotationAngle: Double = 0
+    @State private var pulseScale: Double = 1.0
+    
+    var body: some View {
+        ZStack {
+            // Compass base circle
+            Circle()
+                .stroke(Color.secondary.opacity(0.3), lineWidth: 1.5)
+                .background(
+                    Circle()
+                        .fill(Color.primary.opacity(0.05))
+                )
+            
+            // Cardinal direction markers
+            ForEach([0, 90, 180, 270], id: \.self) { angle in
+                Rectangle()
+                    .fill(Color.secondary.opacity(0.4))
+                    .frame(width: 1, height: 6)
+                    .offset(y: -17)
+                    .rotationEffect(.degrees(Double(angle)))
+            }
+            
+            // Cardinal direction labels using absolute positioning
+            Text("N")
+                .font(.caption2)
+                .fontWeight(.semibold)
+                .foregroundColor(.secondary)
+                .position(x: 22.5, y: 6)
+            
+            Text("S")
+                .font(.caption2)
+                .fontWeight(.semibold)
+                .foregroundColor(.secondary)
+                .position(x: 22.5, y: 39)
+                
+            Text("W")
+                .font(.caption2)
+                .fontWeight(.semibold)
+                .foregroundColor(.secondary)
+                .position(x: 6, y: 22.5)
+                
+            Text("E")
+                .font(.caption2)
+                .fontWeight(.semibold)
+                .foregroundColor(.secondary)
+                .position(x: 39, y: 22.5)
+            
+            // Wind direction arrow
+            Image(systemName: "location.north.fill")
+                .foregroundColor(windArrowColor)
+                .font(.system(size: 14, weight: .bold))
+                .rotationEffect(.degrees(rotationAngle))
+                .scaleEffect(pulseScale)
+                .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: pulseScale)
+                .onAppear {
+                    updateRotation()
+                    startPulseAnimation()
+                }
+                .onChange(of: direction) { _, _ in
+                    updateRotation()
+                }
+                .onChange(of: speed) { _, _ in
+                    startPulseAnimation()
+                }
+        }
+    }
+    
+    private var windArrowColor: Color {
+        switch speed {
+        case 0..<5: return .gray
+        case 5..<15: return .green  
+        case 15..<25: return .yellow
+        case 25..<35: return .orange
+        default: return .red
+        }
+    }
+    
+    private func updateRotation() {
+        withAnimation(.easeInOut(duration: 1.0)) {
+            rotationAngle = direction
+        }
+    }
+    
+    private func startPulseAnimation() {
+        // More intense pulse for higher wind speeds
+        let intensity = min(speed / 30.0, 1.0) // Normalize to 0-1
+        pulseScale = 1.0 + (intensity * 0.3) // Scale between 1.0 and 1.3
+        
+        // Faster pulse for higher wind speeds
+        if speed > 0 {
+            withAnimation(.easeInOut(duration: max(0.5, 1.5 - intensity)).repeatForever(autoreverses: true)) {
+                pulseScale = 1.0 + (intensity * 0.2)
             }
         }
     }
