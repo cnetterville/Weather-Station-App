@@ -1,9 +1,9 @@
-//
+// 
 //  SpecializedSensorCards.swift
 //  Weather Station App
-//
+// 
 //  Created by Curtis Netterville on 10/25/25.
-//
+// 
 
 import SwiftUI
 
@@ -1030,6 +1030,14 @@ struct SunTimesView: View {
                 
                 Spacer()
                 
+                // Timezone abbreviation in the center
+                Text(getCurrentTimeZoneAbbreviation())
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .italic()
+                
+                Spacer()
+                
                 VStack(alignment: .trailing, spacing: 4) {
                     HStack {
                         Text("Sunset")
@@ -1110,6 +1118,11 @@ struct SunTimesView: View {
         formatter.timeStyle = .short
         formatter.timeZone = timeZone
         return formatter.string(from: date)
+    }
+    
+    private func getCurrentTimeZoneAbbreviation() -> String {
+        // Get the current timezone abbreviation accounting for daylight saving
+        return station.timeZone.abbreviation(for: Date()) ?? "Local"
     }
 }
 
@@ -1488,6 +1501,14 @@ struct MoonTimesView: View {
                 
                 Spacer()
                 
+                // Timezone abbreviation in the center
+                Text(getCurrentTimeZoneAbbreviation())
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .italic()
+                
+                Spacer()
+                
                 VStack(alignment: .trailing, spacing: 4) {
                     HStack {
                         Text("Moonset")
@@ -1507,12 +1528,6 @@ struct MoonTimesView: View {
                     }
                 }
             }
-            
-            // Show current timezone name (accounts for daylight saving)
-            Text("Times shown in \(getCurrentTimeZoneName())")
-                .font(.caption2)
-                .foregroundColor(.secondary)
-                .italic()
         }
     }
     
@@ -1523,15 +1538,9 @@ struct MoonTimesView: View {
         return formatter.string(from: date)
     }
     
-    private func getCurrentTimeZoneName() -> String {
-        // Get the current timezone name accounting for daylight saving
-        if timeZone.isDaylightSavingTime(for: Date()) {
-            // Use daylight saving name (e.g., "CDT")
-            return timeZone.localizedName(for: .daylightSaving, locale: .current) ?? timeZone.abbreviation(for: Date()) ?? "Local Time"
-        } else {
-            // Use standard time name (e.g., "CST")
-            return timeZone.localizedName(for: .standard, locale: .current) ?? timeZone.abbreviation(for: Date()) ?? "Local Time"
-        }
+    private func getCurrentTimeZoneAbbreviation() -> String {
+        // Get the current timezone abbreviation accounting for daylight saving
+        return timeZone.abbreviation(for: Date()) ?? "Local"
     }
 }
 
