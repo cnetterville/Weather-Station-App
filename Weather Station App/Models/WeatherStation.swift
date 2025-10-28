@@ -49,7 +49,8 @@ struct SensorLabels: Codable, Equatable {
     var indoorTemp: String = "Indoor Temperature" 
     var wind: String = "Wind"
     var pressure: String = "Pressure"
-    var rainfall: String = "Rainfall (Piezo)"
+    var rainfall: String = "Rainfall (Traditional)"
+    var rainfallPiezo: String = "Rainfall (Piezo)"
     var airQualityCh1: String = "Air Quality Ch1 (PM2.5)"
     var airQualityCh2: String = "Air Quality Ch2 (PM2.5)"
     var airQualityCh3: String = "Air Quality Ch3 (PM2.5)"
@@ -70,7 +71,8 @@ struct SensorPreferences: Codable, Equatable {
     var showIndoorTemp: Bool = true
     var showWind: Bool = true
     var showPressure: Bool = true
-    var showRainfall: Bool = true
+    var showRainfall: Bool = true // Traditional rain gauge
+    var showRainfallPiezo: Bool = true // Piezo rain gauge
     var showAirQualityCh1: Bool = true
     var showAirQualityCh2: Bool = true
     var showAirQualityCh3: Bool = true
@@ -84,6 +86,53 @@ struct SensorPreferences: Codable, Equatable {
     var showSunriseSunset: Bool = true
     var showLunar: Bool = true
     var showCamera: Bool = true
+    
+    // Migration support for existing installations
+    init() {
+        // Default values are set above
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        showOutdoorTemp = try container.decodeIfPresent(Bool.self, forKey: .showOutdoorTemp) ?? true
+        showIndoorTemp = try container.decodeIfPresent(Bool.self, forKey: .showIndoorTemp) ?? true
+        showWind = try container.decodeIfPresent(Bool.self, forKey: .showWind) ?? true
+        showPressure = try container.decodeIfPresent(Bool.self, forKey: .showPressure) ?? true
+        showAirQualityCh1 = try container.decodeIfPresent(Bool.self, forKey: .showAirQualityCh1) ?? true
+        showAirQualityCh2 = try container.decodeIfPresent(Bool.self, forKey: .showAirQualityCh2) ?? true
+        showAirQualityCh3 = try container.decodeIfPresent(Bool.self, forKey: .showAirQualityCh3) ?? true
+        showUVIndex = try container.decodeIfPresent(Bool.self, forKey: .showUVIndex) ?? true
+        showSolar = try container.decodeIfPresent(Bool.self, forKey: .showSolar) ?? true
+        showLightning = try container.decodeIfPresent(Bool.self, forKey: .showLightning) ?? true
+        showTempHumidityCh1 = try container.decodeIfPresent(Bool.self, forKey: .showTempHumidityCh1) ?? false
+        showTempHumidityCh2 = try container.decodeIfPresent(Bool.self, forKey: .showTempHumidityCh2) ?? false
+        showTempHumidityCh3 = try container.decodeIfPresent(Bool.self, forKey: .showTempHumidityCh3) ?? false
+        showBatteryStatus = try container.decodeIfPresent(Bool.self, forKey: .showBatteryStatus) ?? false
+        showSunriseSunset = try container.decodeIfPresent(Bool.self, forKey: .showSunriseSunset) ?? true
+        showLunar = try container.decodeIfPresent(Bool.self, forKey: .showLunar) ?? true
+        showCamera = try container.decodeIfPresent(Bool.self, forKey: .showCamera) ?? true
+        
+        // Migration logic for rainfall preferences
+        if let oldRainfallPref = try container.decodeIfPresent(Bool.self, forKey: .showRainfall) {
+            // If old preference exists, use it for both types
+            showRainfall = oldRainfallPref
+            showRainfallPiezo = oldRainfallPref
+        } else {
+            // Check for new separate preferences
+            showRainfall = try container.decodeIfPresent(Bool.self, forKey: .showRainfall) ?? true
+            showRainfallPiezo = try container.decodeIfPresent(Bool.self, forKey: .showRainfallPiezo) ?? true
+        }
+    }
+    
+    private enum CodingKeys: String, CodingKey {
+        case showOutdoorTemp, showIndoorTemp, showWind, showPressure
+        case showRainfall, showRainfallPiezo
+        case showAirQualityCh1, showAirQualityCh2, showAirQualityCh3
+        case showUVIndex, showSolar, showLightning
+        case showTempHumidityCh1, showTempHumidityCh2, showTempHumidityCh3
+        case showBatteryStatus, showSunriseSunset, showLunar, showCamera
+    }
 }
 
 struct APICredentials: Codable {

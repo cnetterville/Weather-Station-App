@@ -52,13 +52,26 @@ struct OtherSensorsSection: View {
                 )
             }
             
-            // Rainfall Card
-            if station.sensorPreferences.showRainfall {
+            // Traditional Rainfall Card (if enabled and data available)
+            if station.sensorPreferences.showRainfall, let rainfallData = data.rainfall {
+                TraditionalRainfallCard(
+                    station: station,
+                    data: data,
+                    rainfallData: rainfallData,
+                    onTitleChange: { newTitle in
+                        station.customLabels.rainfall = newTitle
+                        weatherService.updateStation(station)
+                    }
+                )
+            }
+            
+            // Piezo Rainfall Card (if enabled)
+            if station.sensorPreferences.showRainfallPiezo {
                 RainfallCard(
                     station: station,
                     data: data,
                     onTitleChange: { newTitle in
-                        station.customLabels.rainfall = newTitle
+                        station.customLabels.rainfallPiezo = newTitle
                         weatherService.updateStation(station)
                     }
                 )

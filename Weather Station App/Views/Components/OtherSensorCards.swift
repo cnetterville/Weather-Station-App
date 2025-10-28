@@ -307,7 +307,7 @@ struct RainfallCard: View {
     
     var body: some View {
         EditableWeatherCard(
-            title: .constant(station.customLabels.rainfall),
+            title: .constant(station.customLabels.rainfallPiezo),
             systemImage: "cloud.rain.fill",
             onTitleChange: onTitleChange
         ) {
@@ -322,7 +322,7 @@ struct RainfallCard: View {
                             .fontWeight(.semibold)
                             .foregroundColor(WeatherStatusHelpers.rainStatusColor(rainfallData.state.value))
                         
-                        // Rain Animation - restored proper conditional logic
+                        // Rain Animation - made smaller and properly clipped
                         if rainfallData.state.value == "1" {
                             RainIntensityAnimation(
                                 rainRate: Double(rainfallData.rainRate.value) ?? 0.0,
@@ -376,6 +376,97 @@ struct RainfallDataView: View {
                         .clipped()
                     }
                 }
+            }
+            HStack {
+                Text("24 Hours:")
+                Spacer()
+                Text(MeasurementConverter.formatRainfall(rainfallData.twentyFourHours.value, originalUnit: rainfallData.twentyFourHours.unit))
+            }
+            HStack {
+                Text("Event Total:")
+                Spacer()
+                Text(MeasurementConverter.formatRainfall(rainfallData.event.value, originalUnit: rainfallData.event.unit))
+            }
+            HStack {
+                Text("Weekly:")
+                Spacer()
+                Text(MeasurementConverter.formatRainfall(rainfallData.weekly.value, originalUnit: rainfallData.weekly.unit))
+            }
+            HStack {
+                Text("Monthly:")
+                Spacer()
+                Text(MeasurementConverter.formatRainfall(rainfallData.monthly.value, originalUnit: rainfallData.monthly.unit))
+            }
+            HStack {
+                Text("Yearly:")
+                Spacer()
+                Text(MeasurementConverter.formatRainfall(rainfallData.yearly.value, originalUnit: rainfallData.yearly.unit))
+            }
+        }
+    }
+}
+
+struct TraditionalRainfallCard: View {
+    let station: WeatherStation
+    let data: WeatherStationData
+    let rainfallData: RainfallData
+    let onTitleChange: (String) -> Void
+    
+    var body: some View {
+        EditableWeatherCard(
+            title: .constant(station.customLabels.rainfall),
+            systemImage: "cloud.rain.fill",
+            onTitleChange: onTitleChange
+        ) {
+            VStack(alignment: .leading, spacing: 8) {
+                // Traditional Rain Gauge Status (no piezo state detection)
+                HStack {
+                    Text("Status:")
+                    Spacer()
+                    Text("Traditional Gauge")
+                        .fontWeight(.semibold)
+                        .foregroundColor(.blue)
+                }
+                
+                Divider()
+                
+                TraditionalRainfallDataView(rainfallData: rainfallData)
+            }
+            .font(.subheadline)
+        }
+    }
+}
+
+struct TraditionalRainfallDataView: View {
+    let rainfallData: RainfallData
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("Today:")
+                Spacer()
+                Text(MeasurementConverter.formatRainfall(rainfallData.daily.value, originalUnit: rainfallData.daily.unit))
+                    .fontWeight(.semibold)
+            }
+            HStack {
+                Text("This Hour:")
+                Spacer()
+                Text(MeasurementConverter.formatRainfall(rainfallData.oneHour.value, originalUnit: rainfallData.oneHour.unit))
+            }
+            HStack {
+                Text("Rate:")
+                Spacer()
+                Text(MeasurementConverter.formatRainRate(rainfallData.rainRate.value, originalUnit: rainfallData.rainRate.unit))
+            }
+            HStack {
+                Text("24 Hours:")
+                Spacer()
+                Text(MeasurementConverter.formatRainfall(rainfallData.twentyFourHours.value, originalUnit: rainfallData.twentyFourHours.unit))
+            }
+            HStack {
+                Text("Event Total:")
+                Spacer()
+                Text(MeasurementConverter.formatRainfall(rainfallData.event.value, originalUnit: rainfallData.event.unit))
             }
             HStack {
                 Text("Weekly:")

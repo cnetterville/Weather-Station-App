@@ -713,7 +713,8 @@ struct EditWeatherStationView: View {
                                     SensorToggleRow("🏠 Indoor Temperature", isOn: $sensorPreferences.showIndoorTemp)
                                     SensorToggleRow("💨 Wind", isOn: $sensorPreferences.showWind)
                                     SensorToggleRow("📊 Pressure", isOn: $sensorPreferences.showPressure)
-                                    SensorToggleRow("🌧️ Rainfall", isOn: $sensorPreferences.showRainfall)
+                                    SensorToggleRow("🌧️ Rainfall (Traditional)", isOn: $sensorPreferences.showRainfall)
+                                    SensorToggleRow("🌧️ Rainfall (Piezo)", isOn: $sensorPreferences.showRainfallPiezo)
                                     SensorToggleRow("☀️ UV Index", isOn: $sensorPreferences.showUVIndex)
                                     SensorToggleRow("⚡ Lightning", isOn: $sensorPreferences.showLightning)
                                 }
@@ -857,6 +858,7 @@ struct EditWeatherStationView: View {
         sensorPreferences.showWind = value
         sensorPreferences.showPressure = value
         sensorPreferences.showRainfall = value
+        sensorPreferences.showRainfallPiezo = value
         sensorPreferences.showAirQualityCh1 = value
         sensorPreferences.showAirQualityCh2 = value
         sensorPreferences.showAirQualityCh3 = value
