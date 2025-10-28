@@ -734,40 +734,46 @@ struct SettingsView: View {
         let activeStations = menuBarManager.availableStations
         let sampleTemp = menuBarManager.showDecimals ? "72.3°F" : "72°F"
         
-        // Show sample icons based on settings and priority (rain > UV > night)
-        let weatherIcon = if menuBarManager.showRainIcon {
-            "💧 " // Rain has highest priority in preview
-        } else if menuBarManager.showUVIcon {
-            "☀️ " // UV second priority
-        } else if menuBarManager.showNightIcon {
-            "🌙 " // Night lowest priority
-        } else {
-            ""
-        }
+        // Show sample icons based on settings (different conditions for demo)
+        let sampleIcons = [
+            menuBarManager.showRainIcon ? "💧" : "",
+            menuBarManager.showUVIcon ? "☀️" : "",
+            menuBarManager.showNightIcon ? "🌙" : ""
+        ].filter { !$0.isEmpty }
         
         switch menuBarManager.displayMode {
         case .singleStation:
             if let station = activeStations.first {
                 let label = station.displayLabelForMenuBar
-                let baseTemp = menuBarManager.showStationName ? "\(label): \(sampleTemp)" : sampleTemp
-                return "\(weatherIcon)\(baseTemp)"
+                let weatherIcon = sampleIcons.first ?? ""
+                if menuBarManager.showStationName {
+                    return "\(label): \(weatherIcon)\(sampleTemp)"
+                } else {
+                    return "\(weatherIcon)\(sampleTemp)"
+                }
             }
         case .allStations:
             if activeStations.count > 0 {
-                let samples = activeStations.prefix(3).map { station in
+                let samples = activeStations.prefix(3).enumerated().map { index, station in
                     let label = station.displayLabelForMenuBar
                     let shortLabel = label.count > 4 ? String(label.prefix(4)) + ":" : label + ":"
-                    return "\(shortLabel)\(sampleTemp)"
+                    // Show different icons for different stations in preview
+                    let iconIndex = index < sampleIcons.count ? index : 0
+                    let weatherIcon = sampleIcons.count > iconIndex ? sampleIcons[iconIndex] : ""
+                    return "\(shortLabel)\(weatherIcon)\(sampleTemp)"
                 }
                 let preview = samples.joined(separator: " | ")
-                let basePreview = activeStations.count > 3 ? preview + " | ..." : preview
-                return "\(weatherIcon)\(basePreview)"
+                return activeStations.count > 3 ? preview + " | ..." : preview
             }
         case .cycleThrough:
             if let station = activeStations.first {
                 let label = station.displayLabelForMenuBar
-                let baseTemp = menuBarManager.showStationName ? "\(label): \(sampleTemp)" : sampleTemp
-                return "\(weatherIcon)\(baseTemp)"
+                let weatherIcon = sampleIcons.first ?? ""
+                if menuBarManager.showStationName {
+                    return "\(label): \(weatherIcon)\(sampleTemp)"
+                } else {
+                    return "\(weatherIcon)\(sampleTemp)"
+                }
             }
         }
         

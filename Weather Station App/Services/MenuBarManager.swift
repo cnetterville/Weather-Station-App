@@ -362,12 +362,12 @@ class MenuBarManager: ObservableObject {
         let baseTitle: String
         if showStationName && weatherService.weatherStations.count > 1 {
             let displayLabel = station.displayLabelForMenuBar
-            baseTitle = "\(displayLabel): \(tempString)"
+            baseTitle = "\(displayLabel): \(weatherIcon)\(tempString)"
         } else {
-            baseTitle = tempString
+            baseTitle = "\(weatherIcon)\(tempString)"
         }
         
-        return weatherIcon.isEmpty ? baseTitle : "\(weatherIcon) \(baseTitle)"
+        return baseTitle
     }
     
     private func getAllStationsTitle() -> String {
@@ -378,28 +378,18 @@ class MenuBarManager: ObservableObject {
         }
         
         var tempStrings: [String] = []
-        var hasRainCondition = false
-        var hasUVCondition = false
-        var hasNightCondition = false
         
         for station in stations {
             if let weatherData = weatherService.weatherData[station.macAddress],
                let temp = Double(weatherData.outdoor.temperature.value) {
                 let tempString = formatTemperature(temp)
+                let weatherIcon = getWeatherIcon(for: weatherData)
                 let displayLabel = station.displayLabelForMenuBar
+                
                 // Use even shorter labels for "all stations" mode
                 let shortLabel = displayLabel.count > 4 ? 
                     String(displayLabel.prefix(4)) + ":" : displayLabel + ":"
-                tempStrings.append("\(shortLabel)\(tempString)")
-                
-                // Check for weather conditions (rain > UV > night priority)
-                if !hasRainCondition && isRaining(weatherData) {
-                    hasRainCondition = true
-                } else if !hasRainCondition && !hasUVCondition && hasSignificantUV(weatherData) {
-                    hasUVCondition = true
-                } else if !hasRainCondition && !hasUVCondition && !hasNightCondition && isNightTime(weatherData) {
-                    hasNightCondition = true
-                }
+                tempStrings.append("\(shortLabel)\(weatherIcon)\(tempString)")
             }
         }
         
@@ -409,20 +399,7 @@ class MenuBarManager: ObservableObject {
         
         // Join with separator and truncate if too long
         let combined = tempStrings.joined(separator: " | ")
-        let baseTitle = combined.count > 50 ? String(combined.prefix(47)) + "…" : combined
-        
-        // Add weather icon based on priority
-        let weatherIcon = if hasRainCondition {
-            getRainIconString()
-        } else if hasUVCondition {
-            getUVIconString()
-        } else if hasNightCondition {
-            getNightIconString()
-        } else {
-            ""
-        }
-        
-        return weatherIcon.isEmpty ? baseTitle : "\(weatherIcon) \(baseTitle)"
+        return combined.count > 60 ? String(combined.prefix(57)) + "…" : combined
     }
     
     private func getCycleStationTitle() -> String {
@@ -450,12 +427,12 @@ class MenuBarManager: ObservableObject {
         let baseTitle: String
         if showStationName {
             let displayLabel = station.displayLabelForMenuBar
-            baseTitle = "\(displayLabel): \(tempString)"
+            baseTitle = "\(displayLabel): \(weatherIcon)\(tempString)"
         } else {
-            baseTitle = tempString
+            baseTitle = "\(weatherIcon)\(tempString)"
         }
         
-        return weatherIcon.isEmpty ? baseTitle : "\(weatherIcon) \(baseTitle)"
+        return baseTitle
     }
     
     private func formatTemperature(_ tempF: Double) -> String {
