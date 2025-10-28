@@ -470,9 +470,24 @@ struct RainIntensityAnimation: View {
                 startAnimation()
             }
         }
+        .onChange(of: rainRate) { _, newRate in
+            // Restart animation when rain rate changes significantly
+            if isRaining {
+                startAnimation()
+            }
+        }
+        .onChange(of: rainIntensity) { _, newIntensity in
+            // Restart animation when intensity level changes
+            if isRaining {
+                startAnimation()
+            }
+        }
     }
     
     private func startAnimation() {
+        // Reset animation state
+        animationOffset = 0
+        
         withAnimation(.linear(duration: rainIntensity.animationSpeed).repeatForever(autoreverses: false)) {
             animationOffset = 1.0
         }

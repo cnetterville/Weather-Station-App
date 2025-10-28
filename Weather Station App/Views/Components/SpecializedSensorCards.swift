@@ -275,18 +275,35 @@ struct AnimatedSunIcon: View {
         .onAppear {
             startAnimations()
         }
+        .onChange(of: intensity) { _, newIntensity in
+            // Restart animations when intensity level changes
+            startAnimations()
+        }
+        .onChange(of: solarRadiation) { _, newValue in
+            // Update animations when solar radiation value changes significantly
+            startAnimations()
+        }
     }
     
     private func startAnimations() {
-        // Rotation animation for sun rays
+        // Stop any existing animations by resetting to initial values
+        rotationAngle = 0
+        pulseScale = 1.0
+        
+        // Rotation animation for sun rays with updated speed
         withAnimation(.linear(duration: animationSpeed).repeatForever(autoreverses: false)) {
             rotationAngle = 360
         }
         
-        // Pulse animation for intense sun
+        // Pulse animation for intense sun with updated conditions
         if intensity.glowRadius > 0 {
             withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
                 pulseScale = 1.1
+            }
+        } else {
+            // Reset pulse scale for low intensity levels
+            withAnimation(.easeOut(duration: 0.3)) {
+                pulseScale = 1.0
             }
         }
     }
@@ -417,6 +434,8 @@ struct LightningDistanceRings: View {
         return safetyZones.last ?? (40, .green, "Safe")
     }
     
+    @State private var lightningPulseScale: CGFloat = 1.0
+    
     var body: some View {
         GeometryReader { geometry in
             let centerX = geometry.size.width / 2
@@ -495,9 +514,45 @@ struct LightningDistanceRings: View {
                 }
             }
         }
+        .onAppear {
+            startLightningAnimation()
+        }
+        .onChange(of: isLightningActive) { _, newValue in
+            if newValue {
+                startLightningAnimation()
+            } else {
+                stopLightningAnimation()
+            }
+        }
+        .onChange(of: currentDistance) { _, newDistance in
+            // Restart animation when lightning distance changes
+            if isLightningActive {
+                startLightningAnimation()
+            }
+        }
+        .onChange(of: lightningCount) { _, newCount in
+            // Restart animation when lightning count changes
+            if isLightningActive {
+                startLightningAnimation()
+            } else {
+                stopLightningAnimation()
+            }
+        }
     }
     
-    @State private var lightningPulseScale: CGFloat = 1.0
+    private func startLightningAnimation() {
+        guard isLightningActive else { return }
+        
+        withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+            lightningPulseScale = 1.2
+        }
+    }
+    
+    private func stopLightningAnimation() {
+        withAnimation(.easeOut(duration: 0.3)) {
+            lightningPulseScale = 1.0
+        }
+    }
     
     init(currentDistance: Double, distanceUnit: String, lightningCount: Int) {
         self.currentDistance = currentDistance
