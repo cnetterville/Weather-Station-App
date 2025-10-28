@@ -81,6 +81,15 @@ class MenuBarManager: ObservableObject {
         }
     }
     
+    @Published var showDecimals: Bool = false {
+        didSet {
+            UserDefaults.standard.set(showDecimals, forKey: "MenuBarShowDecimals")
+            DispatchQueue.main.async {
+                self.updateMenuBarTitle()
+            }
+        }
+    }
+
     // For cycling through stations
     private var currentCycleIndex = 0
 
@@ -132,6 +141,7 @@ class MenuBarManager: ObservableObject {
         selectedStationMac = UserDefaults.standard.string(forKey: "MenuBarSelectedStation") ?? ""
         showStationName = UserDefaults.standard.bool(forKey: "MenuBarShowStationName")
         cycleInterval = UserDefaults.standard.object(forKey: "MenuBarCycleInterval") as? TimeInterval ?? 10.0
+        showDecimals = UserDefaults.standard.bool(forKey: "MenuBarShowDecimals")
         
         if let modeRawValue = UserDefaults.standard.object(forKey: "MenuBarTemperatureMode") as? String,
            let mode = MenuBarTemperatureMode(rawValue: modeRawValue) {
@@ -389,24 +399,48 @@ class MenuBarManager: ObservableObject {
         
         switch temperatureDisplayMode {
         case .fahrenheit:
-            return "\(Int(round(tempF)))°F"
+            if showDecimals {
+                return String(format: "%.1f°F", tempF)
+            } else {
+                return "\(Int(round(tempF)))°F"
+            }
         case .celsius:
             let tempC = (tempF - 32) * 5/9
-            return "\(Int(round(tempC)))°C"
+            if showDecimals {
+                return String(format: "%.1f°C", tempC)
+            } else {
+                return "\(Int(round(tempC)))°C"
+            }
         case .both:
             let tempC = (tempF - 32) * 5/9
-            return "\(Int(round(tempF)))°F/\(Int(round(tempC)))°C"
+            if showDecimals {
+                return String(format: "%.1f°F/%.1f°C", tempF, tempC)
+            } else {
+                return "\(Int(round(tempF)))°F/\(Int(round(tempC)))°C"
+            }
         case .auto:
             // Use the app's unit system preference
             switch unitSystem {
             case .imperial:
-                return "\(Int(round(tempF)))°F"
+                if showDecimals {
+                    return String(format: "%.1f°F", tempF)
+                } else {
+                    return "\(Int(round(tempF)))°F"
+                }
             case .metric:
                 let tempC = (tempF - 32) * 5/9
-                return "\(Int(round(tempC)))°C"
+                if showDecimals {
+                    return String(format: "%.1f°C", tempC)
+                } else {
+                    return "\(Int(round(tempC)))°C"
+                }
             case .both:
                 let tempC = (tempF - 32) * 5/9
-                return "\(Int(round(tempF)))°F/\(Int(round(tempC)))°C"
+                if showDecimals {
+                    return String(format: "%.1f°F/%.1f°C", tempF, tempC)
+                } else {
+                    return "\(Int(round(tempF)))°F/\(Int(round(tempC)))°C"
+                }
             }
         }
     }

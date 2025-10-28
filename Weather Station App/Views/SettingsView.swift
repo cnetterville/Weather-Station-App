@@ -197,6 +197,9 @@ struct SettingsView: View {
                                             .toggleStyle(.checkbox)
                                             .disabled(menuBarManager.displayMode == .allStations) // Always shows names in all stations mode
                                         
+                                        Toggle("Show decimal places", isOn: $menuBarManager.showDecimals)
+                                            .toggleStyle(.checkbox)
+                                        
                                         // Custom menubar labels section
                                         if !menuBarManager.availableStations.isEmpty {
                                             Divider()
@@ -720,19 +723,20 @@ struct SettingsView: View {
     
     private func getMenuBarPreview() -> String? {
         let activeStations = menuBarManager.availableStations
+        let sampleTemp = menuBarManager.showDecimals ? "72.3°F" : "72°F"
         
         switch menuBarManager.displayMode {
         case .singleStation:
             if let station = activeStations.first {
                 let label = station.displayLabelForMenuBar
-                return menuBarManager.showStationName ? "\(label): 72°F" : "72°F"
+                return menuBarManager.showStationName ? "\(label): \(sampleTemp)" : sampleTemp
             }
         case .allStations:
             if activeStations.count > 0 {
                 let samples = activeStations.prefix(3).map { station in
                     let label = station.displayLabelForMenuBar
                     let shortLabel = label.count > 4 ? String(label.prefix(4)) + ":" : label + ":"
-                    return "\(shortLabel)72°F"
+                    return "\(shortLabel)\(sampleTemp)"
                 }
                 let preview = samples.joined(separator: " | ")
                 return activeStations.count > 3 ? preview + " | ..." : preview
@@ -740,7 +744,7 @@ struct SettingsView: View {
         case .cycleThrough:
             if let station = activeStations.first {
                 let label = station.displayLabelForMenuBar
-                return menuBarManager.showStationName ? "\(label): 72°F" : "72°F"
+                return menuBarManager.showStationName ? "\(label): \(sampleTemp)" : sampleTemp
             }
         }
         
