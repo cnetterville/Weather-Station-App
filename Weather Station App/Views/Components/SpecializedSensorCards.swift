@@ -27,16 +27,19 @@ struct SolarUVCard: View {
                 }
                 
                 // UV Index - Most prominent
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 8) {
                     Text("UV Index")
                         .font(.headline)
                         .fontWeight(.semibold)
                     Text(data.solarAndUvi.uvi.value)
                         .font(.system(size: 32, weight: .bold, design: .rounded))
                         .foregroundColor(SolarUVHelpers.getUVIndexColor(data.solarAndUvi.uvi.value))
+                        .lineLimit(1)
+                        .fixedSize()
                     Text(SolarUVHelpers.getUVIndexDescription(data.solarAndUvi.uvi.value))
                         .font(.subheadline)
                         .foregroundColor(SolarUVHelpers.getUVIndexColor(data.solarAndUvi.uvi.value))
+                        .padding(.top, 2)
                 }
                 
                 Divider()
@@ -195,44 +198,6 @@ struct SunStrengthIndicator: View {
                     solarRadiation: solarRadiation
                 )
                 .position(x: centerX, y: centerY - 5)
-                
-                // Intensity labels
-                HStack {
-                    VStack {
-                        Text("Low")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                        Text("0")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                    .position(x: centerX - (min(centerX, centerY) - 10) * 0.7, y: centerY + 25)
-                    
-                    Spacer()
-                    
-                    VStack {
-                        Text("Peak")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                        Text("1200")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                    .position(x: centerX + (min(centerX, centerY) - 10) * 0.7, y: centerY + 25)
-                }
-                
-                // Current value display
-                VStack(spacing: 2) {
-                    Text("\(Int(solarRadiation)) W/m²")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundColor(intensityLevel.color)
-                    
-                    Text(intensityLevel.description)
-                        .font(.caption2)
-                        .foregroundColor(intensityLevel.color.opacity(0.8))
-                }
-                .position(x: centerX, y: centerY + 35)
             }
         }
     }
@@ -527,31 +492,6 @@ struct LightningDistanceRings: View {
                                 value: lightningPulseScale
                             )
                     }
-                }
-                
-                // Distance scale indicators
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("0")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                        Text("mi")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                    .position(x: centerX - 10, y: centerY + maxRadius + 15)
-                    
-                    Spacer()
-                    
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text("\(Int(maxDisplayDistance))")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                        Text("mi")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                    .position(x: centerX + maxRadius, y: centerY + 15)
                 }
             }
         }
@@ -1214,14 +1154,6 @@ struct SunPositionArc: View {
                     .fill(.red)
                     .frame(width: 6, height: 6)
                     .position(x: width, y: height)
-                
-                // Current time indicator (optional - shows exact current time)
-                if isDaytime {
-                    Rectangle()
-                        .fill(.primary.opacity(0.5))
-                        .frame(width: 1, height: 8)
-                        .position(x: sunX, y: height + 8)
-                }
             }
         }
     }
@@ -1648,10 +1580,10 @@ class MoonCalculator {
         var moonset: Date?
         var previousAltitude: Double?
         
-        print("🌙 Calculating moon times for date: \(date)")
-        print("🌙 Start of day in timezone: \(startOfDay)")
-        print("🌙 Latitude: \(latitude), Longitude: \(longitude)")
-        print("🌙 TimeZone: \(timeZone.identifier)")
+        print(" Calculating moon times for date: \(date)")
+        print(" Start of day in timezone: \(startOfDay)")
+        print(" Latitude: \(latitude), Longitude: \(longitude)")
+        print(" TimeZone: \(timeZone.identifier)")
         
         // Check every 30 minutes throughout the day for more precision
         for halfHour in 0..<48 {
@@ -1664,7 +1596,7 @@ class MoonCalculator {
                     // Interpolate to find more precise time
                     let ratio = -prevAlt / (currentAltitude - prevAlt)
                     moonrise = currentTime.addingTimeInterval(-1800 + ratio * 1800)
-                    print("🌙 Found moonrise at: \(moonrise!)")
+                    print(" Found moonrise at: \(moonrise!)")
                 }
                 
                 // Moonset: altitude changes from positive to negative
@@ -1672,7 +1604,7 @@ class MoonCalculator {
                     // Interpolate to find more precise time
                     let ratio = -prevAlt / (currentAltitude - prevAlt)
                     moonset = currentTime.addingTimeInterval(-1800 + ratio * 1800)
-                    print("🌙 Found moonset at: \(moonset!)")
+                    print(" Found moonset at: \(moonset!)")
                 }
             }
             
@@ -1683,7 +1615,7 @@ class MoonCalculator {
                 let formatter = DateFormatter()
                 formatter.timeStyle = .short
                 formatter.timeZone = timeZone
-                print("🌙 \(formatter.string(from: currentTime)): Moon altitude = \(String(format: "%.2f", currentAltitude))°")
+                print(" \(formatter.string(from: currentTime)): Moon altitude = \(String(format: "%.2f", currentAltitude))°")
             }
         }
         
