@@ -19,6 +19,13 @@ struct SolarUVCard: View {
             onTitleChange: onTitleChange
         ) {
             VStack(alignment: .leading, spacing: 12) {
+                // Sun Strength Indicator
+                if let solarValue = Double(data.solarAndUvi.solar.value) {
+                    SunStrengthIndicator(solarRadiation: solarValue)
+                        .frame(height: 60)
+                        .padding(.vertical, 4)
+                }
+                
                 // UV Index - Most prominent
                 VStack(alignment: .leading, spacing: 4) {
                     Text("UV Index")
@@ -36,6 +43,285 @@ struct SolarUVCard: View {
                 
                 // Solar Radiation Details
                 SolarRadiationDetailsView(data: data)
+            }
+        }
+    }
+}
+
+struct SunStrengthIndicator: View {
+    let solarRadiation: Double
+    
+    private var maxSolarRadiation: Double {
+        1200.0 // Peak solar radiation value for scaling
+    }
+    
+    private var solarIntensityRatio: Double {
+        min(solarRadiation / maxSolarRadiation, 1.0)
+    }
+    
+    private var intensityLevel: SolarIntensityLevel {
+        switch solarRadiation {
+        case 0...200: return .veryLow
+        case 201...400: return .low
+        case 401...600: return .moderate
+        case 601...800: return .high
+        case 801...1000: return .veryHigh
+        default: return .extreme
+        }
+    }
+    
+    enum SolarIntensityLevel: CaseIterable {
+        case veryLow, low, moderate, high, veryHigh, extreme
+        
+        var color: Color {
+            switch self {
+            case .veryLow: return .gray
+            case .low: return .blue
+            case .moderate: return .green
+            case .high: return .orange
+            case .veryHigh: return .red
+            case .extreme: return .purple
+            }
+        }
+        
+        var description: String {
+            switch self {
+            case .veryLow: return "Very Low"
+            case .low: return "Low"
+            case .moderate: return "Moderate"
+            case .high: return "High"
+            case .veryHigh: return "Very High"
+            case .extreme: return "Extreme"
+            }
+        }
+        
+        var sunSize: CGFloat {
+            switch self {
+            case .veryLow: return 20
+            case .low: return 24
+            case .moderate: return 28
+            case .high: return 32
+            case .veryHigh: return 36
+            case .extreme: return 40
+            }
+        }
+        
+        var rayLength: CGFloat {
+            switch self {
+            case .veryLow: return 8
+            case .low: return 10
+            case .moderate: return 12
+            case .high: return 14
+            case .veryHigh: return 16
+            case .extreme: return 18
+            }
+        }
+        
+        var glowRadius: CGFloat {
+            switch self {
+            case .veryLow: return 0
+            case .low: return 1
+            case .moderate: return 2
+            case .high: return 4
+            case .veryHigh: return 6
+            case .extreme: return 8
+            }
+        }
+    }
+    
+    var body: some View {
+        GeometryReader { geometry in
+            let centerX = geometry.size.width / 2
+            let centerY = geometry.size.height / 2
+            
+            ZStack {
+                // Background solar strength arc
+                Path { path in
+                    let radius = min(centerX, centerY) - 10
+                    path.addArc(
+                        center: CGPoint(x: centerX, y: centerY + 10),
+                        radius: radius,
+                        startAngle: .degrees(200),
+                        endAngle: .degrees(340),
+                        clockwise: false
+                    )
+                }
+                .stroke(
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            .gray.opacity(0.3),
+                            .blue.opacity(0.3),
+                            .green.opacity(0.3),
+                            .orange.opacity(0.3),
+                            .red.opacity(0.3),
+                            .purple.opacity(0.3)
+                        ]),
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    ),
+                    lineWidth: 8
+                )
+                
+                // Active solar strength arc (shows current intensity)
+                Path { path in
+                    let radius = min(centerX, centerY) - 10
+                    let startAngle: Double = 200
+                    let totalAngle: Double = 140 // from 200 to 340 degrees
+                    let currentAngle = startAngle + (totalAngle * solarIntensityRatio)
+                    
+                    path.addArc(
+                        center: CGPoint(x: centerX, y: centerY + 10),
+                        radius: radius,
+                        startAngle: .degrees(startAngle),
+                        endAngle: .degrees(currentAngle),
+                        clockwise: false
+                    )
+                }
+                .stroke(
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            intensityLevel.color.opacity(0.8),
+                            intensityLevel.color
+                        ]),
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    ),
+                    lineWidth: 8
+                )
+                
+                // Animated sun icon at center
+                AnimatedSunIcon(
+                    intensity: intensityLevel,
+                    solarRadiation: solarRadiation
+                )
+                .position(x: centerX, y: centerY - 5)
+                
+                // Intensity labels
+                HStack {
+                    VStack {
+                        Text("Low")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Text("0")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    .position(x: centerX - (min(centerX, centerY) - 10) * 0.7, y: centerY + 25)
+                    
+                    Spacer()
+                    
+                    VStack {
+                        Text("Peak")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Text("1200")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    .position(x: centerX + (min(centerX, centerY) - 10) * 0.7, y: centerY + 25)
+                }
+                
+                // Current value display
+                VStack(spacing: 2) {
+                    Text("\(Int(solarRadiation)) W/m²")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(intensityLevel.color)
+                    
+                    Text(intensityLevel.description)
+                        .font(.caption2)
+                        .foregroundColor(intensityLevel.color.opacity(0.8))
+                }
+                .position(x: centerX, y: centerY + 35)
+            }
+        }
+    }
+}
+
+struct AnimatedSunIcon: View {
+    let intensity: SunStrengthIndicator.SolarIntensityLevel
+    let solarRadiation: Double
+    
+    @State private var rotationAngle: Double = 0
+    @State private var pulseScale: CGFloat = 1.0
+    
+    private var animationSpeed: Double {
+        switch intensity {
+        case .veryLow: return 10.0
+        case .low: return 8.0
+        case .moderate: return 6.0
+        case .high: return 4.0
+        case .veryHigh: return 2.0
+        case .extreme: return 1.0
+        }
+    }
+    
+    var body: some View {
+        ZStack {
+            // Sun rays (rotating)
+            ForEach(0..<8, id: \.self) { index in
+                Rectangle()
+                    .fill(intensity.color)
+                    .frame(width: 2, height: intensity.rayLength)
+                    .offset(y: -(intensity.sunSize / 2 + intensity.rayLength / 2 + 2))
+                    .rotationEffect(.degrees(Double(index) * 45 + rotationAngle))
+                    .opacity(solarRadiation > 100 ? 0.8 : 0.3)
+            }
+            
+            // Central sun circle
+            Circle()
+                .fill(
+                    RadialGradient(
+                        gradient: Gradient(colors: [
+                            intensity.color.opacity(0.9),
+                            intensity.color
+                        ]),
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: intensity.sunSize / 2
+                    )
+                )
+                .frame(width: intensity.sunSize, height: intensity.sunSize)
+                .scaleEffect(pulseScale)
+                .shadow(
+                    color: intensity.color.opacity(0.6),
+                    radius: intensity.glowRadius
+                )
+            
+            // Sun face (optional cute detail)
+            if intensity != .veryLow {
+                VStack(spacing: 1) {
+                    HStack(spacing: 3) {
+                        Circle()
+                            .fill(.white)
+                            .frame(width: 3, height: 3)
+                        Circle()
+                            .fill(.white)
+                            .frame(width: 3, height: 3)
+                    }
+                    
+                    Capsule()
+                        .fill(.white)
+                        .frame(width: 6, height: 2)
+                }
+                .opacity(0.8)
+            }
+        }
+        .onAppear {
+            startAnimations()
+        }
+    }
+    
+    private func startAnimations() {
+        // Rotation animation for sun rays
+        withAnimation(.linear(duration: animationSpeed).repeatForever(autoreverses: false)) {
+            rotationAngle = 360
+        }
+        
+        // Pulse animation for intense sun
+        if intensity.glowRadius > 0 {
+            withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+                pulseScale = 1.1
             }
         }
     }
@@ -123,6 +409,161 @@ struct LightningCard: View {
                 LastLightningDetectionView(getLastLightningStats: getLastLightningStats)
             }
         }
+    }
+}
+
+struct LightningDistanceRings: View {
+    let currentDistance: Double
+    let distanceUnit: String
+    let lightningCount: Int
+    
+    // Define safety zones for lightning (in miles/km)
+    private let safetyZones: [(distance: Double, color: Color, label: String)] = [
+        (5, .red, "Danger"),      // 0-5 miles - immediate danger
+        (10, .orange, "Warning"),  // 5-10 miles - warning zone  
+        (20, .yellow, "Caution"),  // 10-20 miles - caution zone
+        (40, .green, "Safe")       // 20+ miles - generally safe
+    ]
+    
+    private var maxDisplayDistance: Double {
+        40.0 // Show up to 40 miles/km range
+    }
+    
+    private var currentDistanceInDisplayUnits: Double {
+        // Convert current distance to miles for consistent display
+        if distanceUnit.lowercased().contains("km") {
+            return currentDistance * 0.621371 // Convert km to miles
+        }
+        return currentDistance
+    }
+    
+    private var isLightningActive: Bool {
+        lightningCount > 0 && currentDistance > 0
+    }
+    
+    private var currentSafetyZone: (distance: Double, color: Color, label: String) {
+        let distance = currentDistanceInDisplayUnits
+        
+        for zone in safetyZones {
+            if distance <= zone.distance {
+                return zone
+            }
+        }
+        return safetyZones.last ?? (40, .green, "Safe")
+    }
+    
+    var body: some View {
+        GeometryReader { geometry in
+            let centerX = geometry.size.width / 2
+            let centerY = geometry.size.height / 2
+            let maxRadius = min(centerX, centerY) - 5
+            
+            ZStack {
+                // Background concentric circles (safety zones)
+                ForEach(Array(safetyZones.enumerated()), id: \.offset) { index, zone in
+                    let radius = (zone.distance / maxDisplayDistance) * maxRadius
+                    
+                    Circle()
+                        .stroke(zone.color.opacity(0.2), lineWidth: 1)
+                        .frame(width: radius * 2, height: radius * 2)
+                        .position(x: centerX, y: centerY)
+                    
+                    // Zone labels
+                    Text(zone.label)
+                        .font(.caption2)
+                        .foregroundColor(zone.color.opacity(0.7))
+                        .position(
+                            x: centerX + radius * cos(.pi / 4) * 0.7,
+                            y: centerY - radius * sin(.pi / 4) * 0.7
+                        )
+                }
+                
+                // Weather station at center
+                Circle()
+                    .fill(.blue)
+                    .frame(width: 8, height: 8)
+                    .position(x: centerX, y: centerY)
+                    .overlay(
+                        Circle()
+                            .stroke(.blue.opacity(0.3), lineWidth: 2)
+                            .frame(width: 12, height: 12)
+                            .position(x: centerX, y: centerY)
+                    )
+                
+                // Current lightning position indicator
+                if isLightningActive {
+                    let lightningRadius = min(
+                        (currentDistanceInDisplayUnits / maxDisplayDistance) * maxRadius,
+                        maxRadius
+                    )
+                    
+                    // Lightning strike indicator
+                    Group {
+                        // Strike position (at the distance)
+                        Image(systemName: "bolt.fill")
+                            .foregroundColor(currentSafetyZone.color)
+                            .font(.system(size: 12))
+                            .position(
+                                x: centerX + lightningRadius * cos(.pi / 6),
+                                y: centerY - lightningRadius * sin(.pi / 6)
+                            )
+                            .shadow(color: currentSafetyZone.color.opacity(0.6), radius: 2)
+                        
+                        // Distance ring highlighting current distance
+                        Circle()
+                            .stroke(currentSafetyZone.color, lineWidth: 2)
+                            .frame(width: lightningRadius * 2, height: lightningRadius * 2)
+                            .position(x: centerX, y: centerY)
+                            .opacity(0.8)
+                        
+                        // Pulsing effect for active lightning
+                        Circle()
+                            .stroke(currentSafetyZone.color.opacity(0.3), lineWidth: 1)
+                            .frame(width: lightningRadius * 2, height: lightningRadius * 2)
+                            .position(x: centerX, y: centerY)
+                            .scaleEffect(lightningPulseScale)
+                            .animation(
+                                .easeInOut(duration: 1.5).repeatForever(autoreverses: true),
+                                value: lightningPulseScale
+                            )
+                    }
+                }
+                
+                // Distance scale indicators
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("0")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Text("mi")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    .position(x: centerX - 10, y: centerY + maxRadius + 15)
+                    
+                    Spacer()
+                    
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("\(Int(maxDisplayDistance))")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Text("mi")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    .position(x: centerX + maxRadius, y: centerY + 15)
+                }
+            }
+        }
+    }
+    
+    @State private var lightningPulseScale: CGFloat = 1.0
+    
+    init(currentDistance: Double, distanceUnit: String, lightningCount: Int) {
+        self.currentDistance = currentDistance
+        self.distanceUnit = distanceUnit
+        self.lightningCount = lightningCount
+        self._lightningPulseScale = State(initialValue: 1.0)
     }
 }
 
