@@ -317,20 +317,22 @@ struct RainfallCard: View {
                 HStack {
                     Text("Status:")
                     Spacer()
-                    HStack(spacing: 8) {
+                    HStack(spacing: 6) {
                         Text(WeatherStatusHelpers.rainStatusText(rainfallData.state.value))
                             .fontWeight(.semibold)
                             .foregroundColor(WeatherStatusHelpers.rainStatusColor(rainfallData.state.value))
                         
-                        // Rain Animation
+                        // Rain Animation - restored proper conditional logic
                         if rainfallData.state.value == "1" {
                             RainIntensityAnimation(
                                 rainRate: Double(rainfallData.rainRate.value) ?? 0.0,
                                 isRaining: true
                             )
-                            .frame(width: 30, height: 20)
+                            .frame(width: 20, height: 15)
+                            .clipped()
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .trailing)
                 }
                 
                 Divider()
@@ -364,13 +366,14 @@ struct RainfallDataView: View {
                 HStack(spacing: 4) {
                     Text(MeasurementConverter.formatRainRate(rainfallData.rainRate.value, originalUnit: rainfallData.rainRate.unit))
                     
-                    // Small rain intensity indicator next to rate
+                    // Small rain intensity indicator next to rate - restored proper conditional logic
                     if rainfallData.state.value == "1" {
                         RainIntensityAnimation(
                             rainRate: Double(rainfallData.rainRate.value) ?? 0.0,
                             isRaining: true
                         )
-                        .frame(width: 20, height: 12)
+                        .frame(width: 16, height: 10)
+                        .clipped()
                     }
                 }
             }
