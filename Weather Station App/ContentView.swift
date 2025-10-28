@@ -273,7 +273,7 @@ struct ContentView: View {
         
         // Add timer validation - capture autoRefreshTimer and autoRefreshEnabled by value
         let currentTimer = autoRefreshTimer
-        let refreshEnabled = autoRefreshEnabled
+        _ = autoRefreshEnabled
         DispatchQueue.main.asyncAfter(deadline: .now() + refreshInterval + 30) {
             if let timer = currentTimer, timer.isValid {
                 print("✅ Auto-refresh timer is still valid after first cycle")

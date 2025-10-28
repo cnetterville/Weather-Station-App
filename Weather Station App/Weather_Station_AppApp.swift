@@ -75,7 +75,6 @@ struct Weather_Station_AppApp: App {
         WindowGroup("Main") {
             ContentView()
                 .frame(minWidth: 800, minHeight: 600)
-                .animation(.none)
                 .onAppear {
                     // Initialize the menu bar manager when app starts
                     _ = MenuBarManager.shared

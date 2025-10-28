@@ -31,7 +31,6 @@ struct OtherSensorsSection: View {
                         )
                     }
                 )
-                .animation(.none) // Disable animations to prevent jumping
             }
             
             // Pressure Card
@@ -51,7 +50,6 @@ struct OtherSensorsSection: View {
                         )
                     }
                 )
-                .animation(.none) // Disable animations to prevent jumping
             }
             
             // Traditional Rainfall Card (if enabled and data available)
@@ -65,7 +63,6 @@ struct OtherSensorsSection: View {
                         weatherService.updateStation(station)
                     }
                 )
-                .animation(.none) // Disable animations to prevent jumping
             }
             
             // Piezo Rainfall Card (if enabled)
@@ -78,12 +75,10 @@ struct OtherSensorsSection: View {
                         weatherService.updateStation(station)
                     }
                 )
-                .animation(.none) // Disable animations to prevent jumping
             }
             
             // Air Quality Cards
             AirQualitySensorCards(station: $station, data: data, weatherService: weatherService)
-                .animation(.none) // Disable animations to prevent jumping
             
             // Enhanced Solar & UV Index Card
             if station.sensorPreferences.showSolar {
@@ -95,7 +90,6 @@ struct OtherSensorsSection: View {
                         weatherService.updateStation(station)
                     }
                 )
-                .animation(.none) // Disable animations to prevent jumping
             }
             
             // Lightning Card
@@ -116,7 +110,6 @@ struct OtherSensorsSection: View {
                         )
                     }
                 )
-                .animation(.none) // Disable animations to prevent jumping
             }
             
             // Battery Status Card
@@ -129,7 +122,6 @@ struct OtherSensorsSection: View {
                         weatherService.updateStation(station)
                     }
                 )
-                .animation(.none) // Disable animations to prevent jumping
             }
             
             // Sunrise/Sunset Card
@@ -141,7 +133,6 @@ struct OtherSensorsSection: View {
                         weatherService.updateStation(station)
                     }
                 )
-                .animation(.none) // Disable animations to prevent jumping
             }
             
             // Lunar Card
@@ -153,7 +144,6 @@ struct OtherSensorsSection: View {
                         weatherService.updateStation(station)
                     }
                 )
-                .animation(.none) // Disable animations to prevent jumping
             }
             
             // Camera Card (show only for stations with associated cameras)
@@ -162,7 +152,6 @@ struct OtherSensorsSection: View {
                     station.customLabels.camera = newTitle
                     weatherService.updateStation(station)
                 })
-                .animation(.none) // Disable animations to prevent jumping
             }
         }
     }
@@ -193,7 +182,6 @@ struct AirQualitySensorCards: View {
                         )
                     }
                 )
-                .animation(.none) // Disable animations to prevent jumping
             }
             
             // Air Quality Ch2 Card (if enabled and has data)
@@ -216,7 +204,6 @@ struct AirQualitySensorCards: View {
                         )
                     }
                 )
-                .animation(.none) // Disable animations to prevent jumping
             }
             
             // Air Quality Ch3 Card (if enabled and has data)
@@ -239,7 +226,6 @@ struct AirQualitySensorCards: View {
                         )
                     }
                 )
-                .animation(.none) // Disable animations to prevent jumping
             }
         }
     }
