@@ -22,9 +22,10 @@ struct WeatherStation: Identifiable, Codable, Equatable {
     var longitude: Double?
     var timeZoneId: String?
     var associatedCameraMAC: String? // Link to camera device
+    var menuBarLabel: String? // Custom short label for menubar display
     
     enum CodingKeys: String, CodingKey {
-        case name, macAddress, isActive, lastUpdated, sensorPreferences, customLabels, stationType, creationDate, deviceType, latitude, longitude, timeZoneId, associatedCameraMAC
+        case name, macAddress, isActive, lastUpdated, sensorPreferences, customLabels, stationType, creationDate, deviceType, latitude, longitude, timeZoneId, associatedCameraMAC, menuBarLabel
     }
     
     // Computed property to get the station's timezone
@@ -36,6 +37,20 @@ struct WeatherStation: Identifiable, Codable, Equatable {
         
         // Fallback to device's local timezone if station timezone is not available
         return TimeZone.current
+    }
+    
+    // Computed property to get the display label for menubar (custom label or truncated name)
+    var displayLabelForMenuBar: String {
+        if let customLabel = menuBarLabel, !customLabel.isEmpty {
+            return customLabel
+        }
+        
+        // Fallback to truncated name if no custom label
+        if name.count > 8 {
+            return String(name.prefix(6)) + "…"
+        }
+        
+        return name
     }
     
     // Equatable conformance

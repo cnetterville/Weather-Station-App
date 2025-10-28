@@ -10,6 +10,8 @@ import Combine
 
 struct ContentView: View {
     @StateObject private var weatherService = WeatherStationService.shared
+    // Use the shared instance directly instead of creating a new StateObject
+    private var menuBarManager = MenuBarManager.shared
     @State private var selectedTab = 0
     @State private var showingSettings = false
     @State private var autoRefreshTimer: Timer?
@@ -108,33 +110,90 @@ struct ContentView: View {
                 .background(Color(NSColor.controlBackgroundColor))
             }
         } detail: {
-            if weatherService.weatherStations.isEmpty {
-                EmptyStateView(showingSettings: $showingSettings)
-            } else if selectedTab < weatherService.weatherStations.count && selectedTab >= 0 {
-                let selectedStationBinding = Binding<WeatherStation>(
-                    get: { 
-                        guard selectedTab < weatherService.weatherStations.count && selectedTab >= 0 else {
-                            return weatherService.weatherStations.first ?? WeatherStation(name: "Error", macAddress: "00:00:00:00:00:00")
+            Group {
+                if weatherService.weatherStations.isEmpty {
+                    EmptyStateView(showingSettings: $showingSettings)
+                } else if selectedTab < weatherService.weatherStations.count && selectedTab >= 0 {
+                    let selectedStationBinding = Binding<WeatherStation>(
+                        get: { 
+                            guard selectedTab < weatherService.weatherStations.count && selectedTab >= 0 else {
+                                return weatherService.weatherStations.first ?? WeatherStation(name: "Error", macAddress: "00:00:00:00:00:00")
+                            }
+                            return weatherService.weatherStations[selectedTab] 
+                        },
+                        set: { 
+                            guard selectedTab < weatherService.weatherStations.count && selectedTab >= 0 else { return }
+                            weatherService.weatherStations[selectedTab] = $0 
                         }
-                        return weatherService.weatherStations[selectedTab] 
-                    },
-                    set: { 
-                        guard selectedTab < weatherService.weatherStations.count && selectedTab >= 0 else { return }
-                        weatherService.weatherStations[selectedTab] = $0 
+                    )
+                    WeatherStationDetailView(
+                        station: selectedStationBinding,
+                        weatherData: weatherService.weatherData[selectedTab < weatherService.weatherStations.count && selectedTab >= 0 ? weatherService.weatherStations[selectedTab].macAddress : ""]
+                    )
+                } else {
+                    // Fallback view when selectedTab is out of bounds
+                    VStack {
+                        Text("Please select a weather station")
+                            .font(.title2)
+                            .foregroundColor(.secondary)
                     }
-                )
-                WeatherStationDetailView(
-                    station: selectedStationBinding,
-                    weatherData: weatherService.weatherData[selectedTab < weatherService.weatherStations.count && selectedTab >= 0 ? weatherService.weatherStations[selectedTab].macAddress : ""]
-                )
-            } else {
-                // Fallback view when selectedTab is out of bounds
-                VStack {
-                    Text("Please select a weather station")
-                        .font(.title2)
-                        .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .animation(.none, value: weatherService.weatherStations.count) // Disable animations on station count changes
+            .animation(.none, value: selectedTab) // Disable animations on tab changes
+        }
+        .onAppear {
+            print("📱 ContentView appeared - setting up notification listeners")
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .navigateToStation)) { notification in
+            print("🧭 ContentView received navigateToStation notification")
+            // Handle navigation to specific station from menu bar
+            if let stationMAC = notification.userInfo?["stationMAC"] as? String,
+               let stationIndex = weatherService.weatherStations.firstIndex(where: { $0.macAddress == stationMAC }) {
+                withAnimation(.none) { // Disable animation for menu bar navigation
+                    selectedTab = stationIndex
+                }
+                print("🎯 Navigated to station at index: \(stationIndex)")
+            }
+        }
+        .onReceive(menuBarManager.$shouldActivateApp) { shouldActivate in
+            print("🔄 Received shouldActivateApp: \(shouldActivate)")
+            
+            if shouldActivate {
+                print("🖱️ MenuBar clicked - attempting to show window")
+                
+                // Reset the flag first
+                menuBarManager.shouldActivateApp = false
+                print("🔄 Reset shouldActivateApp flag to false")
+                
+                // Absolutely minimal approach - no system calls
+                DispatchQueue.main.async {
+                    print("🔍 Looking for windows...")
+                    print("📊 Total windows: \(NSApp.windows.count)")
+                    
+                    // Find any visible window with content
+                    if let window = NSApp.windows.first(where: { 
+                        $0.isVisible && 
+                        $0.contentViewController != nil && 
+                        $0.frame.width > 500 
+                    }) {
+                        
+                        print("🎯 Found window: '\(window.title)' - bringing to front")
+                        
+                        // Only use the most basic window operations
+                        window.orderFront(nil)  // Simplest bring-to-front call
+                        
+                        print("✅ Window order changed")
+                        
+                    } else {
+                        print("❌ No suitable window found")
+                        // Debug: show all windows
+                        for (i, window) in NSApp.windows.enumerated() {
+                            print("  Window \(i): '\(window.title)' visible:\(window.isVisible) hasContent:\(window.contentViewController != nil) width:\(window.frame.width)")
+                        }
+                    }
+                }
             }
         }
         .sheet(isPresented: $showingSettings) {
@@ -160,16 +219,18 @@ struct ContentView: View {
         }
         .onChange(of: weatherService.weatherStations) { _, newStations in
             // Adjust selectedTab if it's out of bounds after stations are removed
-            if selectedTab >= newStations.count {
-                selectedTab = max(0, newStations.count - 1)
-            }
-            
-            // Start/stop auto-refresh based on whether we have stations
-            if newStations.isEmpty {
-                selectedTab = 0 // Reset to 0 when no stations
-                stopAutoRefresh()
-            } else if autoRefreshEnabled && autoRefreshTimer == nil {
-                startAutoRefresh()
+            withAnimation(.none) { // Disable animation for data-driven changes
+                if selectedTab >= newStations.count {
+                    selectedTab = max(0, newStations.count - 1)
+                }
+                
+                // Start/stop auto-refresh based on whether we have stations
+                if newStations.isEmpty {
+                    selectedTab = 0 // Reset to 0 when no stations
+                    stopAutoRefresh()
+                } else if autoRefreshEnabled && autoRefreshTimer == nil {
+                    startAutoRefresh()
+                }
             }
         }
         .onChange(of: refreshInterval) { _, _ in
@@ -264,7 +325,7 @@ struct StationListItem: View {
     
     // Add a timer to force UI refresh every few seconds for data age display
     @State private var currentTime = Date()
-    private let timer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
+    private let timer = Timer.publish(every: 30, on: .main, in: .common).autoconnect() // Reduced from 5s to 30s
     
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -278,7 +339,7 @@ struct StationListItem: View {
                 
                 Spacer()
                 
-                // Data age indicator - now refreshes every 5 seconds
+                // Data age indicator - now refreshes every 30 seconds instead of 5
                 Text(weatherService.getDataAge(for: station))
                     .font(.caption2)
                     .foregroundColor(weatherService.isDataFresh(for: station) ? .green : .orange)
@@ -317,8 +378,11 @@ struct StationListItem: View {
         }
         .padding(.vertical, 2)
         .onReceive(timer) { time in
-            currentTime = time // This will trigger UI refresh every 5 seconds
+            withAnimation(.none) { // Disable animation for timer updates
+                currentTime = time // This will trigger UI refresh every 30 seconds
+            }
         }
+        .animation(.none, value: currentTime) // Disable animations for time updates
     }
     
     private func deviceTypeDescription(_ type: Int) -> String {

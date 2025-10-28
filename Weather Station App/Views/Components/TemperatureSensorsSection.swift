@@ -38,6 +38,7 @@ struct TemperatureSensorsSection: View {
                         )
                     }
                 )
+                .animation(.none) // Disable animations to prevent jumping
             }
             
             // Indoor Temperature Card
@@ -64,6 +65,7 @@ struct TemperatureSensorsSection: View {
                         )
                     }
                 )
+                .animation(.none) // Disable animations to prevent jumping
             }
             
             // Additional Temperature/Humidity Ch1 Sensor
@@ -91,6 +93,7 @@ struct TemperatureSensorsSection: View {
                         )
                     }
                 )
+                .animation(.none) // Disable animations to prevent jumping
             }
             
             // Additional Temperature/Humidity Ch2 Sensor
@@ -118,6 +121,7 @@ struct TemperatureSensorsSection: View {
                         )
                     }
                 )
+                .animation(.none) // Disable animations to prevent jumping
             }
             
             // Additional Temperature/Humidity Ch3 Sensor
@@ -145,6 +149,7 @@ struct TemperatureSensorsSection: View {
                         )
                     }
                 )
+                .animation(.none) // Disable animations to prevent jumping
             }
         }
     }

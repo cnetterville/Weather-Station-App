@@ -1,4 +1,4 @@
-//
+// 
 //  SettingsView.swift
 //  Weather Station App
 //
@@ -9,6 +9,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @StateObject private var weatherService = WeatherStationService.shared
+    @StateObject private var menuBarManager = MenuBarManager.shared
     @Environment(\.dismiss) private var dismiss
     
     @State private var applicationKey: String = ""
@@ -87,6 +88,204 @@ struct SettingsView: View {
             
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
+                    // MenuBar Settings
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Menu Bar")
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                        
+                        VStack(alignment: .leading, spacing: 12) {
+                            Toggle("Show temperature in menu bar", isOn: $menuBarManager.isMenuBarEnabled)
+                                .toggleStyle(.checkbox)
+                            
+                            if menuBarManager.isMenuBarEnabled {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    // Display Mode Selection
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text("Display Mode:")
+                                            .font(.headline)
+                                        
+                                        Picker("Display Mode", selection: $menuBarManager.displayMode) {
+                                            ForEach(MenuBarDisplayMode.allCases, id: \.self) { mode in
+                                                VStack(alignment: .leading) {
+                                                    Text(mode.displayName)
+                                                    Text(mode.description)
+                                                        .font(.caption)
+                                                        .foregroundColor(.secondary)
+                                                }
+                                                .tag(mode)
+                                            }
+                                        }
+                                        .pickerStyle(.menu)
+                                    }
+                                    
+                                    // Station Selection (only for single station mode)
+                                    if menuBarManager.displayMode == .singleStation {
+                                        VStack(alignment: .leading, spacing: 8) {
+                                            Text("Weather Station:")
+                                                .font(.headline)
+                                            
+                                            if menuBarManager.availableStations.isEmpty {
+                                                Text("No active weather stations available")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                            } else {
+                                                Picker("Station", selection: $menuBarManager.selectedStationMac) {
+                                                    Text("First available station")
+                                                        .tag("")
+                                                    
+                                                    ForEach(menuBarManager.availableStations, id: \.macAddress) { station in
+                                                        Text(station.name)
+                                                            .tag(station.macAddress)
+                                                    }
+                                                }
+                                                .pickerStyle(.menu)
+                                            }
+                                        }
+                                    }
+                                    
+                                    // Cycling Options (only for cycle mode)
+                                    if menuBarManager.displayMode == .cycleThrough {
+                                        VStack(alignment: .leading, spacing: 8) {
+                                            Text("Cycling Options:")
+                                                .font(.headline)
+                                            
+                                            HStack {
+                                                Text("Cycle Interval:")
+                                                    .font(.subheadline)
+                                                
+                                                Spacer()
+                                                
+                                                Picker("Interval", selection: $menuBarManager.cycleInterval) {
+                                                    Text("5 seconds").tag(5.0)
+                                                    Text("10 seconds").tag(10.0)
+                                                    Text("15 seconds").tag(15.0)
+                                                    Text("30 seconds").tag(30.0)
+                                                    Text("1 minute").tag(60.0)
+                                                    Text("2 minutes").tag(120.0)
+                                                }
+                                                .pickerStyle(.menu)
+                                                .frame(width: 120)
+                                            }
+                                            
+                                            Text("Cycling through \(menuBarManager.availableStations.count) active station\(menuBarManager.availableStations.count == 1 ? "" : "s")")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                    
+                                    // Temperature Display Mode
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text("Temperature Display:")
+                                            .font(.headline)
+                                        
+                                        Picker("Temperature Mode", selection: $menuBarManager.temperatureDisplayMode) {
+                                            ForEach(MenuBarTemperatureMode.allCases, id: \.self) { mode in
+                                                Text(mode.displayName)
+                                                    .tag(mode)
+                                            }
+                                        }
+                                        .pickerStyle(.menu)
+                                    }
+                                    
+                                    // Display Options
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text("Display Options:")
+                                            .font(.headline)
+                                        
+                                        Toggle("Show station names", isOn: $menuBarManager.showStationName)
+                                            .toggleStyle(.checkbox)
+                                            .disabled(menuBarManager.displayMode == .allStations) // Always shows names in all stations mode
+                                        
+                                        // Custom menubar labels section
+                                        if !menuBarManager.availableStations.isEmpty {
+                                            Divider()
+                                                .padding(.vertical, 4)
+                                            
+                                            VStack(alignment: .leading, spacing: 8) {
+                                                HStack {
+                                                    Text("Custom MenuBar Labels:")
+                                                        .font(.subheadline)
+                                                        .fontWeight(.medium)
+                                                    
+                                                    Spacer()
+                                                    
+                                                    // Preview of how it will look in menubar
+                                                    if let previewText = getMenuBarPreview() {
+                                                        VStack(alignment: .trailing) {
+                                                            Text("Preview:")
+                                                                .font(.caption2)
+                                                                .foregroundColor(.secondary)
+                                                            Text(previewText)
+                                                                .font(.system(.caption, design: .monospaced))
+                                                                .padding(.horizontal, 6)
+                                                                .padding(.vertical, 2)
+                                                                .background(Color.black.opacity(0.8))
+                                                                .foregroundColor(.white)
+                                                                .cornerRadius(4)
+                                                        }
+                                                    }
+                                                }
+                                                
+                                                Text("Set short labels for each station to save menubar space (max 8 characters):")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                                
+                                                ForEach(Array(menuBarManager.availableStations.enumerated()), id: \.element.id) { index, station in
+                                                    MenuBarLabelEditor(station: station)
+                                                }
+                                                
+                                                // Quick action buttons
+                                                HStack {
+                                                    Button("Reset All Labels") {
+                                                        resetAllCustomLabels()
+                                                    }
+                                                    .buttonStyle(.bordered)
+                                                    .controlSize(.small)
+                                                    
+                                                    Button("Auto-Generate Short Labels") {
+                                                        autoGenerateShortLabels()
+                                                    }
+                                                    .buttonStyle(.bordered)
+                                                    .controlSize(.small)
+                                                    
+                                                    Spacer()
+                                                }
+                                            }
+                                        }
+                                    }
+                                    
+                                    // Info
+                                    HStack {
+                                        Image(systemName: "info.circle")
+                                            .foregroundColor(.blue)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("Click the menu bar item to see detailed weather info and quick actions")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                            Text("Custom labels help keep the menubar compact while showing meaningful station identifiers")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                            if menuBarManager.displayMode == .allStations {
+                                                Text("All stations mode: Shows abbreviated data from all active stations")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                            } else if menuBarManager.displayMode == .cycleThrough {
+                                                Text("Cycle mode: Automatically rotates between stations every \(Int(menuBarManager.cycleInterval)) seconds")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                            }
+                                        }
+                                    }
+                                }
+                                .padding(.leading, 16)
+                            }
+                        }
+                        .padding()
+                        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                        .cornerRadius(8)
+                    }
+                    
                     // Display Preferences
                     VStack(alignment: .leading, spacing: 16) {
                         Text("Display Preferences")
@@ -107,7 +306,7 @@ struct SettingsView: View {
                                             HStack {
                                                 Image(systemName: unitSystemDisplayMode == mode ? "checkmark.circle.fill" : "circle")
                                                     .foregroundColor(unitSystemDisplayMode == mode ? .blue : .secondary)
-                                                
+												
                                                 VStack(alignment: .leading, spacing: 2) {
                                                     Text(mode.shortName)
                                                         .font(.headline)
@@ -116,7 +315,7 @@ struct SettingsView: View {
                                                         .font(.caption)
                                                         .foregroundColor(.secondary)
                                                 }
-                                                
+												
                                                 Spacer()
                                             }
                                             .padding(.vertical, 4)
@@ -159,7 +358,7 @@ struct SettingsView: View {
                                 VStack(alignment: .leading, spacing: 8) {
                                     Text("Refresh Interval:")
                                         .font(.headline)
-                                    
+									
                                     // Use a more compact layout for the picker
                                     VStack(alignment: .leading, spacing: 8) {
                                         // First row
@@ -198,7 +397,7 @@ struct SettingsView: View {
                                             })
                                         }
                                     }
-                                    
+									
                                     HStack {
                                         Image(systemName: "info.circle")
                                             .foregroundColor(.blue)
@@ -518,6 +717,79 @@ struct SettingsView: View {
         UserDefaults.standard.set(autoRefreshBinding.wrappedValue, forKey: "AutoRefreshEnabled")
         UserDefaults.standard.set(refreshIntervalBinding.wrappedValue, forKey: "RefreshInterval")
     }
+    
+    private func getMenuBarPreview() -> String? {
+        let activeStations = menuBarManager.availableStations
+        
+        switch menuBarManager.displayMode {
+        case .singleStation:
+            if let station = activeStations.first {
+                let label = station.displayLabelForMenuBar
+                return menuBarManager.showStationName ? "\(label): 72°F" : "72°F"
+            }
+        case .allStations:
+            if activeStations.count > 0 {
+                let samples = activeStations.prefix(3).map { station in
+                    let label = station.displayLabelForMenuBar
+                    let shortLabel = label.count > 4 ? String(label.prefix(4)) + ":" : label + ":"
+                    return "\(shortLabel)72°F"
+                }
+                let preview = samples.joined(separator: " | ")
+                return activeStations.count > 3 ? preview + " | ..." : preview
+            }
+        case .cycleThrough:
+            if let station = activeStations.first {
+                let label = station.displayLabelForMenuBar
+                return menuBarManager.showStationName ? "\(label): 72°F" : "72°F"
+            }
+        }
+        
+        return nil
+    }
+    
+    private func resetAllCustomLabels() {
+        for station in menuBarManager.availableStations {
+            if let index = weatherService.weatherStations.firstIndex(where: { $0.id == station.id }) {
+                var updatedStation = weatherService.weatherStations[index]
+                updatedStation.menuBarLabel = nil
+                weatherService.updateWeatherStation(updatedStation)
+            }
+        }
+        
+        // Trigger menubar update
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            NotificationCenter.default.post(name: .weatherDataUpdated, object: nil)
+        }
+    }
+    
+    private func autoGenerateShortLabels() {
+        for (index, station) in menuBarManager.availableStations.enumerated() {
+            if let stationIndex = weatherService.weatherStations.firstIndex(where: { $0.id == station.id }) {
+                var updatedStation = weatherService.weatherStations[stationIndex]
+                
+                // Generate a short label based on the station name
+                let words = station.name.split(separator: " ")
+                let shortLabel: String
+                
+                if words.count > 1 {
+                    // Use first letter of each word (up to 4 letters) + number if needed
+                    let initials = words.prefix(3).map { String($0.first ?? "?") }.joined()
+                    shortLabel = initials + (index > 0 ? "\(index + 1)" : "")
+                } else {
+                    // Use first 6 characters of single word
+                    shortLabel = String(station.name.prefix(6))
+                }
+                
+                updatedStation.menuBarLabel = String(shortLabel.prefix(8)) // Ensure max 8 chars
+                weatherService.updateWeatherStation(updatedStation)
+            }
+        }
+        
+        // Trigger menubar update
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            NotificationCenter.default.post(name: .weatherDataUpdated, object: nil)
+        }
+    }
 }
 
 struct AddWeatherStationView: View {
@@ -798,7 +1070,19 @@ struct EditWeatherStationView: View {
                 Spacer()
                 
                 Button("Save Changes") {
-                    saveChanges()
+                    var updatedStation = station
+                    updatedStation.name = stationName.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let newMAC = macAddress.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+                    
+                    if updatedStation.macAddress != newMAC {
+                        weatherService.weatherData.removeValue(forKey: updatedStation.macAddress)
+                        updatedStation.macAddress = newMAC
+                        updatedStation.lastUpdated = nil
+                    }
+                    
+                    updatedStation.sensorPreferences = sensorPreferences
+                    weatherService.updateWeatherStation(updatedStation)
+                    dismiss()
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(stationName.isEmpty || macAddress.isEmpty || !macError.isEmpty)
@@ -895,22 +1179,6 @@ struct EditWeatherStationView: View {
                 }
             }
         }
-    }
-    
-    private func saveChanges() {
-        var updatedStation = station
-        updatedStation.name = stationName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let newMAC = macAddress.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        
-        if updatedStation.macAddress != newMAC {
-            weatherService.weatherData.removeValue(forKey: updatedStation.macAddress)
-            updatedStation.macAddress = newMAC
-            updatedStation.lastUpdated = nil
-        }
-        
-        updatedStation.sensorPreferences = sensorPreferences
-        weatherService.updateWeatherStation(updatedStation)
-        dismiss()
     }
 }
 
@@ -1238,6 +1506,10 @@ struct ExistingStationRow: View {
             if !applicationKey.isEmpty && !apiKey.isEmpty {
                 StationAPIURL(station: station, applicationKey: applicationKey, apiKey: apiKey)
             }
+            
+            if station.menuBarLabel != nil {
+                MenuBarLabelEditor(station: station)
+            }
         }
         .padding()
         .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
@@ -1352,6 +1624,66 @@ struct IntervalButton: View {
         .background(binding.wrappedValue == interval ? Color.accentColor : Color.clear)
         .foregroundColor(binding.wrappedValue == interval ? .white : .primary)
         .cornerRadius(6)
+    }
+}
+
+struct MenuBarLabelEditor: View {
+    let station: WeatherStation
+    @StateObject private var weatherService = WeatherStationService.shared
+    @State private var customLabel: String = ""
+    
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(station.name)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                Text(station.macAddress)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .font(.system(.caption2, design: .monospaced))
+            }
+            
+            Spacer()
+            
+            VStack(alignment: .trailing, spacing: 2) {
+                TextField("Short Label", text: $customLabel)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 120)
+                    .font(.system(.body, design: .default))
+                    .onChange(of: customLabel) { _, newValue in
+                        // Limit to 8 characters for menubar display
+                        if newValue.count > 8 {
+                            customLabel = String(newValue.prefix(8))
+                        }
+                        updateStationLabel(newValue)
+                    }
+                
+                Text("\(customLabel.count)/8 chars")
+                    .font(.caption2)
+                    .foregroundColor(customLabel.count > 6 ? .orange : .secondary)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color.gray.opacity(0.1))
+        .cornerRadius(6)
+        .onAppear {
+            customLabel = station.menuBarLabel ?? ""
+        }
+    }
+    
+    private func updateStationLabel(_ newLabel: String) {
+        if let index = weatherService.weatherStations.firstIndex(where: { $0.id == station.id }) {
+            var updatedStation = weatherService.weatherStations[index]
+            updatedStation.menuBarLabel = newLabel.isEmpty ? nil : newLabel
+            weatherService.updateWeatherStation(updatedStation)
+            
+            // Trigger menubar update
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                NotificationCenter.default.post(name: .weatherDataUpdated, object: nil)
+            }
+        }
     }
 }
 

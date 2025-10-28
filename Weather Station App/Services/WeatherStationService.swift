@@ -145,7 +145,7 @@ class WeatherStationService: ObservableObject {
         return true
     }
     
-    private func fetchWeatherDataOptimized(for station: WeatherStation) async {
+    func fetchWeatherDataOptimized(for station: WeatherStation) async {
         // Check if we should skip this request entirely
         if !shouldFetchFreshData(for: station) {
             return
@@ -185,6 +185,9 @@ class WeatherStationService: ObservableObject {
                     if let currentError = errorMessage, currentError.contains(station.name) {
                         errorMessage = nil
                     }
+                    
+                    // Post notification that weather data was updated
+                    NotificationCenter.default.post(name: .weatherDataUpdated, object: nil)
                 }
             } else {
                 await MainActor.run {
@@ -195,6 +198,15 @@ class WeatherStationService: ObservableObject {
             await MainActor.run {
                 errorMessage = "Failed to get response for \(station.name)"
             }
+        }
+    }
+    
+    func fetchWeatherData(for station: WeatherStation) async {
+        await fetchWeatherDataOptimized(for: station)
+        
+        // After successful data fetch, post notification
+        await MainActor.run {
+            NotificationCenter.default.post(name: .weatherDataUpdated, object: nil)
         }
     }
     
@@ -316,11 +328,6 @@ class WeatherStationService: ObservableObject {
         }
         
         return nil
-    }
-    
-    // Legacy method for backward compatibility
-    func fetchWeatherData(for station: WeatherStation) async {
-        await fetchWeatherDataOptimized(for: station)
     }
     
     // MARK: - Enhanced Data Freshness Management (with TimestampExtractor)
@@ -1105,6 +1112,11 @@ class WeatherStationService: ObservableObject {
         if let data = UserDefaults.standard.data(forKey: "WeatherStations"),
            let savedStations = try? JSONDecoder().decode([WeatherStation].self, from: data) {
             weatherStations = savedStations
+            
+            // Post notification that stations were loaded
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .weatherStationsUpdated, object: nil)
+            }
         }
     }
     

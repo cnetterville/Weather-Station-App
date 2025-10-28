@@ -38,6 +38,7 @@ struct WeatherStationDetailView: View {
                 }
                 .padding()
             }
+            .clipped() // Prevent content from overflowing during layout changes
         }
         .navigationTitle(station.name)
         .toolbar {
@@ -73,6 +74,8 @@ struct WeatherStationDetailView: View {
             }
             .frame(minWidth: 800, minHeight: 600)
         }
+        .id(station.id) // Ensure view is recreated when station changes to prevent state conflicts
+        .animation(.none, value: station.id) // Disable animations for station changes
     }
 }
 
