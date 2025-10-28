@@ -424,7 +424,7 @@ struct RainfallCard: View {
         ) {
             let rainfallData = data.rainfallPiezo
             VStack(alignment: .leading, spacing: 8) {
-                // Rain Status with Animation
+                // Rain Status with Animation - made more prominent
                 HStack {
                     Text("Status:")
                     Spacer()
@@ -433,13 +433,13 @@ struct RainfallCard: View {
                             .fontWeight(.semibold)
                             .foregroundColor(WeatherStatusHelpers.rainStatusColor(rainfallData.state.value))
                         
-                        // Rain Animation - made smaller and properly clipped
+                        // Rain Animation - made larger and more prominent
                         if rainfallData.state.value == "1" {
                             RainIntensityAnimation(
                                 rainRate: Double(rainfallData.rainRate.value) ?? 0.0,
                                 isRaining: true
                             )
-                            .frame(width: 20, height: 15)
+                            .frame(width: 30, height: 20)
                             .clipped()
                         }
                     }
@@ -474,19 +474,8 @@ struct RainfallDataView: View {
             HStack {
                 Text("Rate:")
                 Spacer()
-                HStack(spacing: 4) {
-                    Text(MeasurementConverter.formatRainRate(rainfallData.rainRate.value, originalUnit: rainfallData.rainRate.unit))
-                    
-                    // Small rain intensity indicator next to rate - restored proper conditional logic
-                    if rainfallData.state.value == "1" {
-                        RainIntensityAnimation(
-                            rainRate: Double(rainfallData.rainRate.value) ?? 0.0,
-                            isRaining: true
-                        )
-                        .frame(width: 16, height: 10)
-                        .clipped()
-                    }
-                }
+                // Removed the rain animation from here
+                Text(MeasurementConverter.formatRainRate(rainfallData.rainRate.value, originalUnit: rainfallData.rainRate.unit))
             }
             HStack {
                 Text("24 Hours:")
