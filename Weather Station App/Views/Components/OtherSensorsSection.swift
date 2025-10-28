@@ -122,6 +122,17 @@ struct OtherSensorsSection: View {
                 )
             }
             
+            // Lunar Card
+            if station.sensorPreferences.showLunar && station.latitude != nil && station.longitude != nil {
+                LunarCard(
+                    station: station,
+                    onTitleChange: { newTitle in
+                        station.customLabels.lunar = newTitle
+                        weatherService.updateStation(station)
+                    }
+                )
+            }
+            
             // Camera Card (show only for stations with associated cameras)
             if station.sensorPreferences.showCamera && station.associatedCameraMAC != nil {
                 CameraTileView(station: station, onTitleChange: { newTitle in

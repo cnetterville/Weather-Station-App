@@ -756,6 +756,7 @@ struct EditWeatherStationView: View {
                                 
                                 SensorToggleRow("🔋 Battery Status", isOn: $sensorPreferences.showBatteryStatus)
                                 SensorToggleRow("🌅 Sunrise/Sunset", isOn: $sensorPreferences.showSunriseSunset)
+                                SensorToggleRow("🌙 Moon & Lunar", isOn: $sensorPreferences.showLunar)
                                 SensorToggleRow("📷 Weather Camera", isOn: $sensorPreferences.showCamera)
                             }
                             

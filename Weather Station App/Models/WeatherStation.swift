@@ -61,6 +61,7 @@ struct SensorLabels: Codable, Equatable {
     var tempHumidityCh3: String = "Temp/Humidity Ch3"
     var batteryStatus: String = "Battery Status"
     var sunriseSunset: String = "Sunrise/Sunset"
+    var lunar: String = "Moon & Lunar"
     var camera: String = "Weather Camera"
 }
 
@@ -81,6 +82,7 @@ struct SensorPreferences: Codable, Equatable {
     var showTempHumidityCh3: Bool = false
     var showBatteryStatus: Bool = false
     var showSunriseSunset: Bool = true
+    var showLunar: Bool = true
     var showCamera: Bool = true
 }
 

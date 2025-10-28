@@ -1230,3 +1230,431 @@ struct SunLocationRequiredView: View {
         }
     }
 }
+
+struct LunarCard: View {
+    let station: WeatherStation
+    let onTitleChange: (String) -> Void
+    
+    var body: some View {
+        EditableWeatherCard(
+            title: .constant(station.customLabels.lunar),
+            systemImage: "moon.stars.fill",
+            onTitleChange: onTitleChange
+        ) {
+            if let latitude = station.latitude, let longitude = station.longitude {
+                LunarInfoView(
+                    latitude: latitude,
+                    longitude: longitude,
+                    timeZone: station.timeZone
+                )
+            } else {
+                LunarLocationRequiredView()
+            }
+        }
+    }
+}
+
+struct LunarInfoView: View {
+    let latitude: Double
+    let longitude: Double
+    let timeZone: TimeZone
+    
+    private var moonPhase: MoonPhase {
+        MoonCalculator.getCurrentMoonPhase(for: Date(), timeZone: timeZone)
+    }
+    
+    private var moonTimes: MoonTimes? {
+        MoonCalculator.calculateMoonTimes(
+            for: Date(),
+            latitude: latitude,
+            longitude: longitude,
+            timeZone: timeZone
+        )
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Current Moon Phase Display
+            HStack(spacing: 16) {
+                // Moon Phase Visual
+                MoonPhaseVisual(phase: moonPhase)
+                    .frame(width: 50, height: 50)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(moonPhase.name)
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                    
+                    Text("\(Int(moonPhase.illumination * 100))% Illuminated")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    
+                    Text("Age: \(moonPhase.age) days")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+            }
+            
+            Divider()
+            
+            // Moonrise and Moonset Times
+            if let moonTimes = moonTimes {
+                MoonTimesView(moonTimes: moonTimes, timeZone: timeZone)
+            } else {
+                Text("Moon times unavailable")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+            
+            Divider()
+            
+            // Next Moon Phase Information
+            NextMoonPhaseView(currentPhase: moonPhase)
+        }
+    }
+}
+
+struct MoonPhaseVisual: View {
+    let phase: MoonPhase
+    
+    var body: some View {
+        GeometryReader { geometry in
+            let size = min(geometry.size.width, geometry.size.height)
+            
+            ZStack {
+                // Background circle (full moon)
+                Circle()
+                    .fill(.gray.opacity(0.2))
+                    .frame(width: size, height: size)
+                
+                // Illuminated portion
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [.yellow.opacity(0.8), .white]),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: size, height: size)
+                    .mask(
+                        MoonPhaseMask(illumination: phase.illumination, isWaxing: phase.isWaxing)
+                            .frame(width: size, height: size)
+                    )
+                
+                // Subtle border
+                Circle()
+                    .stroke(.secondary.opacity(0.3), lineWidth: 1)
+                    .frame(width: size, height: size)
+            }
+        }
+    }
+}
+
+struct MoonPhaseMask: View {
+    let illumination: Double
+    let isWaxing: Bool
+    
+    var body: some View {
+        GeometryReader { geometry in
+            let size = min(geometry.size.width, geometry.size.height)
+            let radius = size / 2
+            let center = CGPoint(x: size / 2, y: size / 2)
+            
+            Path { path in
+                // Create the moon phase shape
+                if illumination <= 0.01 {
+                    // New moon - no illumination
+                    return
+                } else if illumination >= 0.99 {
+                    // Full moon - complete circle
+                    path.addEllipse(in: CGRect(x: 0, y: 0, width: size, height: size))
+                } else if illumination == 0.5 {
+                    // Quarter moon - half circle
+                    path.move(to: CGPoint(x: center.x, y: 0))
+                    path.addArc(
+                        center: center,
+                        radius: radius,
+                        startAngle: .degrees(-90),
+                        endAngle: .degrees(90),
+                        clockwise: isWaxing
+                    )
+                    path.closeSubpath()
+                } else {
+                    // Crescent or gibbous moon
+                    let phase = illumination
+                    
+                    // Calculate the shape of the terminator (day/night boundary)
+                    path.move(to: CGPoint(x: center.x, y: 0))
+                    
+                    if isWaxing {
+                        // Waxing phases (crescent to gibbous)
+                        if phase < 0.5 {
+                            // Waxing crescent
+                            let ellipseWidth = size * (1 - 2 * phase)
+                            path.addEllipse(in: CGRect(
+                                x: center.x - ellipseWidth / 2,
+                                y: 0,
+                                width: ellipseWidth,
+                                height: size
+                            ))
+                            path.addArc(
+                                center: center,
+                                radius: radius,
+                                startAngle: .degrees(-90),
+                                endAngle: .degrees(90),
+                                clockwise: true
+                            )
+                        } else {
+                            // Waxing gibbous
+                            path.addEllipse(in: CGRect(x: 0, y: 0, width: size, height: size))
+                            let ellipseWidth = size * (2 * (1 - phase))
+                            path.addEllipse(in: CGRect(
+                                x: center.x - ellipseWidth / 2,
+                                y: 0,
+                                width: ellipseWidth,
+                                height: size
+                            ))
+                        }
+                    } else {
+                        // Waning phases (gibbous to crescent)
+                        if phase > 0.5 {
+                            // Waning gibbous
+                            path.addEllipse(in: CGRect(x: 0, y: 0, width: size, height: size))
+                            let ellipseWidth = size * (2 * (1 - phase))
+                            path.addEllipse(in: CGRect(
+                                x: size - center.x - ellipseWidth / 2,
+                                y: 0,
+                                width: ellipseWidth,
+                                height: size
+                            ))
+                        } else {
+                            // Waning crescent
+                            let ellipseWidth = size * (1 - 2 * phase)
+                            path.addEllipse(in: CGRect(
+                                x: size - center.x - ellipseWidth / 2,
+                                y: 0,
+                                width: ellipseWidth,
+                                height: size
+                            ))
+                            path.addArc(
+                                center: center,
+                                radius: radius,
+                                startAngle: .degrees(-90),
+                                endAngle: .degrees(90),
+                                clockwise: false
+                            )
+                        }
+                    }
+                }
+            }
+            .fill(.black)
+        }
+    }
+}
+
+struct MoonTimesView: View {
+    let moonTimes: MoonTimes
+    let timeZone: TimeZone
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Moon Times")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .fontWeight(.semibold)
+            
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Image(systemName: "moonrise.fill")
+                            .foregroundColor(.blue)
+                        Text("Moonrise")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    if let moonrise = moonTimes.moonrise {
+                        Text(formatTime(moonrise))
+                            .font(.title3)
+                            .fontWeight(.bold)
+                    } else {
+                        Text("No moonrise")
+                            .font(.title3)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
+                Spacer()
+                
+                VStack(alignment: .trailing, spacing: 4) {
+                    HStack {
+                        Text("Moonset")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        Image(systemName: "moonset.fill")
+                            .foregroundColor(.purple)
+                    }
+                    if let moonset = moonTimes.moonset {
+                        Text(formatTime(moonset))
+                            .font(.title3)
+                            .fontWeight(.bold)
+                    } else {
+                        Text("No moonset")
+                            .font(.title3)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+        }
+    }
+    
+    private func formatTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        formatter.timeZone = timeZone
+        return formatter.string(from: date)
+    }
+}
+
+struct NextMoonPhaseView: View {
+    let currentPhase: MoonPhase
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Upcoming")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .fontWeight(.semibold)
+            
+            HStack {
+                Text("Next \(currentPhase.nextPhaseName):")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Text("in \(currentPhase.daysToNextPhase) days")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+            }
+        }
+    }
+}
+
+struct LunarLocationRequiredView: View {
+    var body: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "location.slash")
+                .font(.system(size: 24))
+                .foregroundColor(.secondary)
+            Text("Location Required")
+                .font(.headline)
+                .foregroundColor(.secondary)
+            Text("Moon calculations require station location data")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+        }
+    }
+}
+
+// MARK: - Moon Calculation System
+
+struct MoonPhase {
+    let name: String
+    let illumination: Double // 0.0 to 1.0
+    let age: Int // Days since new moon
+    let isWaxing: Bool
+    let nextPhaseName: String
+    let daysToNextPhase: Int
+}
+
+struct MoonTimes {
+    let moonrise: Date?
+    let moonset: Date?
+}
+
+class MoonCalculator {
+    
+    static func getCurrentMoonPhase(for date: Date, timeZone: TimeZone = .current) -> MoonPhase {
+        let calendar = Calendar.current
+        
+        // Reference: New moon on January 1, 2000
+        let referenceDate = DateComponents(year: 2000, month: 1, day: 6, hour: 18, minute: 14)
+        let referenceMoonDate = calendar.date(from: referenceDate) ?? date
+        
+        // Lunar cycle is approximately 29.53059 days
+        let lunarCycle = 29.53059
+        let daysSinceReference = date.timeIntervalSince(referenceMoonDate) / (24 * 60 * 60)
+        let cyclePosition = daysSinceReference.truncatingRemainder(dividingBy: lunarCycle)
+        let normalizedPosition = cyclePosition / lunarCycle
+        
+        let age = Int(cyclePosition)
+        let illumination = 0.5 * (1 - cos(2 * .pi * normalizedPosition))
+        
+        let (name, isWaxing, nextPhase, daysToNext) = getMoonPhaseInfo(age: age, illumination: illumination)
+        
+        return MoonPhase(
+            name: name,
+            illumination: illumination,
+            age: age,
+            isWaxing: isWaxing,
+            nextPhaseName: nextPhase,
+            daysToNextPhase: daysToNext
+        )
+    }
+    
+    static func calculateMoonTimes(for date: Date, latitude: Double, longitude: Double, timeZone: TimeZone) -> MoonTimes? {
+        // Simplified moon rise/set calculation
+        // In a production app, you'd want to use a more accurate astronomical library
+        
+        let calendar = Calendar.current
+        let startOfDay = calendar.startOfDay(for: date)
+        
+        // Approximate moonrise and moonset times based on lunar position
+        let moonPhase = getCurrentMoonPhase(for: date, timeZone: timeZone)
+        
+        // Moon rises approximately 50 minutes later each day
+        let daysInCycle = Double(moonPhase.age)
+        let baseRiseTime = 6.0 // 6 AM base
+        let riseDelay = (daysInCycle * 50.0) / 60.0 // Convert minutes to hours
+        let adjustedRiseTime = (baseRiseTime + riseDelay).truncatingRemainder(dividingBy: 24)
+        
+        let setTime = (adjustedRiseTime + 12.0).truncatingRemainder(dividingBy: 24)
+        
+        let moonrise = startOfDay.addingTimeInterval(adjustedRiseTime * 3600)
+        let moonset = startOfDay.addingTimeInterval(setTime * 3600)
+        
+        // Sometimes moon doesn't rise or set on a given day
+        let shouldShowRise = daysInCycle < 25
+        let shouldShowSet = daysInCycle > 4
+        
+        return MoonTimes(
+            moonrise: shouldShowRise ? moonrise : nil,
+            moonset: shouldShowSet ? moonset : nil
+        )
+    }
+    
+    private static func getMoonPhaseInfo(age: Int, illumination: Double) -> (name: String, isWaxing: Bool, nextPhase: String, daysToNext: Int) {
+        switch age {
+        case 0...1:
+            return ("New Moon", true, "First Quarter", 7 - age)
+        case 2...6:
+            return ("Waxing Crescent", true, "First Quarter", 7 - age)
+        case 7...8:
+            return ("First Quarter", true, "Full Moon", 15 - age)
+        case 9...13:
+            return ("Waxing Gibbous", true, "Full Moon", 15 - age)
+        case 14...16:
+            return ("Full Moon", false, "Last Quarter", 22 - age)
+        case 17...21:
+            return ("Waning Gibbous", false, "Last Quarter", 22 - age)
+        case 22...23:
+            return ("Last Quarter", false, "New Moon", 30 - age)
+        case 24...29:
+            return ("Waning Crescent", false, "New Moon", 30 - age)
+        default:
+            return ("New Moon", true, "First Quarter", 7)
+        }
+    }
+}

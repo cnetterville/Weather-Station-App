@@ -67,6 +67,210 @@ struct OutdoorTemperatureCard: View {
     }
 }
 
+struct TemperatureRangeArc: View {
+    let currentTemp: Double
+    let tempStats: DailyTemperatureStats
+    let unit: String
+    
+    private var temperatureRange: (min: Double, max: Double) {
+        // Use a comfortable display range around the daily high/low
+        let buffer = max(5.0, (tempStats.highTemp - tempStats.lowTemp) * 0.2) // At least 5° buffer
+        return (
+            min: tempStats.lowTemp - buffer,
+            max: tempStats.highTemp + buffer
+        )
+    }
+    
+    private var currentPosition: CGFloat {
+        let range = temperatureRange
+        let totalRange = range.max - range.min
+        guard totalRange > 0 else { return 0.5 }
+        
+        let position = (currentTemp - range.min) / totalRange
+        return CGFloat(max(0, min(1, position))) // Clamp between 0 and 1
+    }
+    
+    private var lowPosition: CGFloat {
+        let range = temperatureRange
+        let totalRange = range.max - range.min
+        guard totalRange > 0 else { return 0.2 }
+        
+        let position = (tempStats.lowTemp - range.min) / totalRange
+        return CGFloat(max(0, min(1, position)))
+    }
+    
+    private var highPosition: CGFloat {
+        let range = temperatureRange
+        let totalRange = range.max - range.min
+        guard totalRange > 0 else { return 0.8 }
+        
+        let position = (tempStats.highTemp - range.min) / totalRange
+        return CGFloat(max(0, min(1, position)))
+    }
+    
+    private var currentTempColor: Color {
+        let normalizedTemp = (currentTemp - tempStats.lowTemp) / max(1, tempStats.highTemp - tempStats.lowTemp)
+        
+        switch normalizedTemp {
+        case ...0.2: return .blue
+        case 0.2...0.4: return .cyan
+        case 0.4...0.6: return .green
+        case 0.6...0.8: return .orange
+        default: return .red
+        }
+    }
+    
+    var body: some View {
+        GeometryReader { geometry in
+            let width = geometry.size.width
+            let height = geometry.size.height
+            let arcHeight = height * 0.7
+            
+            ZStack {
+                // Background arc representing the temperature range
+                Path { path in
+                    path.move(to: CGPoint(x: 0, y: height))
+                    path.addQuadCurve(
+                        to: CGPoint(x: width, y: height),
+                        control: CGPoint(x: width / 2, y: height - arcHeight)
+                    )
+                }
+                .stroke(Color.secondary.opacity(0.3), lineWidth: 6)
+                
+                // Temperature range arc (low to high)
+                Path { path in
+                    path.move(to: CGPoint(x: width * lowPosition, y: height))
+                    
+                    let startX = width * lowPosition
+                    let endX = width * highPosition
+                    let controlX = (startX + endX) / 2
+                    let controlY = height - (arcHeight * sin(.pi * ((lowPosition + highPosition) / 2)))
+                    
+                    path.addQuadCurve(
+                        to: CGPoint(x: endX, y: height),
+                        control: CGPoint(x: controlX, y: controlY)
+                    )
+                }
+                .stroke(
+                    LinearGradient(
+                        gradient: Gradient(colors: [.blue, .cyan, .green, .orange, .red]),
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    ),
+                    lineWidth: 6
+                )
+                
+                // Low temperature marker
+                let lowX = width * lowPosition
+                let lowY = height - (arcHeight * sin(.pi * lowPosition))
+                
+                TemperatureMarker(
+                    temperature: tempStats.formattedLow,
+                    color: .blue,
+                    isLow: true
+                )
+                .position(x: lowX, y: lowY - 15)
+                
+                // High temperature marker
+                let highX = width * highPosition
+                let highY = height - (arcHeight * sin(.pi * highPosition))
+                
+                TemperatureMarker(
+                    temperature: tempStats.formattedHigh,
+                    color: .red,
+                    isLow: false
+                )
+                .position(x: highX, y: highY - 15)
+                
+                // Current temperature indicator
+                let currentX = width * currentPosition
+                let currentY = height - (arcHeight * sin(.pi * currentPosition))
+                
+                Circle()
+                    .fill(currentTempColor)
+                    .frame(width: 12, height: 12)
+                    .position(x: currentX, y: currentY)
+                    .shadow(color: currentTempColor.opacity(0.6), radius: 3)
+                    .overlay(
+                        Circle()
+                            .stroke(.white, lineWidth: 2)
+                            .frame(width: 12, height: 12)
+                            .position(x: currentX, y: currentY)
+                    )
+                
+                // Current temperature label
+                Text(TemperatureConverter.formatTemperature(String(currentTemp), originalUnit: unit))
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(currentTempColor)
+                    .position(x: currentX, y: currentY - 20)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(.background)
+                            .opacity(0.8)
+                            .padding(.horizontal, -4)
+                            .padding(.vertical, -2)
+                    )
+                
+                // Range indicators
+                HStack {
+                    VStack(spacing: 2) {
+                        Text("Low")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Text(String(format: "%.0f°", temperatureRange.min))
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    .position(x: 30, y: height + 15)
+                    
+                    Spacer()
+                    
+                    VStack(spacing: 2) {
+                        Text("High")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Text(String(format: "%.0f°", temperatureRange.max))
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    .position(x: width - 30, y: height + 15)
+                }
+            }
+        }
+    }
+}
+
+struct TemperatureMarker: View {
+    let temperature: String
+    let color: Color
+    let isLow: Bool
+    
+    var body: some View {
+        VStack(spacing: 2) {
+            Circle()
+                .fill(color)
+                .frame(width: 8, height: 8)
+                .overlay(
+                    Circle()
+                        .stroke(.white, lineWidth: 1)
+                )
+            
+            Text(temperature)
+                .font(.caption2)
+                .fontWeight(.semibold)
+                .foregroundColor(color)
+                .background(
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(.background)
+                        .opacity(0.8)
+                        .padding(.horizontal, -2)
+                        .padding(.vertical, -1)
+                )
+        }
+    }
+}
+
 struct IndoorTemperatureCard: View {
     let station: WeatherStation
     let data: WeatherStationData
