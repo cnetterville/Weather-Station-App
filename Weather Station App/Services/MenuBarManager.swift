@@ -447,24 +447,38 @@ class MenuBarManager: ObservableObject {
     
     // Helper method to get weather icon for a specific station
     private func getWeatherIconForStation(_ weatherData: WeatherStationData, station: WeatherStation) -> String {
+        print("🎯 Getting weather icon for station: \(station.name)")
+        print("   - showRainIcon: \(showRainIcon)")
+        print("   - showUVIcon: \(showUVIcon)")
+        print("   - showCloudyIcon: \(showCloudyIcon)")
+        print("   - showNightIcon: \(showNightIcon)")
+        
         // Priority 1: Rain (highest priority)
         if showRainIcon && isRaining(weatherData) {
-            return getRainIconString()
+            let icon = getRainIconString()
+            print("   ✅ Selected rain icon: \(icon)")
+            return icon
         }
         
         // Priority 2: High UV (sunny conditions)
         if showUVIcon && hasSignificantUV(weatherData) {
-            return getUVIconString()
+            let icon = getUVIconString()
+            print("   ✅ Selected UV icon: \(icon)")
+            return icon
         }
         
         // Priority 3: Cloudy daytime (overcast but still daylight)
         if showCloudyIcon && isCloudyDaytime(weatherData) {
-            return getCloudyIconString()
+            let icon = getCloudyIconString()
+            print("   ✅ Selected cloudy icon: \(icon)")
+            return icon
         }
         
         // Priority 4: Night time (lowest priority) - now using actual sunset/sunrise
         if showNightIcon && isNightTime(weatherData, for: station) {
-            return getNightIconString()
+            let icon = getNightIconString()
+            print("   ✅ Selected night icon: \(icon)")
+            return icon
         }
         
         return ""
@@ -559,15 +573,43 @@ class MenuBarManager: ObservableObject {
     }
     
     private func isRaining(_ weatherData: WeatherStationData) -> Bool {
-        // Check piezo rain gauge rate - if it's > 0, it's currently raining
+        // Check piezo rain gauge status - this is the primary indicator
+        let stateString = weatherData.rainfallPiezo.state.value
         let rainRateString = weatherData.rainfallPiezo.rainRate.value
-        guard let rainRate = Double(rainRateString) else {
-            return false
+        
+        // Debug logging to understand what we're getting
+        print("🌧️ Rain Detection Debug:")
+        print("   - Piezo State: '\(stateString)' (unit: \(weatherData.rainfallPiezo.state.unit))")
+        print("   - Rain Rate: '\(rainRateString)' (unit: \(weatherData.rainfallPiezo.rainRate.unit))")
+        
+        // Primary check: piezo state (this is the key indicator for active rain)
+        if let state = Double(stateString) {
+            print("   - Parsed piezo state: \(state)")
+            // Piezo state typically indicates: 0 = not raining, 1 = raining
+            // Some systems might use different values, so check for any positive value
+            if state > 0.0 {
+                print("   ✅ Rain detected via piezo state: \(state)")
+                return true
+            }
+        } else {
+            // Handle case where state might be a string like "raining" or "dry"
+            let stateLower = stateString.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+            print("   - Piezo state as string: '\(stateLower)'")
+            
+            if stateLower == "raining" || stateLower == "rain" || stateLower == "wet" || stateLower == "1" {
+                print("   ✅ Rain detected via piezo state string: '\(stateLower)'")
+                return true
+            }
         }
         
-        // Consider it raining if rain rate is greater than 0
-        // Rain rate is typically in inches/hour or mm/hour
-        return rainRate > 0.0
+        // Secondary check: current rain rate (immediate rainfall)
+        if let rainRate = Double(rainRateString), rainRate > 0.0 {
+            print("   ✅ Rain detected via current rate: \(rainRate)")
+            return true
+        }
+        
+        print("   ❌ No active rain detected")
+        return false
     }
     
     private func hasHighUV(_ weatherData: WeatherStationData) -> Bool {
