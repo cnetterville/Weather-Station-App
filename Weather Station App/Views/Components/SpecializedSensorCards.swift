@@ -191,12 +191,157 @@ struct BatteryStatusCard: View {
             systemImage: "battery.100",
             onTitleChange: onTitleChange
         ) {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 8) {
+                // System Health Overview (Traffic Light Dashboard)
+                BatteryHealthDashboard(data: data)
+                
+                Divider()
+                
                 BatteryMainSystemsView(data: data)
                 Divider()
                 BatterySensorSystemsView(data: data)
             }
             .font(.caption)
+        }
+    }
+}
+
+struct BatteryHealthDashboard: View {
+    let data: WeatherStationData
+    
+    private var systemHealthStats: (total: Int, healthy: Int, warning: Int, critical: Int) {
+        var stats = (total: 0, healthy: 0, warning: 0, critical: 0)
+        
+        // Check all battery components
+        let batteries = [
+            data.battery.console?.value,
+            data.battery.hapticArrayBattery?.value,
+            data.battery.hapticArrayCapacitor?.value,
+            data.battery.lightningSensor?.value,
+            data.battery.rainfallSensor?.value,
+            data.battery.pm25SensorCh1?.value,
+            data.battery.pm25SensorCh2?.value,
+            data.battery.tempHumiditySensorCh1?.value,
+            data.battery.tempHumiditySensorCh2?.value,
+            data.battery.tempHumiditySensorCh3?.value
+        ]
+        
+        for batteryValue in batteries {
+            guard let value = batteryValue else { continue }
+            stats.total += 1
+            
+            let status = BatteryHealthHelper.getBatteryHealth(value)
+            switch status.level {
+            case .healthy:
+                stats.healthy += 1
+            case .warning:
+                stats.warning += 1
+            case .critical:
+                stats.critical += 1
+            }
+        }
+        
+        return stats
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("System Health Overview")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .fontWeight(.semibold)
+            
+            HStack(spacing: 12) {
+                // Traffic Light Indicators
+                HStack(spacing: 8) {
+                    // Green (Healthy)
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(.green)
+                            .frame(width: 12, height: 12)
+                        Text("\(systemHealthStats.healthy)")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                    }
+                    
+                    // Yellow (Warning)
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(.orange)
+                            .frame(width: 12, height: 12)
+                        Text("\(systemHealthStats.warning)")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(systemHealthStats.warning > 0 ? .orange : .secondary)
+                    }
+                    
+                    // Red (Critical)
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(.red)
+                            .frame(width: 12, height: 12)
+                        Text("\(systemHealthStats.critical)")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(systemHealthStats.critical > 0 ? .red : .secondary)
+                    }
+                }
+                
+                Spacer()
+                
+                // Overall Status
+                VStack(alignment: .trailing, spacing: 2) {
+                    HStack(spacing: 4) {
+                        Image(systemName: overallSystemIcon)
+                            .foregroundColor(overallSystemColor)
+                            .font(.caption)
+                        Text(overallSystemStatus)
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(overallSystemColor)
+                    }
+                    
+                    Text("\(systemHealthStats.total) systems")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+    }
+    
+    private var overallSystemStatus: String {
+        if systemHealthStats.critical > 0 {
+            return "Critical"
+        } else if systemHealthStats.warning > 0 {
+            return "Warning"
+        } else if systemHealthStats.healthy > 0 {
+            return "Healthy"
+        } else {
+            return "No Data"
+        }
+    }
+    
+    private var overallSystemColor: Color {
+        if systemHealthStats.critical > 0 {
+            return .red
+        } else if systemHealthStats.warning > 0 {
+            return .orange
+        } else if systemHealthStats.healthy > 0 {
+            return .green
+        } else {
+            return .secondary
+        }
+    }
+    
+    private var overallSystemIcon: String {
+        if systemHealthStats.critical > 0 {
+            return "exclamationmark.triangle.fill"
+        } else if systemHealthStats.warning > 0 {
+            return "exclamationmark.circle.fill"
+        } else if systemHealthStats.healthy > 0 {
+            return "checkmark.circle.fill"
+        } else {
+            return "questionmark.circle"
         }
     }
 }
@@ -209,6 +354,7 @@ struct BatteryMainSystemsView: View {
             // Main Console and Haptic Array
             if let console = data.battery.console {
                 HStack {
+                    BatteryHealthIndicator(value: console.value)
                     Text("Console:")
                     Spacer()
                     Text("\(console.value) \(console.unit)")
@@ -218,6 +364,7 @@ struct BatteryMainSystemsView: View {
             
             if let haptic = data.battery.hapticArrayBattery {
                 HStack {
+                    BatteryHealthIndicator(value: haptic.value)
                     Text("Haptic Array:")
                     Spacer()
                     Text("\(haptic.value) \(haptic.unit)")
@@ -228,6 +375,7 @@ struct BatteryMainSystemsView: View {
             // Haptic Capacitor - moved up for better visibility
             if let hapticCap = data.battery.hapticArrayCapacitor {
                 HStack {
+                    BatteryHealthIndicator(value: hapticCap.value)
                     Text("Haptic Capacitor:")
                     Spacer()
                     Text("\(hapticCap.value) \(hapticCap.unit)")
@@ -247,6 +395,7 @@ struct BatterySensorSystemsView: View {
             // Sensor Batteries
             if let lightning = data.battery.lightningSensor {
                 HStack {
+                    BatteryHealthIndicator(value: lightning.value)
                     Text("Lightning Sensor:")
                     Spacer()
                     Text(WeatherStatusHelpers.batteryLevelText(lightning.value))
@@ -255,6 +404,7 @@ struct BatterySensorSystemsView: View {
             
             if let rainfall = data.battery.rainfallSensor {
                 HStack {
+                    BatteryHealthIndicator(value: rainfall.value)
                     Text("Rainfall Sensor:")
                     Spacer()
                     Text("\(rainfall.value) \(rainfall.unit)")
@@ -263,6 +413,7 @@ struct BatterySensorSystemsView: View {
             
             if let pm25Ch1 = data.battery.pm25SensorCh1 {
                 HStack {
+                    BatteryHealthIndicator(value: pm25Ch1.value)
                     Text("PM2.5 Ch1:")
                     Spacer()
                     Text(WeatherStatusHelpers.batteryLevelText(pm25Ch1.value))
@@ -271,6 +422,7 @@ struct BatterySensorSystemsView: View {
             
             if let pm25Ch2 = data.battery.pm25SensorCh2 {
                 HStack {
+                    BatteryHealthIndicator(value: pm25Ch2.value)
                     Text("PM2.5 Ch2:")
                     Spacer()
                     Text(WeatherStatusHelpers.batteryLevelText(pm25Ch2.value))
@@ -279,6 +431,7 @@ struct BatterySensorSystemsView: View {
             
             if let th1 = data.battery.tempHumiditySensorCh1 {
                 HStack {
+                    BatteryHealthIndicator(value: th1.value)
                     Text("Temp/Humidity Ch1:")
                     Spacer()
                     Text(WeatherStatusHelpers.tempHumidityBatteryStatusText(th1.value))
@@ -287,6 +440,7 @@ struct BatterySensorSystemsView: View {
             
             if let th2 = data.battery.tempHumiditySensorCh2 {
                 HStack {
+                    BatteryHealthIndicator(value: th2.value)
                     Text("Temp/Humidity Ch2:")
                     Spacer()
                     Text(WeatherStatusHelpers.tempHumidityBatteryStatusText(th2.value))
@@ -295,12 +449,85 @@ struct BatterySensorSystemsView: View {
             
             if let th3 = data.battery.tempHumiditySensorCh3 {
                 HStack {
+                    BatteryHealthIndicator(value: th3.value)
                     Text("Temp/Humidity Ch3:")
                     Spacer()
                     Text(WeatherStatusHelpers.tempHumidityBatteryStatusText(th3.value))
                 }
             }
         }
+    }
+}
+
+struct BatteryHealthIndicator: View {
+    let value: String
+    
+    private var healthStatus: BatteryHealthHelper.BatteryHealth {
+        BatteryHealthHelper.getBatteryHealth(value)
+    }
+    
+    var body: some View {
+        Circle()
+            .fill(healthStatus.color)
+            .frame(width: 12, height: 12)
+            .shadow(color: healthStatus.color.opacity(0.3), radius: 1)
+    }
+}
+
+// MARK: - Battery Health Helper
+struct BatteryHealthHelper {
+    enum HealthLevel {
+        case healthy, warning, critical
+    }
+    
+    struct BatteryHealth {
+        let level: HealthLevel
+        let color: Color
+        let description: String
+    }
+    
+    static func getBatteryHealth(_ value: String) -> BatteryHealth {
+        // Handle voltage values (like console, haptic array)
+        if value.contains(".") || value.contains("V") {
+            let numericValue = Double(value.replacingOccurrences(of: "V", with: "")) ?? 0
+            
+            if numericValue >= 3.0 {
+                return BatteryHealth(level: .healthy, color: .green, description: "Good")
+            } else if numericValue >= 2.5 {
+                return BatteryHealth(level: .warning, color: .orange, description: "Low")
+            } else {
+                return BatteryHealth(level: .critical, color: .red, description: "Critical")
+            }
+        }
+        
+        // Handle temp/humidity sensor status FIRST (before integer parsing)
+        // These sensors return "0" = Normal (Green) or "1" = Low (Orange)
+        if value == "0" {
+            return BatteryHealth(level: .healthy, color: .green, description: "Normal")
+        } else if value == "1" {
+            return BatteryHealth(level: .warning, color: .orange, description: "Low")
+        }
+        
+        // Handle integer values (sensor battery levels 2-6, but NOT 0-1 from temp/humidity)
+        if let intValue = Int(value), intValue >= 2 {
+            switch intValue {
+            case 4...6: // 61-100% + DC Power
+                return BatteryHealth(level: .healthy, color: .green, description: "Good")
+            case 2...3: // 21-60%
+                return BatteryHealth(level: .warning, color: .orange, description: "Low")
+            default:
+                return BatteryHealth(level: .warning, color: .orange, description: "Unknown")
+            }
+        }
+        
+        // Handle other battery sensor levels (0-1 range for non-temp/humidity sensors)
+        if let intValue = Int(value), intValue < 2 {
+            // This would be for PM2.5 or Lightning sensors with 0-1 values (Critical)
+            return BatteryHealth(level: .critical, color: .red, description: "Critical")
+        }
+        
+        // Default case
+        return BatteryHealth(level: .warning, color: .orange, description: "Unknown")
     }
 }
 
