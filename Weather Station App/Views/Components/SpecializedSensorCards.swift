@@ -417,6 +417,16 @@ struct SunTimesView: View {
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
                         }
+                        
+                        HStack {
+                            Text("Day Length:")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Text(tomorrowSunTimes.formattedDayLength)
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                        }
                     }
                 }
             }
