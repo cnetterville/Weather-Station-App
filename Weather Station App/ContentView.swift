@@ -147,52 +147,28 @@ struct ContentView: View {
             print("📱 ContentView appeared - setting up notification listeners")
         }
         .onReceive(NotificationCenter.default.publisher(for: .navigateToStation)) { notification in
-            print("🧭 ContentView received navigateToStation notification")
             // Handle navigation to specific station from menu bar
             if let stationMAC = notification.userInfo?["stationMAC"] as? String,
                let stationIndex = weatherService.weatherStations.firstIndex(where: { $0.macAddress == stationMAC }) {
                 withAnimation(.none) { // Disable animation for menu bar navigation
                     selectedTab = stationIndex
                 }
-                print("🎯 Navigated to station at index: \(stationIndex)")
             }
         }
-        .onReceive(menuBarManager.$shouldActivateApp) { shouldActivate in
-            print("🔄 Received shouldActivateApp: \(shouldActivate)")
+        .onReceive(NotificationCenter.default.publisher(for: .showMainWindow)) { _ in
+            // Handle request to show main window from menubar
+            print("📱 Received showMainWindow notification")
             
-            if shouldActivate {
-                print("🖱️ MenuBar clicked - attempting to show window")
+            // The window should already be visible since this ContentView is displayed
+            // Just ensure the app is activated
+            DispatchQueue.main.async {
+                NSApp.activate(ignoringOtherApps: true)
                 
-                // Reset the flag first
-                menuBarManager.shouldActivateApp = false
-                print("🔄 Reset shouldActivateApp flag to false")
-                
-                // Absolutely minimal approach - no system calls
-                DispatchQueue.main.async {
-                    print("🔍 Looking for windows...")
-                    print("📊 Total windows: \(NSApp.windows.count)")
-                    
-                    // Find any visible window with content
-                    if let window = NSApp.windows.first(where: { 
-                        $0.isVisible && 
-                        $0.contentViewController != nil && 
-                        $0.frame.width > 500 
-                    }) {
-                        
-                        print("🎯 Found window: '\(window.title)' - bringing to front")
-                        
-                        // Only use the most basic window operations
-                        window.orderFront(nil)  // Simplest bring-to-front call
-                        
-                        print("✅ Window order changed")
-                        
-                    } else {
-                        print("❌ No suitable window found")
-                        // Debug: show all windows
-                        for (i, window) in NSApp.windows.enumerated() {
-                            print("  Window \(i): '\(window.title)' visible:\(window.isVisible) hasContent:\(window.contentViewController != nil) width:\(window.frame.width)")
-                        }
-                    }
+                if let window = NSApp.mainWindow {
+                    window.makeKeyAndOrderFront(nil)
+                    print("✅ Activated main window from ContentView")
+                } else {
+                    print("⚠️ No main window found in ContentView")
                 }
             }
         }
@@ -240,6 +216,7 @@ struct ContentView: View {
             }
         }
         .onDisappear {
+            print("📱 ContentView disappeared - stopping auto-refresh")
             stopAutoRefresh()
         }
         .alert("Error", isPresented: .constant(weatherService.errorMessage != nil)) {
@@ -256,8 +233,14 @@ struct ContentView: View {
         
         guard autoRefreshEnabled && !weatherService.weatherStations.isEmpty else { return }
         
-        autoRefreshTimer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { timer in
+        autoRefreshTimer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak weatherService] timer in
             print("🔄 Auto-refresh timer fired at \(Date())")
+            
+            guard let weatherService = weatherService else {
+                print("❌ WeatherService deallocated, stopping timer")
+                timer.invalidate()
+                return
+            }
             
             if !weatherService.isLoading {
                 Task { @MainActor in
@@ -288,15 +271,15 @@ struct ContentView: View {
             print("🔄 Smart auto-refresh started: every \(seconds) second\(seconds == 1 ? "" : "s") at \(Date())")
         }
         
-        // Add timer validation
+        // Add timer validation - capture autoRefreshTimer and autoRefreshEnabled by value
+        let currentTimer = autoRefreshTimer
+        let refreshEnabled = autoRefreshEnabled
         DispatchQueue.main.asyncAfter(deadline: .now() + refreshInterval + 30) {
-            if let timer = autoRefreshTimer, timer.isValid {
+            if let timer = currentTimer, timer.isValid {
                 print("✅ Auto-refresh timer is still valid after first cycle")
             } else {
-                print("❌ Auto-refresh timer became invalid - restarting")
-                if autoRefreshEnabled {
-                    startAutoRefresh()
-                }
+                print("❌ Auto-refresh timer became invalid - checking if restart needed")
+                // Note: We can't restart from here since we can't capture self weakly in a struct
             }
         }
     }

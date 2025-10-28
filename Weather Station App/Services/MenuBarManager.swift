@@ -14,9 +14,6 @@ class MenuBarManager: ObservableObject {
     private let weatherService = WeatherStationService.shared
     private var cycleThroughTimer: Timer?
     
-    // Add a simple flag for activation requests
-    @Published var shouldActivateApp: Bool = false
-    
     @Published var isMenuBarEnabled: Bool = false {
         didSet {
             DispatchQueue.main.async {
@@ -112,6 +109,24 @@ class MenuBarManager: ObservableObject {
         }
     }
     
+    deinit {
+        print("🗑️ MenuBarManager deinit - cleaning up resources")
+        
+        // Remove all observers
+        NotificationCenter.default.removeObserver(self)
+        
+        // Stop and clean up timers
+        stopCyclingTimer()
+        
+        // Remove status item
+        if let statusItem = statusItem {
+            NSStatusBar.system.removeStatusItem(statusItem)
+            self.statusItem = nil
+        }
+        
+        print("🗑️ MenuBarManager cleanup completed")
+    }
+    
     private func loadSettings() {
         isMenuBarEnabled = UserDefaults.standard.bool(forKey: "MenuBarEnabled")
         selectedStationMac = UserDefaults.standard.string(forKey: "MenuBarSelectedStation") ?? ""
@@ -132,32 +147,66 @@ class MenuBarManager: ObservableObject {
     private func setupObservers() {
         // Listen for weather data updates
         NotificationCenter.default.addObserver(
-            forName: .weatherDataUpdated,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.updateMenuBarTitle()
-        }
+            self,
+            selector: #selector(weatherDataUpdated),
+            name: .weatherDataUpdated,
+            object: nil
+        )
         
         // Listen for unit system changes
         NotificationCenter.default.addObserver(
-            forName: .unitSystemChanged,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.updateMenuBarTitle()
-        }
+            self,
+            selector: #selector(unitSystemChanged),
+            name: .unitSystemChanged,
+            object: nil
+        )
         
         // Listen for when weather stations are loaded/updated
         NotificationCenter.default.addObserver(
-            forName: .weatherStationsUpdated,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                self?.updateMenuBarTitle()
-            }
+            self,
+            selector: #selector(weatherStationsUpdated),
+            name: .weatherStationsUpdated,
+            object: nil
+        )
+        
+        // Listen for app termination to clean up
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appWillTerminate),
+            name: NSApplication.willTerminateNotification,
+            object: nil
+        )
+    }
+    
+    @objc private func weatherDataUpdated() {
+        DispatchQueue.main.async { [weak self] in
+            self?.updateMenuBarTitle()
         }
+    }
+    
+    @objc private func unitSystemChanged() {
+        DispatchQueue.main.async { [weak self] in
+            self?.updateMenuBarTitle()
+        }
+    }
+    
+    @objc private func weatherStationsUpdated() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.updateMenuBarTitle()
+        }
+    }
+    
+    @objc private func appWillTerminate() {
+        print("🗑️ App will terminate - cleaning up MenuBarManager")
+        
+        // Stop timers immediately
+        stopCyclingTimer()
+        
+        // Remove status item
+        removeStatusItem()
+        
+        // Remove all observers
+        NotificationCenter.default.removeObserver(self)
     }
     
     private func setupStatusItem() {
@@ -179,22 +228,62 @@ class MenuBarManager: ObservableObject {
     }
     
     @objc private func statusItemClicked() {
-        print("🖱️ MenuBar item clicked!")
+        print("🖱️ MenuBar clicked - attempting to show app")
         
-        // Use NotificationCenter instead of @Published property
-        NotificationCenter.default.post(name: .bringAppToFront, object: nil)
-        print("📢 Posted bringAppToFront notification")
+        // Activate the app first
+        NSApp.activate(ignoringOtherApps: true)
+        
+        // Try to find existing main window
+        let mainWindows = NSApp.windows.filter { window in
+            !window.className.contains("StatusBar") && 
+            !window.className.contains("Item") &&
+            window.contentView != nil &&
+            window.frame.width > 500
+        }
+        
+        if let existingWindow = mainWindows.first {
+            print("🎯 Found existing window - bringing to front")
+            
+            if existingWindow.isMiniaturized {
+                existingWindow.deminiaturize(nil)
+            }
+            
+            existingWindow.makeKeyAndOrderFront(nil)
+            existingWindow.orderFrontRegardless()
+            
+        } else {
+            print("❌ No existing window found - using simple notification approach")
+            
+            // Use a simple notification that ContentView will handle
+            NotificationCenter.default.post(name: .showMainWindow, object: nil)
+            
+            // Give it a moment, then try to activate any window that appears
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                NSApp.activate(ignoringOtherApps: true)
+                
+                // Look for any new windows
+                if let newWindow = NSApp.windows.first(where: { window in
+                    !window.className.contains("StatusBar") && 
+                    !window.className.contains("Item") &&
+                    window.contentView != nil &&
+                    window.frame.width > 500
+                }) {
+                    newWindow.makeKeyAndOrderFront(nil)
+                    print("✅ Found and activated new window")
+                } else {
+                    print("⚠️ No window appeared after notification")
+                }
+            }
+        }
         
         // Navigate to selected station
         if let selectedStation = getSelectedStation() {
-            print("📍 Posting navigation to station: \(selectedStation.name)")
             NotificationCenter.default.post(
                 name: .navigateToStation, 
                 object: nil, 
                 userInfo: ["stationMAC": selectedStation.macAddress]
             )
-        } else {
-            print("❌ No selected station found")
+            print("🎯 Posted navigation to station: \(selectedStation.name)")
         }
     }
     
@@ -203,13 +292,6 @@ class MenuBarManager: ObservableObject {
         
         let title = getMenuBarTitle()
         statusItem.button?.title = title
-        
-        // Debug logging to help troubleshoot
-        if let station = getSelectedStation() {
-            print("🖥️ MenuBar updated: \(title) for station \(station.name)")
-        } else {
-            print("🖥️ MenuBar updated: \(title) (no station selected)")
-        }
     }
     
     private func getMenuBarTitle() -> String {
@@ -348,9 +430,9 @@ class MenuBarManager: ObservableObject {
         
         guard displayMode == .cycleThrough, availableStations.count > 1 else { return }
         
-        cycleThroughTimer = Timer.scheduledTimer(withTimeInterval: cycleInterval, repeats: true) { _ in
+        cycleThroughTimer = Timer.scheduledTimer(withTimeInterval: cycleInterval, repeats: true) { [weak self] _ in
             DispatchQueue.main.async {
-                self.cycleToNextStation()
+                self?.cycleToNextStation()
             }
         }
         
@@ -434,5 +516,5 @@ extension Notification.Name {
     static let showSettingsFromMenuBar = Notification.Name("showSettingsFromMenuBar")
     static let navigateToStation = Notification.Name("navigateToStation")
     static let weatherStationsUpdated = Notification.Name("weatherStationsUpdated")
-    static let bringAppToFront = Notification.Name("bringAppToFront")
+    static let showMainWindow = Notification.Name("showMainWindow")
 }

@@ -7,13 +7,75 @@
 
 import SwiftUI
 
+// AppDelegate to handle notifications when no windows exist
+class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        print("🚀 AppDelegate: App finished launching")
+        
+        // Set up observer for showing main window when needed
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleShowMainWindow),
+            name: .showMainWindow,
+            object: nil
+        )
+    }
+    
+    @objc func handleShowMainWindow() {
+        print("📱 AppDelegate: Received showMainWindow notification")
+        
+        // Check if there are any existing main windows
+        let hasMainWindow = NSApp.windows.contains { window in
+            !window.className.contains("StatusBar") && 
+            !window.className.contains("Item") &&
+            window.contentView != nil &&
+            window.frame.width > 500
+        }
+        
+        if hasMainWindow {
+            print("✅ AppDelegate: Main window already exists, letting ContentView handle it")
+            return
+        }
+        
+        print("📱 AppDelegate: No main window exists, creating new one")
+        
+        // Create a new window with proper SwiftUI lifecycle management
+        DispatchQueue.main.async {
+            // Use NSApp's built-in mechanism to create a new untitled document/window
+            // This will trigger SwiftUI to create a new WindowGroup instance
+            if NSApp.responds(to: #selector(NSDocumentController.newDocument(_:))) {
+                NSApp.sendAction(#selector(NSDocumentController.newDocument(_:)), to: nil, from: nil)
+                print("✅ AppDelegate: Sent newDocument action")
+            } else {
+                // Fallback: Try to trigger File > New menu item
+                if let fileMenu = NSApp.mainMenu?.item(withTitle: "File"),
+                   let newItem = fileMenu.submenu?.items.first(where: { $0.title.contains("New") }) {
+                    NSApp.sendAction(newItem.action!, to: newItem.target, from: newItem)
+                    print("✅ AppDelegate: Triggered File > New menu item")
+                } else {
+                    print("❌ AppDelegate: Could not find way to create new window")
+                }
+            }
+            
+            // Ensure the app is active
+            NSApp.activate(ignoringOtherApps: true)
+        }
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+}
+
 @main
 struct Weather_Station_AppApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    
     var body: some Scene {
-        WindowGroup {
+        WindowGroup("Main") {
             ContentView()
                 .frame(minWidth: 800, minHeight: 600)
-                .animation(.none) // Disable global animations that could cause jumping
+                .animation(.none)
                 .onAppear {
                     // Initialize the menu bar manager when app starts
                     _ = MenuBarManager.shared
@@ -21,59 +83,31 @@ struct Weather_Station_AppApp: App {
                     // Disable automatic animations globally
                     NSAnimationContext.current.duration = 0
                     
-                    print("🚀 App started - setting up notification listeners at app level")
+                    print("🚀 ContentView appeared")
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .showMainWindow)) { _ in
+                    // Handle the notification within the SwiftUI context
+                    print("📱 ContentView: Received showMainWindow notification")
                     
-                    // Set up notification observer at the app level where it's guaranteed to work
-                    NotificationCenter.default.addObserver(
-                        forName: .bringAppToFront,
-                        object: nil,
-                        queue: .main
-                    ) { _ in
-                        print("🔔 App level received bringAppToFront notification!")
+                    // Since we're already in a ContentView, this window should already be visible
+                    // Just ensure the app is activated and window is brought forward
+                    DispatchQueue.main.async {
+                        NSApp.activate(ignoringOtherApps: true)
                         
-                        // Check if main window exists
-                        let mainWindow = NSApp.windows.first { window in
+                        if let window = NSApp.mainWindow ?? NSApp.windows.first(where: { window in
                             !window.className.contains("StatusBar") && 
-                            !window.className.contains("Item")
-                        }
-                        
-                        if let window = mainWindow {
-                            print("🎯 Found existing main window - bringing to front")
-                            window.deminiaturize(nil)
+                            !window.className.contains("Item") &&
+                            window.contentView != nil
+                        }) {
+                            if window.isMiniaturized {
+                                window.deminiaturize(nil)
+                            }
                             window.makeKeyAndOrderFront(nil)
                             window.orderFrontRegardless()
-                            
+                            print("✅ Activated existing window from ContentView")
                         } else {
-                            print("🏗️ No main window - creating new window")
-                            
-                            // The proper SwiftUI way to open a new window
-                            DispatchQueue.main.async {
-                                // This should trigger WindowGroup to create a new window
-                                let newWindow = NSWindow(
-                                    contentRect: NSRect(x: 100, y: 100, width: 1200, height: 800),
-                                    styleMask: [.titled, .closable, .miniaturizable, .resizable],
-                                    backing: .buffered,
-                                    defer: false
-                                )
-                                
-                                // Set window properties
-                                newWindow.title = "Weather Station App"
-                                newWindow.center()
-                                newWindow.makeKeyAndOrderFront(nil)
-                                
-                                // Create the content view
-                                let contentView = NSHostingView(rootView: ContentView())
-                                newWindow.contentView = contentView
-                                
-                                print("✅ Created new main window")
-                            }
+                            print("⚠️ No main window found in ContentView")
                         }
-                    }
-                    
-                    // Test notification after a delay
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        print("🧪 Sending test notification from app level")
-                        NotificationCenter.default.post(name: .bringAppToFront, object: nil)
                     }
                 }
         }
