@@ -203,10 +203,13 @@ struct SettingsView: View {
                                         Toggle("Show rain icon when raining", isOn: $menuBarManager.showRainIcon)
                                             .toggleStyle(.checkbox)
                                         
-                                        Toggle("Show sun icon for high UV (3+)", isOn: $menuBarManager.showUVIcon)
+                                        Toggle("Show sun icon for high solar (600+ W/m²)", isOn: $menuBarManager.showUVIcon)
                                             .toggleStyle(.checkbox)
                                         
-                                        Toggle("Show moon icon at night", isOn: $menuBarManager.showNightIcon)
+                                        Toggle("Show cloud icon for moderate solar", isOn: $menuBarManager.showCloudyIcon)
+                                            .toggleStyle(.checkbox)
+                                        
+                                        Toggle("Show moon icon at night (<50 W/m²)", isOn: $menuBarManager.showNightIcon)
                                             .toggleStyle(.checkbox)
                                         
                                         // Custom menubar labels section
@@ -734,18 +737,21 @@ struct SettingsView: View {
         let activeStations = menuBarManager.availableStations
         let sampleTemp = menuBarManager.showDecimals ? "72.3°F" : "72°F"
         
-        // Show sample icons based on settings (different conditions for demo)
+        // Show sample icons based on settings and priority (rain > UV > cloudy > night)
         let sampleIcons = [
-            menuBarManager.showRainIcon ? "💧" : "",
-            menuBarManager.showUVIcon ? "☀️" : "",
-            menuBarManager.showNightIcon ? "🌙" : ""
-        ].filter { !$0.isEmpty }
+            menuBarManager.showRainIcon ? "💧" : nil,
+            menuBarManager.showUVIcon ? "☀️" : nil,
+            menuBarManager.showCloudyIcon ? "☁️" : nil,
+            menuBarManager.showNightIcon ? "🌙" : nil
+        ].compactMap { $0 }
+        
+        let weatherIcon = sampleIcons.first ?? ""
+        let displayIcon = weatherIcon.isEmpty ? "" : "\(weatherIcon) "
         
         switch menuBarManager.displayMode {
         case .singleStation:
             if let station = activeStations.first {
                 let label = station.displayLabelForMenuBar
-                let weatherIcon = sampleIcons.first ?? ""
                 if menuBarManager.showStationName {
                     return "\(label): \(weatherIcon)\(sampleTemp)"
                 } else {
@@ -759,8 +765,8 @@ struct SettingsView: View {
                     let shortLabel = label.count > 4 ? String(label.prefix(4)) + ":" : label + ":"
                     // Show different icons for different stations in preview
                     let iconIndex = index < sampleIcons.count ? index : 0
-                    let weatherIcon = sampleIcons.count > iconIndex ? sampleIcons[iconIndex] : ""
-                    return "\(shortLabel)\(weatherIcon)\(sampleTemp)"
+                    let stationIcon = sampleIcons.count > iconIndex ? sampleIcons[iconIndex] : ""
+                    return "\(shortLabel)\(stationIcon)\(sampleTemp)"
                 }
                 let preview = samples.joined(separator: " | ")
                 return activeStations.count > 3 ? preview + " | ..." : preview
@@ -768,7 +774,6 @@ struct SettingsView: View {
         case .cycleThrough:
             if let station = activeStations.first {
                 let label = station.displayLabelForMenuBar
-                let weatherIcon = sampleIcons.first ?? ""
                 if menuBarManager.showStationName {
                     return "\(label): \(weatherIcon)\(sampleTemp)"
                 } else {

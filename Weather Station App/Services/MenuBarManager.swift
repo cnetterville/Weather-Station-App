@@ -116,6 +116,15 @@ class MenuBarManager: ObservableObject {
             }
         }
     }
+    
+    @Published var showCloudyIcon: Bool = true {
+        didSet {
+            UserDefaults.standard.set(showCloudyIcon, forKey: "MenuBarShowCloudyIcon")
+            DispatchQueue.main.async {
+                self.updateMenuBarTitle()
+            }
+        }
+    }
 
     // For cycling through stations
     private var currentCycleIndex = 0
@@ -172,6 +181,7 @@ class MenuBarManager: ObservableObject {
         showRainIcon = UserDefaults.standard.object(forKey: "MenuBarShowRainIcon") as? Bool ?? true
         showUVIcon = UserDefaults.standard.object(forKey: "MenuBarShowUVIcon") as? Bool ?? true
         showNightIcon = UserDefaults.standard.bool(forKey: "MenuBarShowNightIcon")
+        showCloudyIcon = UserDefaults.standard.object(forKey: "MenuBarShowCloudyIcon") as? Bool ?? true
         
         if let modeRawValue = UserDefaults.standard.object(forKey: "MenuBarTemperatureMode") as? String,
            let mode = MenuBarTemperatureMode(rawValue: modeRawValue) {
@@ -519,6 +529,10 @@ class MenuBarManager: ObservableObject {
         return "🌙" // Moon emoji
     }
     
+    private func getCloudyIconString() -> String {
+        return "☁️" // Cloud emoji
+    }
+    
     private func isRaining(_ weatherData: WeatherStationData) -> Bool {
         // Check piezo rain gauge rate - if it's > 0, it's currently raining
         let rainRateString = weatherData.rainfallPiezo.rainRate.value
@@ -536,29 +550,40 @@ class MenuBarManager: ObservableObject {
     }
     
     private func hasSignificantUV(_ weatherData: WeatherStationData) -> Bool {
-        let uviString = weatherData.solarAndUvi.uvi.value
-        guard let uviValue = Double(uviString) else {
+        let solarString = weatherData.solarAndUvi.solar.value
+        guard let solarValue = Double(solarString) else {
             return false
         }
         
-        // Use UV index 3+ (Moderate and above) as threshold
-        // This avoids showing sun icon at night when UV is 0
-        // and focuses on times when UV protection is recommended
-        return uviValue >= 3.0
+        // Use solar radiation instead of UV index for more accurate detection
+        // Clear sunny conditions: 600+ W/m² (typical peak solar radiation)
+        // This provides more responsive and accurate sunny weather detection
+        return solarValue >= 600.0
     }
     
     private func isNightTime(_ weatherData: WeatherStationData) -> Bool {
-        let uviString = weatherData.solarAndUvi.uvi.value
         let solarString = weatherData.solarAndUvi.solar.value
         
-        guard let uviValue = Double(uviString),
-              let solarValue = Double(solarString) else {
+        guard let solarValue = Double(solarString) else {
             return false
         }
         
-        // Consider it nighttime if both UV index is 0 AND solar radiation is very low
-        // This helps distinguish true nighttime from cloudy/indoor conditions
-        return uviValue == 0.0 && solarValue < 10.0 // Very low solar radiation threshold
+        // Use solar radiation for nighttime detection
+        // Very low solar radiation indicates true nighttime
+        return solarValue < 50.0 // Nighttime threshold
+    }
+    
+    private func isCloudyDaytime(_ weatherData: WeatherStationData) -> Bool {
+        let solarString = weatherData.solarAndUvi.solar.value
+        
+        guard let solarValue = Double(solarString) else {
+            return false
+        }
+        
+        // Cloudy/overcast daytime: moderate solar radiation
+        // Between nighttime threshold and sunny threshold
+        // 50-600 W/m² range indicates daylight but not clear/sunny
+        return solarValue >= 50.0 && solarValue < 600.0
     }
     
     // MARK: - Weather Icon Helpers (Priority-based)
@@ -569,12 +594,17 @@ class MenuBarManager: ObservableObject {
             return getRainIconString()
         }
         
-        // Priority 2: High UV (only during daytime)
+        // Priority 2: High UV (sunny conditions)
         if showUVIcon && hasSignificantUV(weatherData) {
             return getUVIconString()
         }
         
-        // Priority 3: Night time (lowest priority)
+        // Priority 3: Cloudy daytime (overcast but still daylight)
+        if showCloudyIcon && isCloudyDaytime(weatherData) {
+            return getCloudyIconString()
+        }
+        
+        // Priority 4: Night time (lowest priority)
         if showNightIcon && isNightTime(weatherData) {
             return getNightIconString()
         }
