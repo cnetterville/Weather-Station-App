@@ -1058,6 +1058,18 @@ struct SunTimesView: View {
                     .fontWeight(.semibold)
             }
             
+            // Daylight left
+            HStack {
+                Text("Daylight Left:")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Text(sunTimes.formattedDaylightLeft)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(sunTimes.daylightLeft != nil ? .orange : .secondary)
+            }
+            
             // Tomorrow's sunrise and sunset
             if let latitude = station.latitude, let longitude = station.longitude {
                 let calendar = Calendar.current

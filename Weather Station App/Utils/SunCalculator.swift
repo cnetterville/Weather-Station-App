@@ -33,6 +33,34 @@ struct SunTimes {
         return String(format: "%dh %02dm", hours, minutes)
     }
     
+    /// Calculate time remaining until sunset (daylight left)
+    var daylightLeft: TimeInterval? {
+        let now = Date()
+        
+        // Only return daylight left if it's currently daytime
+        if isCurrentlyDaylight && now <= sunset {
+            return sunset.timeIntervalSince(now)
+        }
+        
+        return nil
+    }
+    
+    /// Formatted string for daylight remaining
+    var formattedDaylightLeft: String {
+        guard let daylightRemaining = daylightLeft else {
+            return "Night time"
+        }
+        
+        let hours = Int(daylightRemaining / 3600)
+        let minutes = Int((daylightRemaining.truncatingRemainder(dividingBy: 3600)) / 60)
+        
+        if hours > 0 {
+            return String(format: "%dh %02dm", hours, minutes)
+        } else {
+            return String(format: "%dm", minutes)
+        }
+    }
+    
     var isCurrentlyDaylight: Bool {
         let now = Date()
         
