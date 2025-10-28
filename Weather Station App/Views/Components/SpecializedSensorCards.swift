@@ -340,7 +340,10 @@ struct SunTimesView: View {
                 Spacer()
             }
             
-            Divider()
+            // Sun Position Arc
+            SunPositionArc(sunTimes: sunTimes)
+                .frame(height: 50)
+                .padding(.vertical, 4)
             
             // Sunrise and sunset times
             HStack {
@@ -439,6 +442,107 @@ struct SunTimesView: View {
         formatter.timeStyle = .short
         formatter.timeZone = timeZone
         return formatter.string(from: date)
+    }
+}
+
+struct SunPositionArc: View {
+    let sunTimes: SunTimes
+    
+    private var sunPosition: CGFloat {
+        let now = Date()
+        
+        // If before sunrise or after sunset, show sun below horizon
+        if now < sunTimes.sunrise {
+            return 0 // Before sunrise - sun at left edge (below horizon)
+        } else if now > sunTimes.sunset {
+            return 1 // After sunset - sun at right edge (below horizon)
+        } else {
+            // During the day - calculate position along arc
+            let totalDaylight = sunTimes.sunset.timeIntervalSince(sunTimes.sunrise)
+            let timeSinceSunrise = now.timeIntervalSince(sunTimes.sunrise)
+            return CGFloat(timeSinceSunrise / totalDaylight)
+        }
+    }
+    
+    private var isDaytime: Bool {
+        let now = Date()
+        return now >= sunTimes.sunrise && now <= sunTimes.sunset
+    }
+    
+    var body: some View {
+        GeometryReader { geometry in
+            let width = geometry.size.width
+            let height = geometry.size.height
+            let arcHeight = height * 0.7
+            
+            ZStack {
+                // Background arc representing the sun's path
+                Path { path in
+                    path.move(to: CGPoint(x: 0, y: height))
+                    path.addQuadCurve(
+                        to: CGPoint(x: width, y: height),
+                        control: CGPoint(x: width / 2, y: height - arcHeight)
+                    )
+                }
+                .stroke(Color.secondary.opacity(0.3), lineWidth: 2)
+                
+                // Daylight portion of the arc (if currently daylight)
+                if isDaytime {
+                    Path { path in
+                        path.move(to: CGPoint(x: 0, y: height))
+                        
+                        let endX = width * sunPosition
+                        let controlX = endX / 2
+                        let controlY = height - (arcHeight * sin(.pi * sunPosition))
+                        
+                        path.addQuadCurve(
+                            to: CGPoint(x: endX, y: height),
+                            control: CGPoint(x: controlX, y: controlY)
+                        )
+                    }
+                    .stroke(
+                        LinearGradient(
+                            gradient: Gradient(colors: [.orange, .yellow]),
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        lineWidth: 3
+                    )
+                }
+                
+                // Sun position indicator
+                let sunX = width * sunPosition
+                let sunY = isDaytime ? 
+                    height - (arcHeight * sin(.pi * sunPosition)) : 
+                    height + 5 // Below horizon when not daylight
+                
+                Circle()
+                    .fill(isDaytime ? .yellow : .gray)
+                    .frame(width: 12, height: 12)
+                    .position(x: sunX, y: sunY)
+                    .shadow(color: isDaytime ? .yellow.opacity(0.6) : .clear, radius: 2)
+                
+                // Sunrise marker
+                Circle()
+                    .fill(.orange)
+                    .frame(width: 6, height: 6)
+                    .position(x: 0, y: height)
+                
+                // Sunset marker  
+                Circle()
+                    .fill(.red)
+                    .frame(width: 6, height: 6)
+                    .position(x: width, y: height)
+                
+                // Current time indicator (optional - shows exact current time)
+                if isDaytime {
+                    Rectangle()
+                        .fill(.primary.opacity(0.5))
+                        .frame(width: 1, height: 8)
+                        .position(x: sunX, y: height + 8)
+                }
+            }
+        }
     }
 }
 
