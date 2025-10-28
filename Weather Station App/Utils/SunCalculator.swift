@@ -37,8 +37,8 @@ struct SunTimes {
     var daylightLeft: TimeInterval? {
         let now = Date()
         
-        // Only return daylight left if it's currently daytime
-        if isCurrentlyDaylight && now <= sunset {
+        // Only return daylight left if it's currently daytime and before sunset
+        if now >= sunrise && now <= sunset {
             return sunset.timeIntervalSince(now)
         }
         
@@ -63,24 +63,7 @@ struct SunTimes {
     
     var isCurrentlyDaylight: Bool {
         let now = Date()
-        
-        // Convert all times to the station's timezone for proper comparison
-        var calendar = Calendar.current
-        calendar.timeZone = timeZone
-        
-        let nowInStationTZ = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: now)
-        let sunriseInStationTZ = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: sunrise)
-        let sunsetInStationTZ = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: sunset)
-        
-        // Create comparable times (same date, different times)
-        guard let nowTime = calendar.date(from: nowInStationTZ),
-              let sunriseTime = calendar.date(from: sunriseInStationTZ),
-              let sunsetTime = calendar.date(from: sunsetInStationTZ) else {
-            // Fallback to simple comparison
-            return now >= sunrise && now <= sunset
-        }
-        
-        return nowTime >= sunriseTime && nowTime <= sunsetTime
+        return now >= sunrise && now <= sunset
     }
 }
 
