@@ -59,7 +59,7 @@ struct SunStrengthIndicator: View {
         min(solarRadiation / maxSolarRadiation, 1.0)
     }
     
-    private var intensityLevel: SolarIntensityLevel {
+    private var intensityLevel: SunStrengthIndicator.SolarIntensityLevel {
         switch solarRadiation {
         case 0...200: return .veryLow
         case 201...400: return .low
@@ -1476,7 +1476,7 @@ struct MoonTimesView: View {
                             .foregroundColor(.secondary)
                     }
                     if let moonrise = moonTimes.moonrise {
-                        Text(formatTime(moonrise))
+                        Text(formatTimeInTimeZone(moonrise, timeZone: timeZone))
                             .font(.title3)
                             .fontWeight(.bold)
                     } else {
@@ -1497,7 +1497,7 @@ struct MoonTimesView: View {
                             .foregroundColor(.purple)
                     }
                     if let moonset = moonTimes.moonset {
-                        Text(formatTime(moonset))
+                        Text(formatTimeInTimeZone(moonset, timeZone: timeZone))
                             .font(.title3)
                             .fontWeight(.bold)
                     } else {
@@ -1507,14 +1507,31 @@ struct MoonTimesView: View {
                     }
                 }
             }
+            
+            // Show current timezone name (accounts for daylight saving)
+            Text("Times shown in \(getCurrentTimeZoneName())")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .italic()
         }
     }
     
-    private func formatTime(_ date: Date) -> String {
+    private func formatTimeInTimeZone(_ date: Date, timeZone: TimeZone) -> String {
         let formatter = DateFormatter()
         formatter.timeStyle = .short
         formatter.timeZone = timeZone
         return formatter.string(from: date)
+    }
+    
+    private func getCurrentTimeZoneName() -> String {
+        // Get the current timezone name accounting for daylight saving
+        if timeZone.isDaylightSavingTime(for: Date()) {
+            // Use daylight saving name (e.g., "CDT")
+            return timeZone.localizedName(for: .daylightSaving, locale: .current) ?? timeZone.abbreviation(for: Date()) ?? "Local Time"
+        } else {
+            // Use standard time name (e.g., "CST")
+            return timeZone.localizedName(for: .standard, locale: .current) ?? timeZone.abbreviation(for: Date()) ?? "Local Time"
+        }
     }
 }
 
@@ -1559,7 +1576,6 @@ struct LunarLocationRequiredView: View {
 }
 
 // MARK: - Moon Calculation System
-
 struct MoonPhase {
     let name: String
     let illumination: Double // 0.0 to 1.0
@@ -1577,20 +1593,15 @@ struct MoonTimes {
 class MoonCalculator {
     
     static func getCurrentMoonPhase(for date: Date, timeZone: TimeZone = .current) -> MoonPhase {
-        let calendar = Calendar.current
+        // Convert date to Julian Day
+        let julianDay = dateToJulianDay(date)
         
-        // Reference: New moon on January 1, 2000
-        let referenceDate = DateComponents(year: 2000, month: 1, day: 6, hour: 18, minute: 14)
-        let referenceMoonDate = calendar.date(from: referenceDate) ?? date
+        // Calculate moon phase
+        let phase = calculateMoonPhase(julianDay: julianDay)
+        let illumination = 0.5 * (1 - cos(2 * .pi * phase))
         
-        // Lunar cycle is approximately 29.53059 days
-        let lunarCycle = 29.53059
-        let daysSinceReference = date.timeIntervalSince(referenceMoonDate) / (24 * 60 * 60)
-        let cyclePosition = daysSinceReference.truncatingRemainder(dividingBy: lunarCycle)
-        let normalizedPosition = cyclePosition / lunarCycle
-        
-        let age = Int(cyclePosition)
-        let illumination = 0.5 * (1 - cos(2 * .pi * normalizedPosition))
+        // Calculate age in days (moon cycle is ~29.53 days)
+        let age = Int(phase * 29.53)
         
         let (name, isWaxing, nextPhase, daysToNext) = getMoonPhaseInfo(age: age, illumination: illumination)
         
@@ -1605,34 +1616,170 @@ class MoonCalculator {
     }
     
     static func calculateMoonTimes(for date: Date, latitude: Double, longitude: Double, timeZone: TimeZone) -> MoonTimes? {
-        // Simplified moon rise/set calculation
-        // In a production app, you'd want to use a more accurate astronomical library
+        // Set up calendar for the specific timezone
+        var calendar = Calendar.current
+        calendar.timeZone = timeZone
         
-        let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: date)
+        var moonrise: Date?
+        var moonset: Date?
+        var previousAltitude: Double?
         
-        // Approximate moonrise and moonset times based on lunar position
-        let moonPhase = getCurrentMoonPhase(for: date, timeZone: timeZone)
+        print("🌙 Calculating moon times for date: \(date)")
+        print("🌙 Start of day in timezone: \(startOfDay)")
+        print("🌙 Latitude: \(latitude), Longitude: \(longitude)")
+        print("🌙 TimeZone: \(timeZone.identifier)")
         
-        // Moon rises approximately 50 minutes later each day
-        let daysInCycle = Double(moonPhase.age)
-        let baseRiseTime = 6.0 // 6 AM base
-        let riseDelay = (daysInCycle * 50.0) / 60.0 // Convert minutes to hours
-        let adjustedRiseTime = (baseRiseTime + riseDelay).truncatingRemainder(dividingBy: 24)
+        // Check every 30 minutes throughout the day for more precision
+        for halfHour in 0..<48 {
+            let currentTime = startOfDay.addingTimeInterval(Double(halfHour) * 1800) // 30 minutes = 1800 seconds
+            let currentAltitude = calculateMoonAltitude(for: currentTime, latitude: latitude, longitude: longitude, timeZone: timeZone)
+            
+            if let prevAlt = previousAltitude {
+                // Moonrise: altitude changes from negative to positive
+                if prevAlt < 0 && currentAltitude >= 0 && moonrise == nil {
+                    // Interpolate to find more precise time
+                    let ratio = -prevAlt / (currentAltitude - prevAlt)
+                    moonrise = currentTime.addingTimeInterval(-1800 + ratio * 1800)
+                    print("🌙 Found moonrise at: \(moonrise!)")
+                }
+                
+                // Moonset: altitude changes from positive to negative
+                if prevAlt >= 0 && currentAltitude < 0 && moonset == nil {
+                    // Interpolate to find more precise time
+                    let ratio = -prevAlt / (currentAltitude - prevAlt)
+                    moonset = currentTime.addingTimeInterval(-1800 + ratio * 1800)
+                    print("🌙 Found moonset at: \(moonset!)")
+                }
+            }
+            
+            previousAltitude = currentAltitude
+            
+            // Debug: Print altitude for troubleshooting
+            if halfHour % 4 == 0 { // Every 2 hours
+                let formatter = DateFormatter()
+                formatter.timeStyle = .short
+                formatter.timeZone = timeZone
+                print("🌙 \(formatter.string(from: currentTime)): Moon altitude = \(String(format: "%.2f", currentAltitude))°")
+            }
+        }
         
-        let setTime = (adjustedRiseTime + 12.0).truncatingRemainder(dividingBy: 24)
+        return MoonTimes(moonrise: moonrise, moonset: moonset)
+    }
+    
+    private static func dateToJulianDay(_ date: Date) -> Double {
+        // Convert to Julian Day (standard astronomical calculation)
+        let timeInterval = date.timeIntervalSince1970
+        let julianDay = (timeInterval / 86400.0) + 2440587.5
+        return julianDay
+    }
+    
+    private static func calculateMoonPhase(julianDay: Double) -> Double {
+        // Calculate moon phase based on Julian Day
+        // Reference: January 6, 2000 was a new moon
+        let newMoonReference = 2451550.1  // JD of new moon on Jan 6, 2000
+        let lunarCycle = 29.53058867      // Average lunar month in days
         
-        let moonrise = startOfDay.addingTimeInterval(adjustedRiseTime * 3600)
-        let moonset = startOfDay.addingTimeInterval(setTime * 3600)
+        let daysSinceNewMoon = julianDay - newMoonReference
+        let cyclesSinceNewMoon = daysSinceNewMoon / lunarCycle
+        let phasePosition = cyclesSinceNewMoon - floor(cyclesSinceNewMoon)
         
-        // Sometimes moon doesn't rise or set on a given day
-        let shouldShowRise = daysInCycle < 25
-        let shouldShowSet = daysInCycle > 4
+        return phasePosition
+    }
+    
+    private static func calculateMoonAltitude(for date: Date, latitude: Double, longitude: Double, timeZone: TimeZone) -> Double {
+        // Convert date to UTC for astronomical calculations
+        let utcDate = date
+        let julianDay = dateToJulianDay(utcDate)
         
-        return MoonTimes(
-            moonrise: shouldShowRise ? moonrise : nil,
-            moonset: shouldShowSet ? moonset : nil
-        )
+        // Calculate moon's position (simplified)
+        let moonPosition = calculateMoonPosition(julianDay: julianDay)
+        
+        // Calculate local sidereal time for the given longitude and time
+        let lst = calculateLocalSiderealTime(julianDay: julianDay, longitude: longitude)
+        
+        // Calculate hour angle (in degrees)
+        var hourAngle = lst - moonPosition.rightAscension
+        
+        // Normalize hour angle to [-180, 180] range
+        while hourAngle > 180 { hourAngle -= 360 }
+        while hourAngle < -180 { hourAngle += 360 }
+        
+        // Convert to radians for trigonometric calculations
+        let latRad = latitude * .pi / 180.0
+        let decRad = moonPosition.declination * .pi / 180.0
+        let haRad = hourAngle * .pi / 180.0
+        
+        // Calculate altitude using spherical trigonometry
+        let sinAlt = sin(latRad) * sin(decRad) + cos(latRad) * cos(decRad) * cos(haRad)
+        let altitudeRad = asin(max(-1.0, min(1.0, sinAlt))) // Clamp to valid range
+        let altitude = altitudeRad * 180.0 / .pi
+        
+        // Apply atmospheric refraction correction for objects near horizon
+        let refraction = if altitude > -1 && altitude < 15 {
+            1.02 / tan((altitude + 10.3 / (altitude + 5.11)) * .pi / 180.0) / 60.0
+        } else {
+            0.0
+        }
+        
+        return altitude + refraction - 0.583 // Standard correction for moon's semidiameter and refraction
+    }
+    
+    private static func calculateMoonPosition(julianDay: Double) -> (rightAscension: Double, declination: Double) {
+        // Simplified lunar position calculation
+        let T = (julianDay - 2451545.0) / 36525.0
+        
+        // Mean longitude of the Moon
+        let L0 = normalizeAngle(218.3164477 + 481267.88123421 * T)
+        
+        // Mean elongation of Moon from Sun
+        let D = normalizeAngle(297.8501921 + 445267.1114034 * T)
+        
+        // Sun's mean anomaly
+        let M = normalizeAngle(357.5291092 + 35999.0502909 * T)
+        
+        // Moon's mean anomaly
+        let Mp = normalizeAngle(134.9633964 + 477198.8675055 * T)
+        
+        // Argument of latitude
+        let F = normalizeAngle(93.2720950 + 483202.0175233 * T)
+        
+        // Calculate longitude and latitude corrections (main terms)
+        let longitude = L0 + 6.289 * sin(Mp * .pi / 180.0) + 1.274 * sin((2 * D - Mp) * .pi / 180.0) + 0.658 * sin(2 * D * .pi / 180.0)
+        let latitude = 5.128 * sin(F * .pi / 180.0)
+        
+        // Convert to equatorial coordinates
+        let obliquity = 23.4393 - 0.0000004 * (julianDay - 2451545.0)
+        let obliquityRad = obliquity * .pi / 180.0
+        let lonRad = longitude * .pi / 180.0
+        let latRad = latitude * .pi / 180.0
+        
+        // Right ascension and declination
+        let ra = atan2(sin(lonRad) * cos(obliquityRad) - tan(latRad) * sin(obliquityRad), cos(lonRad)) * 180.0 / .pi
+        let dec = asin(sin(latRad) * cos(obliquityRad) + cos(latRad) * sin(obliquityRad) * sin(lonRad)) * 180.0 / .pi
+        
+        return (normalizeAngle(ra), dec)
+    }
+    
+    private static func calculateLocalSiderealTime(julianDay: Double, longitude: Double) -> Double {
+        // Calculate Greenwich Mean Sidereal Time
+        let T = (julianDay - 2451545.0) / 36525.0
+        var gmst = 280.46061837 + 360.98564736629 * (julianDay - 2451545.0) + 0.000387933 * T * T - T * T * T / 38710000.0
+        
+        // Normalize GMST
+        gmst = normalizeAngle(gmst)
+        
+        // Convert to Local Sidereal Time
+        let lst = normalizeAngle(gmst + longitude)
+        
+        return lst
+    }
+    
+    private static func normalizeAngle(_ angle: Double) -> Double {
+        var normalized = angle
+        while normalized < 0 { normalized += 360 }
+        while normalized >= 360 { normalized -= 360 }
+        return normalized
     }
     
     private static func getMoonPhaseInfo(age: Int, illumination: Double) -> (name: String, isWaxing: Bool, nextPhase: String, daysToNext: Int) {

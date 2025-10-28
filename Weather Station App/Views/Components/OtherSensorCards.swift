@@ -465,7 +465,7 @@ struct RainIntensityAnimation: View {
                 startAnimation()
             }
         }
-        .onChange(of: isRaining) { newValue in
+        .onChange(of: isRaining) { _, newValue in
             if newValue {
                 startAnimation()
             }
