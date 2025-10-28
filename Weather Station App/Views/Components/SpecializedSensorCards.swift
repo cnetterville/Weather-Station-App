@@ -1554,6 +1554,17 @@ struct NextMoonPhaseView: View {
                     .font(.subheadline)
                     .fontWeight(.semibold)
             }
+            
+            HStack {
+                Text("Next Full Moon:")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Text("in \(currentPhase.daysToNextFullMoon) days")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.yellow)
+            }
         }
     }
 }
@@ -1583,6 +1594,7 @@ struct MoonPhase {
     let isWaxing: Bool
     let nextPhaseName: String
     let daysToNextPhase: Int
+    let daysToNextFullMoon: Int
 }
 
 struct MoonTimes {
@@ -1604,6 +1616,7 @@ class MoonCalculator {
         let age = Int(phase * 29.53)
         
         let (name, isWaxing, nextPhase, daysToNext) = getMoonPhaseInfo(age: age, illumination: illumination)
+        let daysToFullMoon = calculateDaysToNextFullMoon(age: age)
         
         return MoonPhase(
             name: name,
@@ -1611,7 +1624,8 @@ class MoonCalculator {
             age: age,
             isWaxing: isWaxing,
             nextPhaseName: nextPhase,
-            daysToNextPhase: daysToNext
+            daysToNextPhase: daysToNext,
+            daysToNextFullMoon: daysToFullMoon
         )
     }
     
@@ -1802,6 +1816,20 @@ class MoonCalculator {
             return ("Waning Crescent", false, "New Moon", 30 - age)
         default:
             return ("New Moon", true, "First Quarter", 7)
+        }
+    }
+    
+    private static func calculateDaysToNextFullMoon(age: Int) -> Int {
+        // Full moon occurs around day 14-15 of the lunar cycle
+        let fullMoonDay = 15
+        
+        if age < fullMoonDay {
+            // We haven't reached this cycle's full moon yet
+            return fullMoonDay - age
+        } else {
+            // Full moon has passed, calculate days to next cycle's full moon
+            let daysRemainingInCycle = 30 - age
+            return daysRemainingInCycle + fullMoonDay
         }
     }
 }
