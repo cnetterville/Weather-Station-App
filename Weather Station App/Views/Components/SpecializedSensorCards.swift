@@ -1735,8 +1735,8 @@ class MoonCalculator {
         // Mean elongation of Moon from Sun
         let D = normalizeAngle(297.8501921 + 445267.1114034 * T)
         
-        // Sun's mean anomaly
-        let M = normalizeAngle(357.5291092 + 35999.0502909 * T)
+        // Sun's mean anomaly (not used in simplified calculation)
+        let _ = normalizeAngle(357.5291092 + 35999.0502909 * T)
         
         // Moon's mean anomaly
         let Mp = normalizeAngle(134.9633964 + 477198.8675055 * T)
