@@ -105,11 +105,7 @@ class WeatherStationService: ObservableObject {
                     
                     // Also fetch today's historical data for high/low calculations (if not already cached)
                     if await !self.hasTodaysHistoricalData(for: station) {
-                        await self.fetchHistoricalData(
-                            for: station,
-                            timeRange: .last24Hours, 
-                            sensors: ["outdoor", "indoor", "temp_and_humidity_ch1", "temp_and_humidity_ch2", "temp_and_humidity_ch3", "rainfall", "rainfall_piezo", "wind", "pressure", "lightning", "pm25_ch1", "pm25_ch2", "pm25_ch3"] 
-                        )
+                        await self.fetchTodaysHistoricalData(for: station)
                     }
                     
                     // Smaller delay for fewer stations
@@ -456,18 +452,59 @@ class WeatherStationService: ObservableObject {
     private func fetchTodaysHistoricalData(for station: WeatherStation) async {
         print(" Fetching today's historical data for \(station.name)...")
         
-        // Fetch data for the full current calendar day (00:00:00 to 23:59:59)
-        await fetchHistoricalData(
-            for: station,
-            timeRange: .last24Hours, 
-            sensors: ["outdoor", "indoor", "temp_and_humidity_ch1", "temp_and_humidity_ch2", "temp_and_humidity_ch3", "rainfall", "rainfall_piezo", "wind", "pressure", "lightning", "pm25_ch1", "pm25_ch2", "pm25_ch3"] 
-        )
-        
-        // Fetch extended lightning data separately and merge it
+        // First fetch extended lightning data (30 days) and store it
         print(" Fetching extended lightning historical data for \(station.name)...")
         await fetchExtendedLightningData(for: station)
         
-        print(" Completed today's historical data fetch for: \(station.name)")
+        // Store the lightning data before it gets overwritten
+        let lightningData = historicalData[station.macAddress]?.lightning
+        
+        // Then fetch today's detailed data for other sensors (excluding lightning)
+        await fetchHistoricalData(
+            for: station,
+            timeRange: .last24Hours, 
+            sensors: ["outdoor", "indoor", "temp_and_humidity_ch1", "temp_and_humidity_ch2", "temp_and_humidity_ch3", "rainfall", "rainfall_piezo", "wind", "pressure", "pm25_ch1", "pm25_ch2", "pm25_ch3"] 
+        )
+        
+        // Restore the extended lightning data after the regular fetch
+        if let existingData = historicalData[station.macAddress], let savedLightningData = lightningData {
+            let mergedData = HistoricalWeatherData(
+                outdoor: existingData.outdoor,
+                indoor: existingData.indoor,
+                solarAndUvi: existingData.solarAndUvi,
+                rainfall: existingData.rainfall,
+                rainfallPiezo: existingData.rainfallPiezo,
+                wind: existingData.wind,
+                pressure: existingData.pressure,
+                lightning: savedLightningData, // Use the 30-day lightning data
+                pm25Ch1: existingData.pm25Ch1,
+                pm25Ch2: existingData.pm25Ch2,
+                pm25Ch3: existingData.pm25Ch3,
+                tempAndHumidityCh1: existingData.tempAndHumidityCh1,
+                tempAndHumidityCh2: existingData.tempAndHumidityCh2,
+                tempAndHumidityCh3: existingData.tempAndHumidityCh3
+            )
+            historicalData[station.macAddress] = mergedData
+            print(" Lightning data preserved: \(savedLightningData.count?.list.count ?? 0) readings")
+        }
+        
+        // DEBUG: Check final lightning data
+        if let lightningData = historicalData[station.macAddress]?.lightning?.count {
+            print(" Final lightning data: \(lightningData.list.count) readings")
+            
+            // Show sample of recent data
+            let recent = lightningData.list.prefix(5)
+            for (timestamp, count) in recent {
+                if let ts = Double(timestamp) {
+                    let date = Date(timeIntervalSince1970: ts)
+                    print("   - \(date): \(count)")
+                }
+            }
+        } else {
+            print(" No lightning data in final result")
+        }
+        
+        print(" Completed historical data fetch for: \(station.name)")
     }
     
     private func fetchExtendedLightningData(for station: WeatherStation) async {
@@ -475,14 +512,14 @@ class WeatherStationService: ObservableObject {
             return
         }
 
-        // Use 7 days with 4hour cycle for better lightning data retention
-        let timeRange = HistoricalTimeRange.last7Days
+        // Use 30 days with 4hour cycle for better lightning data retention and coverage
+        let timeRange = HistoricalTimeRange.last30Days
         let sensors = ["lightning"]
         
         let calendar = Calendar.current
         let now = Date()
         let endDate = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: now) ?? now
-        let startDate = calendar.date(byAdding: .day, value: -6, to: calendar.startOfDay(for: now)) ?? now
+        let startDate = calendar.date(byAdding: .day, value: -29, to: calendar.startOfDay(for: now)) ?? now
 
         // Format dates exactly as API example: 2022-01-01 00:00:00
         let dateFormatter = DateFormatter()
@@ -514,38 +551,53 @@ class WeatherStationService: ObservableObject {
             
             let (data, response) = try await session.data(for: request)
             
-            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
-                let decoder = JSONDecoder()
-                let historicalResponse = try decoder.decode(HistoricalWeatherResponse.self, from: data)
-                
-                await MainActor.run {
-                    if historicalResponse.code == 0 {
-                        // Merge lightning data into existing historical data instead of replacing it
-                        if let existingData = historicalData[station.macAddress] {
-                            // Create new HistoricalWeatherData with updated lightning data
-                            let mergedData = HistoricalWeatherData(
-                                outdoor: existingData.outdoor,
-                                indoor: existingData.indoor,
-                                solarAndUvi: existingData.solarAndUvi,
-                                rainfall: existingData.rainfall,
-                                rainfallPiezo: existingData.rainfallPiezo,
-                                wind: existingData.wind,
-                                pressure: existingData.pressure,
-                                lightning: historicalResponse.data.lightning,
-                                pm25Ch1: existingData.pm25Ch1,
-                                pm25Ch2: existingData.pm25Ch2,
-                                pm25Ch3: existingData.pm25Ch3,
-                                tempAndHumidityCh1: existingData.tempAndHumidityCh1,
-                                tempAndHumidityCh2: existingData.tempAndHumidityCh2,
-                                tempAndHumidityCh3: existingData.tempAndHumidityCh3
-                            )
-                            historicalData[station.macAddress] = mergedData
-                            print(" [Extended Lightning: \(station.name)] Successfully merged extended lightning data")
-                        } else {
-                            // If no existing data, just store the lightning data
-                            historicalData[station.macAddress] = historicalResponse.data
-                            print(" [Extended Lightning: \(station.name)] Successfully stored lightning data")
-                        }
+            if let httpResponse = response as? HTTPURLResponse {
+                if httpResponse.statusCode == 429 {
+                    print(" Rate limited, reducing concurrent requests")
+                    maxConcurrentRequests = max(1, maxConcurrentRequests - 1)
+                    await MainActor.run {
+                        errorMessage = "API rate limited, reducing request speed"
+                    }
+                    return
+                } else if httpResponse.statusCode != 200 {
+                    await MainActor.run {
+                        errorMessage = "HTTP \(httpResponse.statusCode)"
+                    }
+                    return
+                }
+            }
+            
+            // Parse response
+            let decoder = JSONDecoder()
+            let historicalResponse = try decoder.decode(HistoricalWeatherResponse.self, from: data)
+            
+            await MainActor.run {
+                if historicalResponse.code == 0 {
+                    // Merge lightning data into existing historical data instead of replacing it
+                    if let existingData = historicalData[station.macAddress] {
+                        // Create new HistoricalWeatherData with updated lightning data
+                        let mergedData = HistoricalWeatherData(
+                            outdoor: existingData.outdoor,
+                            indoor: existingData.indoor,
+                            solarAndUvi: existingData.solarAndUvi,
+                            rainfall: existingData.rainfall,
+                            rainfallPiezo: existingData.rainfallPiezo,
+                            wind: existingData.wind,
+                            pressure: existingData.pressure,
+                            lightning: historicalResponse.data.lightning,
+                            pm25Ch1: existingData.pm25Ch1,
+                            pm25Ch2: existingData.pm25Ch2,
+                            pm25Ch3: existingData.pm25Ch3,
+                            tempAndHumidityCh1: existingData.tempAndHumidityCh1,
+                            tempAndHumidityCh2: existingData.tempAndHumidityCh2,
+                            tempAndHumidityCh3: existingData.tempAndHumidityCh3
+                        )
+                        historicalData[station.macAddress] = mergedData
+                        print(" Successfully merged 30-day lightning data")
+                    } else {
+                        // If no existing data, just store the lightning data
+                        historicalData[station.macAddress] = historicalResponse.data
+                        print(" Successfully stored 30-day lightning data")
                     }
                 }
             }
