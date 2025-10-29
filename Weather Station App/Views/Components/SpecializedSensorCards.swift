@@ -923,16 +923,30 @@ struct BatteryHealthHelper {
     }
     
     static func getBatteryHealth(_ value: String) -> BatteryHealth {
-        // Handle voltage values (like console, haptic array)
+        // Handle voltage values (like console, haptic array, rainfall sensor)
         if value.contains(".") || value.contains("V") {
             let numericValue = Double(value.replacingOccurrences(of: "V", with: "")) ?? 0
             
-            if numericValue >= 3.0 {
-                return BatteryHealth(level: .healthy, color: .green, description: "Good")
-            } else if numericValue >= 2.5 {
-                return BatteryHealth(level: .warning, color: .orange, description: "Low")
+            // Check if this is likely a single-battery sensor (like rainfall sensor)
+            // Single 1.5V battery sensors typically show values between 1.0V - 1.8V
+            if numericValue >= 1.0 && numericValue <= 2.0 {
+                // Single 1.5V battery thresholds
+                if numericValue >= 1.4 {
+                    return BatteryHealth(level: .healthy, color: .green, description: "Good")
+                } else if numericValue >= 1.2 {
+                    return BatteryHealth(level: .warning, color: .orange, description: "Low")
+                } else {
+                    return BatteryHealth(level: .critical, color: .red, description: "Critical")
+                }
             } else {
-                return BatteryHealth(level: .critical, color: .red, description: "Critical")
+                // Multi-battery or higher voltage sensors (console, haptic array, etc.)
+                if numericValue >= 3.0 {
+                    return BatteryHealth(level: .healthy, color: .green, description: "Good")
+                } else if numericValue >= 2.5 {
+                    return BatteryHealth(level: .warning, color: .orange, description: "Low")
+                } else {
+                    return BatteryHealth(level: .critical, color: .red, description: "Critical")
+                }
             }
         }
         
