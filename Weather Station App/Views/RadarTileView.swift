@@ -239,9 +239,9 @@ struct RadarTileView: View {
                         // Auto-refresh status overlay
                         if !hasError && !isLoading {
                             VStack {
+                                Spacer()
                                 HStack {
-                                    Spacer()
-                                    VStack(alignment: .trailing, spacing: 2) {
+                                    VStack(alignment: .leading, spacing: 2) {
                                         HStack(spacing: 4) {
                                             Circle()
                                                 .fill(Color.green)
@@ -260,11 +260,11 @@ struct RadarTileView: View {
                                     .background(Color.black.opacity(0.7))
                                     .cornerRadius(6)
                                     .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
+                                    
+                                    Spacer()
                                 }
-                                .padding(.trailing, 8)
-                                .padding(.top, 30)
-                                
-                                Spacer()
+                                .padding(.leading, 8)
+                                .padding(.bottom, 8)
                             }
                         }
                     }
