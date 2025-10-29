@@ -48,7 +48,7 @@ struct SunTimes {
     /// Formatted string for daylight remaining
     var formattedDaylightLeft: String {
         guard let daylightRemaining = daylightLeft else {
-            return "Night time"
+            return "Nighttime"
         }
         
         let hours = Int(daylightRemaining / 3600)
