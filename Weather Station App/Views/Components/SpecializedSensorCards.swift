@@ -1563,15 +1563,18 @@ struct NextMoonPhaseView: View {
                     .fontWeight(.semibold)
             }
             
-            HStack {
-                Text("Next Full Moon:")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                Spacer()
-                Text("in \(currentPhase.daysToNextFullMoon) days")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.yellow)
+            // Only show "Next Full Moon" if it's different from the next phase
+            if currentPhase.nextPhaseName != "Full Moon" {
+                HStack {
+                    Text("Next Full Moon:")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text("in \(currentPhase.daysToNextFullMoon) days")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.yellow)
+                }
             }
         }
     }
