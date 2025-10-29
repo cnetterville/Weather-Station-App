@@ -1,0 +1,114 @@
+private func fetchHistoricalDataSingle(for station: WeatherStation, timeRange: HistoricalTimeRange, startDate: Date, endDate: Date, sensors: [String]) async {
+        // Format dates for API
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        dateFormatter.timeZone = TimeZone.current
+        
+        let startDateString = dateFormatter.string(from: startDate)
+        let endDateString = dateFormatter.string(from: endDate)
+        let callBack = sensors.joined(separator: ",")
+        
+        // Build URL
+        let urlString = "\(historyURL)?application_key=\(credentials.applicationKey)&api_key=\(credentials.apiKey)&mac=\(station.macAddress)&start_date=\(startDateString)&end_date=\(endDateString)&cycle_type=\(timeRange.cycleType)&call_back=\(callBack)"
+        
+        guard let url = URL(string: urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "") else {
+            await MainActor.run {
+                errorMessage = "Invalid historical data URL for \(station.name)"
+                isLoadingHistory = false
+            }
+            return
+        }
+        
+        print(" [Historical: \(station.name)] Single request for \(timeRange.rawValue)")
+        print(" Date range: \(startDateString) to \(endDateString)")
+        print(" Cycle type: \(timeRange.cycleType)")
+        print(" URL: \(url.absoluteString)")
+        
+        do {
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+            request.cachePolicy = .reloadIgnoringLocalCacheData
+            request.timeoutInterval = 60.0
+            request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+            request.setValue("application/json", forHTTPHeaderField: "Accept")
+            
+            let (data, response) = try await session.data(for: request)
+            
+            print(" [Historical: \(station.name)] Response received: \(data.count) bytes")
+            
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+                // Log the raw response for debugging chunks (only first chunk to avoid spam)
+                if chunkCount == 1, let responseString = String(data: data, encoding: .utf8) {
+                    print(" [Historical Chunk: \(station.name)] First chunk raw response:")
+                    print("--- START CHUNK RESPONSE ---")
+                    print(responseString)
+                    print("--- END CHUNK RESPONSE ---")
+                }
+                
+                do {
+                    let decoder = JSONDecoder()
+                    let historicalResponse = try decoder.decode(HistoricalWeatherResponse.self, from: data)
+                    
+                    if historicalResponse.code == 0 {
+                        // Merge this chunk with existing data
+                        if allHistoricalData == nil {
+                            allHistoricalData = historicalResponse.data
+                        } else {
+                            allHistoricalData = mergeHistoricalData(existing: allHistoricalData!, new: historicalResponse.data)
+                        }
+                        print(" [Historical: \(station.name)] Chunk \(chunkCount) loaded successfully")
+                        
+                        // Small delay between chunks to avoid rate limiting
+                        try await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+                        
+                    } else {
+                        await MainActor.run {
+                            errorMessage = "Chunk \(chunkCount) API Error for \(station.name): \(historicalResponse.msg)"
+                            isLoadingHistory = false
+                        }
+                        return
+                    }
+                } catch {
+                    print(" [Historical Chunk: \(station.name)] Chunk \(chunkCount) parsing failed: \(error)")
+                    
+                    // Provide detailed error information for chunks
+                    if let decodingError = error as? DecodingError {
+                        switch decodingError {
+                        case .keyNotFound(let key, let context):
+                            print(" Chunk \(chunkCount) missing key: \(key.stringValue) at path: \(context.codingPath)")
+                        case .typeMismatch(let type, let context):
+                            print(" Chunk \(chunkCount) type mismatch for type: \(type) at path: \(context.codingPath)")
+                        case .valueNotFound(let type, let context):
+                            print(" Chunk \(chunkCount) value not found for type: \(type) at path: \(context.codingPath)")
+                        case .dataCorrupted(let context):
+                            print(" Chunk \(chunkCount) data corrupted at path: \(context.codingPath), description: \(context.debugDescription)")
+                        @unknown default:
+                            print(" Chunk \(chunkCount) unknown decoding error: \(error)")
+                        }
+                    }
+                    
+                    await MainActor.run {
+                        errorMessage = "Chunk \(chunkCount) parsing error for \(station.name): \(error.localizedDescription)"
+                        isLoadingHistory = false
+                    }
+                    return
+                }
+            } else {
+                await MainActor.run {
+                    if let httpResponse = response as? HTTPURLResponse {
+                        errorMessage = "Chunk \(chunkCount) HTTP \(httpResponse.statusCode) for \(station.name)"
+                    } else {
+                        errorMessage = "Chunk \(chunkCount) network error for \(station.name)"
+                    }
+                    isLoadingHistory = false
+                }
+                return
+            }
+            
+        } catch {
+            await MainActor.run {
+                errorMessage = "Historical data error for \(station.name): \(error.localizedDescription)"
+                isLoadingHistory = false
+            }
+        }
+    }

@@ -12,6 +12,35 @@ struct HistoricalWeatherResponse: Codable {
     let msg: String
     let time: String
     let data: HistoricalWeatherData
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        code = try container.decode(Int.self, forKey: .code)
+        msg = try container.decode(String.self, forKey: .msg)
+        time = try container.decode(String.self, forKey: .time)
+        
+        // Handle both dictionary and empty array cases for data field
+        if let dataDict = try? container.decode(HistoricalWeatherData.self, forKey: .data) {
+            // Data is a dictionary with sensor data
+            data = dataDict
+        } else {
+            // Data is an empty array or invalid format, create empty HistoricalWeatherData
+            data = HistoricalWeatherData.empty()
+        }
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(code, forKey: .code)
+        try container.encode(msg, forKey: .msg) 
+        try container.encode(time, forKey: .time)
+        try container.encode(data, forKey: .data)
+    }
+    
+    private enum CodingKeys: String, CodingKey {
+        case code, msg, time, data
+    }
 }
 
 struct HistoricalWeatherData: Codable {
@@ -40,6 +69,26 @@ struct HistoricalWeatherData: Codable {
         case tempAndHumidityCh1 = "temp_and_humidity_ch1"
         case tempAndHumidityCh2 = "temp_and_humidity_ch2"
         case tempAndHumidityCh3 = "temp_and_humidity_ch3"
+    }
+    
+    // Factory method to create empty historical data
+    static func empty() -> HistoricalWeatherData {
+        return HistoricalWeatherData(
+            outdoor: nil,
+            indoor: nil,
+            solarAndUvi: nil,
+            rainfall: nil,
+            rainfallPiezo: nil,
+            wind: nil,
+            pressure: nil,
+            lightning: nil,
+            pm25Ch1: nil,
+            pm25Ch2: nil,
+            pm25Ch3: nil,
+            tempAndHumidityCh1: nil,
+            tempAndHumidityCh2: nil,
+            tempAndHumidityCh3: nil
+        )
     }
 }
 

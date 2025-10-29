@@ -716,7 +716,7 @@ class DailyTemperatureCalculator {
     
     // MARK: - Lightning Calculations
     
-    static func calculateLastLightningDetection(from historicalData: HistoricalWeatherData?, currentLightningCount: String, daysToSearch: Int = 7) -> LastLightningStats? {
+    static func calculateLastLightningDetection(from historicalData: HistoricalWeatherData?, currentLightningCount: String, daysToSearch: Int = 30) -> LastLightningStats? {
         // First, check if there's any current lightning activity
         if let currentCount = Int(currentLightningCount), currentCount > 0 {
             // Lightning detected recently (within current reading period)
@@ -848,7 +848,7 @@ class DailyTemperatureCalculator {
         return calculateDailyPM25Stats(from: historical.pm25Ch3, for: date, timeZone: station.timeZone)
     }
     
-    static func getLastLightningStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, daysToSearch: Int = 7) -> LastLightningStats? {
+    static func getLastLightningStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, daysToSearch: Int = 30) -> LastLightningStats? {
         return calculateLastLightningDetection(
             from: historicalData,
             currentLightningCount: weatherData.lightning.count.value,

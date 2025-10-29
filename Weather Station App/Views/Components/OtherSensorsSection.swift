@@ -106,7 +106,7 @@ struct OtherSensorsSection: View {
                             weatherData: data,
                             historicalData: weatherService.historicalData[station.macAddress],
                             station: station,
-                            daysToSearch: 7
+                            daysToSearch: 30
                         )
                     }
                 )
