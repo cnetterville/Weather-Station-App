@@ -22,6 +22,7 @@ struct RadarTileView: View {
     @State private var radarRefreshInterval: TimeInterval = 600 // Default 10 minutes
     @State private var countdownTrigger = 0 // Force UI updates
     @State private var initialLoadDelayTask: Task<Void, Never>? // Track initial load task
+    @State private var hasInitiallyLoaded = false // Track if we've done the initial load
     
     // Calculate a unique delay for this station's radar based on MAC address
     private var initialLoadDelay: TimeInterval {
@@ -245,6 +246,7 @@ struct RadarTileView: View {
                     
                     await MainActor.run {
                         loadRadar()
+                        hasInitiallyLoaded = true
                         startAutoRefreshTimer()
                         startCountdownTimer()
                     }
@@ -288,15 +290,16 @@ struct RadarTileView: View {
             return
         }
         
-        isLoading = true
+        // Only set loading state if this isn't the initial delayed load
+        if hasInitiallyLoaded {
+            isLoading = true
+        }
+        
         hasError = false
         lastRefreshTime = Date()
         nextRefreshTime = Date().addingTimeInterval(radarRefreshInterval)
         
-        // WebView will handle the actual loading
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            // Small delay to allow WebView to initialize
-        }
+        // WebView will handle the actual loading through the delegate
     }
     
     private func refreshRadar() {
@@ -436,8 +439,11 @@ struct RadarWebView: NSViewRepresentable {
         
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             DispatchQueue.main.async {
-                self.parent.isLoading = false
-                self.parent.hasError = false
+                // Small delay to ensure the iframe content has loaded
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    self.parent.isLoading = false
+                    self.parent.hasError = false
+                }
             }
         }
         
