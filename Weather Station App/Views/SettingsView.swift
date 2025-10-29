@@ -1,4 +1,4 @@
-// 
+//
 //  SettingsView.swift
 //  Weather Station App
 //
@@ -26,6 +26,7 @@ struct SettingsView: View {
     // Auto-refresh settings - use local state if no binding provided
     @State private var localAutoRefreshEnabled = true
     @State private var localRefreshInterval: TimeInterval = 300
+    @State private var radarRefreshInterval: TimeInterval = 600
     
     // Optional bindings for when called from ContentView
     var autoRefreshEnabled: Binding<Bool>?
@@ -48,6 +49,16 @@ struct SettingsView: View {
         ("5 minutes", 300),
         ("10 minutes", 600),
         ("15 minutes", 900),
+        ("30 minutes", 1800),
+        ("1 hour", 3600)
+    ]
+    
+    // Radar refresh interval options (in seconds)
+    private let radarRefreshIntervals: [(String, TimeInterval)] = [
+        ("5 minutes", 300),
+        ("10 minutes", 600),
+        ("15 minutes", 900),
+        ("20 minutes", 1200),
         ("30 minutes", 1800),
         ("1 hour", 3600)
     ]
@@ -362,61 +373,108 @@ struct SettingsView: View {
                             .fontWeight(.semibold)
                         
                         VStack(alignment: .leading, spacing: 12) {
-                            Toggle("Enable Auto-Refresh", isOn: autoRefreshBinding)
-                                .toggleStyle(.checkbox)
-                                .onChange(of: autoRefreshBinding.wrappedValue) { _, _ in
-                                    saveAutoRefreshSettings()
-                                    onSettingsChanged?()
+                            // Weather Data Refresh
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Weather Data")
+                                    .font(.headline)
+                                    .foregroundColor(.blue)
+                                
+                                Toggle("Enable Auto-Refresh", isOn: autoRefreshBinding)
+                                    .toggleStyle(.checkbox)
+                                    .onChange(of: autoRefreshBinding.wrappedValue) { _, _ in
+                                        saveAutoRefreshSettings()
+                                        onSettingsChanged?()
+                                    }
+                                
+                                if autoRefreshBinding.wrappedValue {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text("Refresh Interval:")
+                                            .font(.subheadline)
+                                            .fontWeight(.medium)
+                                        
+                                        // Use a more compact layout for the picker
+                                        VStack(alignment: .leading, spacing: 8) {
+                                            // First row
+                                            HStack(spacing: 8) {
+                                                IntervalButton(label: "1 min", interval: 60.0, binding: refreshIntervalBinding, onChanged: {
+                                                    saveAutoRefreshSettings()
+                                                    onSettingsChanged?()
+                                                })
+                                                IntervalButton(label: "2 min", interval: 120.0, binding: refreshIntervalBinding, onChanged: {
+                                                    saveAutoRefreshSettings()
+                                                    onSettingsChanged?()
+                                                })
+                                                IntervalButton(label: "5 min", interval: 300.0, binding: refreshIntervalBinding, onChanged: {
+                                                    saveAutoRefreshSettings()
+                                                    onSettingsChanged?()
+                                                })
+                                            }
+                                            
+                                            // Second row
+                                            HStack(spacing: 8) {
+                                                IntervalButton(label: "10 min", interval: 600.0, binding: refreshIntervalBinding, onChanged: {
+                                                    saveAutoRefreshSettings()
+                                                    onSettingsChanged?()
+                                                })
+                                                IntervalButton(label: "15 min", interval: 900.0, binding: refreshIntervalBinding, onChanged: {
+                                                    saveAutoRefreshSettings()
+                                                    onSettingsChanged?()
+                                                })
+                                                IntervalButton(label: "30 min", interval: 1800.0, binding: refreshIntervalBinding, onChanged: {
+                                                    saveAutoRefreshSettings()
+                                                    onSettingsChanged?()
+                                                })
+                                                IntervalButton(label: "1 hour", interval: 3600.0, binding: refreshIntervalBinding, onChanged: {
+                                                    saveAutoRefreshSettings()
+                                                    onSettingsChanged?()
+                                                })
+                                            }
+                                        }
+                                        
+                                        HStack {
+                                            Image(systemName: "info.circle")
+                                                .foregroundColor(.blue)
+                                            Text("Weather data will automatically refresh at the selected interval")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
                                 }
+                            }
                             
-                            if autoRefreshBinding.wrappedValue {
+                            Divider()
+                            
+                            // Radar Refresh Settings
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Weather Radar")
+                                    .font(.headline)
+                                    .foregroundColor(.purple)
+                                
                                 VStack(alignment: .leading, spacing: 8) {
-                                    Text("Refresh Interval:")
-                                        .font(.headline)
+                                    Text("Auto-Refresh Interval:")
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
                                    
-                                    // Use a more compact layout for the picker
                                     VStack(alignment: .leading, spacing: 8) {
                                         // First row
                                         HStack(spacing: 8) {
-                                            IntervalButton(label: "1 min", interval: 60.0, binding: refreshIntervalBinding, onChanged: {
-                                                saveAutoRefreshSettings()
-                                                onSettingsChanged?()
-                                            })
-                                            IntervalButton(label: "2 min", interval: 120.0, binding: refreshIntervalBinding, onChanged: {
-                                                saveAutoRefreshSettings()
-                                                onSettingsChanged?()
-                                            })
-                                            IntervalButton(label: "5 min", interval: 300.0, binding: refreshIntervalBinding, onChanged: {
-                                                saveAutoRefreshSettings()
-                                                onSettingsChanged?()
-                                            })
+                                            RadarIntervalButton(label: "5 min", interval: 300.0, binding: $radarRefreshInterval, onChanged: saveRadarRefreshSettings)
+                                            RadarIntervalButton(label: "10 min", interval: 600.0, binding: $radarRefreshInterval, onChanged: saveRadarRefreshSettings)
+                                            RadarIntervalButton(label: "15 min", interval: 900.0, binding: $radarRefreshInterval, onChanged: saveRadarRefreshSettings)
                                         }
                                         
                                         // Second row
                                         HStack(spacing: 8) {
-                                            IntervalButton(label: "10 min", interval: 600.0, binding: refreshIntervalBinding, onChanged: {
-                                                saveAutoRefreshSettings()
-                                                onSettingsChanged?()
-                                            })
-                                            IntervalButton(label: "15 min", interval: 900.0, binding: refreshIntervalBinding, onChanged: {
-                                                saveAutoRefreshSettings()
-                                                onSettingsChanged?()
-                                            })
-                                            IntervalButton(label: "30 min", interval: 1800.0, binding: refreshIntervalBinding, onChanged: {
-                                                saveAutoRefreshSettings()
-                                                onSettingsChanged?()
-                                            })
-                                            IntervalButton(label: "1 hour", interval: 3600.0, binding: refreshIntervalBinding, onChanged: {
-                                                saveAutoRefreshSettings()
-                                                onSettingsChanged?()
-                                            })
+                                            RadarIntervalButton(label: "20 min", interval: 1200.0, binding: $radarRefreshInterval, onChanged: saveRadarRefreshSettings)
+                                            RadarIntervalButton(label: "30 min", interval: 1800.0, binding: $radarRefreshInterval, onChanged: saveRadarRefreshSettings)
+                                            RadarIntervalButton(label: "1 hour", interval: 3600.0, binding: $radarRefreshInterval, onChanged: saveRadarRefreshSettings)
                                         }
                                     }
                                    
                                     HStack {
                                         Image(systemName: "info.circle")
-                                            .foregroundColor(.blue)
-                                        Text("Weather data will automatically refresh at the selected interval")
+                                            .foregroundColor(.purple)
+                                        Text("Radar imagery will automatically refresh at the selected interval")
                                             .font(.caption)
                                             .foregroundColor(.secondary)
                                     }
@@ -614,6 +672,7 @@ struct SettingsView: View {
             applicationKey = weatherService.credentials.applicationKey
             apiKey = weatherService.credentials.apiKey
             unitSystemDisplayMode = UserDefaults.standard.unitSystemDisplayMode
+            radarRefreshInterval = UserDefaults.standard.radarRefreshInterval
         }
         .sheet(isPresented: $showingAddStation) {
             AddWeatherStationView()
@@ -733,6 +792,11 @@ struct SettingsView: View {
         UserDefaults.standard.set(refreshIntervalBinding.wrappedValue, forKey: "RefreshInterval")
     }
     
+    private func saveRadarRefreshSettings() {
+        UserDefaults.standard.radarRefreshInterval = radarRefreshInterval
+        NotificationCenter.default.post(name: .radarSettingsChanged, object: radarRefreshInterval)
+    }
+    
     private func getMenuBarPreview() -> String? {
         let activeStations = menuBarManager.availableStations
         let sampleTemp = menuBarManager.showDecimals ? "72.3°F" : "72°F"
@@ -746,7 +810,6 @@ struct SettingsView: View {
         ].compactMap { $0 }
         
         let weatherIcon = sampleIcons.first ?? ""
-        
         switch menuBarManager.displayMode {
         case .singleStation:
             if let station = activeStations.first {
@@ -1068,6 +1131,7 @@ struct EditWeatherStationView: View {
                                 SensorToggleRow("🌅 Sunrise/Sunset", isOn: $sensorPreferences.showSunriseSunset)
                                 SensorToggleRow("🌙 Moon & Lunar", isOn: $sensorPreferences.showLunar)
                                 SensorToggleRow("📷 Weather Camera", isOn: $sensorPreferences.showCamera)
+                                SensorToggleRow("🌦️ Weather Radar", isOn: $sensorPreferences.showRadar)
                             }
                             
                             // Quick Actions
@@ -1191,6 +1255,7 @@ struct EditWeatherStationView: View {
         sensorPreferences.showBatteryStatus = value
         sensorPreferences.showSunriseSunset = value
         sensorPreferences.showCamera = value
+        sensorPreferences.showRadar = value
     }
     
     private func testUpdatedStation() {
@@ -1659,6 +1724,25 @@ struct IntervalButton: View {
         .buttonStyle(.bordered)
         .controlSize(.small)
         .background(binding.wrappedValue == interval ? Color.accentColor : Color.clear)
+        .foregroundColor(binding.wrappedValue == interval ? .white : .primary)
+        .cornerRadius(6)
+    }
+}
+
+struct RadarIntervalButton: View {
+    let label: String
+    let interval: TimeInterval
+    let binding: Binding<TimeInterval>
+    let onChanged: () -> Void
+    
+    var body: some View {
+        Button(label) {
+            binding.wrappedValue = interval
+            onChanged()
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .background(binding.wrappedValue == interval ? Color.purple : Color.clear)
         .foregroundColor(binding.wrappedValue == interval ? .white : .primary)
         .cornerRadius(6)
     }

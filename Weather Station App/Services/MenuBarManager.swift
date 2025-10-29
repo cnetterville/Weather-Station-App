@@ -798,4 +798,5 @@ extension Notification.Name {
     static let navigateToStation = Notification.Name("navigateToStation")
     static let weatherStationsUpdated = Notification.Name("weatherStationsUpdated")
     static let showMainWindow = Notification.Name("showMainWindow")
+    static let radarSettingsChanged = Notification.Name("radarSettingsChanged")
 }
