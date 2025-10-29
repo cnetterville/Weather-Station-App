@@ -89,7 +89,7 @@ struct RadarTileView: View {
                 <div class="radar-wrapper">
                     <iframe 
                         class="radar-iframe" 
-                        src="https://embed.ventusky.com/?p=\(lat);\(lon);8&l=radar&w=320&h=220&ssl=1&t=\(Int(Date().timeIntervalSince1970))" 
+                        src="https://embed.ventusky.com/?p=\(lat);\(lon);8&l=radar&w=320&h=225&ssl=1&t=\(Int(Date().timeIntervalSince1970))" 
                         loading="lazy"
                         frameborder="0">
                     </iframe>
@@ -139,7 +139,7 @@ struct RadarTileView: View {
                         .controlSize(.small)
                     }
                     .frame(maxWidth: .infinity)
-                    .frame(height: 220)
+                    .frame(height: 225)
                 } else {
                     // Radar content
                     ZStack {
@@ -150,14 +150,14 @@ struct RadarTileView: View {
                             isLoading: $isLoading,
                             hasError: $hasError
                         )
-                        .frame(height: 220) // Match iframe height
+                        .frame(height: 225) // Match iframe height
                         .cornerRadius(8)
                         
                         // Loading overlay
                         if isLoading {
                             Rectangle()
                                 .fill(Color(NSColor.controlBackgroundColor))
-                                .frame(height: 220)
+                                .frame(height: 225)
                                 .cornerRadius(8)
                                 .overlay(
                                     VStack(spacing: 12) {
