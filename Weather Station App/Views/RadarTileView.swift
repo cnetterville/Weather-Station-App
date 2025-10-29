@@ -50,7 +50,7 @@ struct RadarTileView: View {
     
     private func generateWindyRadarHTML(lat: Double, lon: Double) -> String {
         let zoom = 8
-        let overlay = showSatelliteOverlay ? "radar,satellite" : "radar"
+        let overlay = showSatelliteOverlay ? "rain,satellite" : "rain"
         let timestamp = Int(Date().timeIntervalSince1970)
         
         return """
