@@ -771,57 +771,33 @@ class DailyTemperatureCalculator {
             return (readingDate, count)
         }.sorted { $0.0 < $1.0 } // Sort by date, OLDEST first for proper increase detection
         
-        print(" Lightning analysis for last \(daysToSearch) days:")
-        print(" Found \(sortedReadings.count) readings in search window")
-        
         // Calculate actual days searched based on available data
         if !sortedReadings.isEmpty {
             let oldestReading = sortedReadings.first!.0
-            let newestReading = sortedReadings.last!.0
             let daysDifference = calendar.dateComponents([.day], from: oldestReading, to: now).day ?? 0
             actualDaysSearched = min(daysToSearch, daysDifference + 1)
-            
-            print(" Data spans from \(oldestReading) to \(newestReading)")
-            print(" Actual days searched: \(actualDaysSearched)")
         }
         
         // Look for lightning detection by analyzing count increases from oldest to newest
         var previousCount: Int?
         
         for (readingDate, count) in sortedReadings {
-            print(" Reading: \(readingDate) - Count: \(count)")
-            
             if let prevCount = previousCount {
                 // If current count is higher than previous count, lightning was detected
                 if count > prevCount {
                     mostRecentLightningTime = readingDate
-                    print("   ⚡ Lightning increase detected! (\(prevCount) → \(count))")
                 }
             } else if count > 0 {
                 // First reading and it has a non-zero count
                 mostRecentLightningTime = readingDate
-                print("   ⚡ Initial lightning count detected: \(count)")
             }
             
             previousCount = count
         }
         
-        // If we found lightning, use the most recent detection time
-        if let lightningTime = mostRecentLightningTime {
-            print(" Most recent lightning detected at: \(lightningTime)")
-            
-            return LastLightningStats(
-                lastDetectionTime: lightningTime,
-                isFromHistoricalData: true,
-                searchedDaysBack: actualDaysSearched
-            )
-        }
-        
-        // No lightning found, but we did search historical data
-        print(" No lightning detected in \(actualDaysSearched) days of historical data")
-        
+        // Return the result
         return LastLightningStats(
-            lastDetectionTime: nil,
+            lastDetectionTime: mostRecentLightningTime,
             isFromHistoricalData: true,
             searchedDaysBack: actualDaysSearched
         )
@@ -874,10 +850,6 @@ class DailyTemperatureCalculator {
     }
     
     static func getLastLightningStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, daysToSearch: Int = 30) -> LastLightningStats? {
-        // Debug the lightning data
-        let debugInfo = debugLightningData(weatherData: weatherData, historicalData: historicalData)
-        print(debugInfo)
-        
         return calculateLastLightningDetection(
             from: historicalData,
             currentLightningCount: weatherData.lightning.count.value,
@@ -1017,63 +989,5 @@ class DailyTemperatureCalculator {
             dataPointCount: humidityReadings.count,
             isFromHistoricalData: true
         )
-    }
-    
-    static func debugLightningData(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?) -> String {
-        var debug = "=== LIGHTNING DEBUG INFO ===\n"
-        
-        // Current lightning count
-        debug += "Current Lightning Count: \(weatherData.lightning.count.value)\n"
-        
-        // Check historical data
-        if let historical = historicalData {
-            debug += "Historical data available: YES\n"
-            
-            if let lightning = historical.lightning {
-                debug += "Lightning historical data available: YES\n"
-                
-                if let countData = lightning.count {
-                    debug += "Lightning count data available: YES\n"
-                    debug += "Number of lightning readings: \(countData.list.count)\n"
-                    
-                    // Show recent readings
-                    let sortedReadings = countData.list.compactMap { (timestampString, countString) -> (Date, Int, String)? in
-                        guard let timestamp = Double(timestampString),
-                              let count = Int(countString) else {
-                            return nil
-                        }
-                        return (Date(timeIntervalSince1970: timestamp), count, timestampString)
-                    }.sorted { $0.0 > $1.0 } // Most recent first for display
-                    
-                    debug += "Recent lightning readings:\n"
-                    for (index, (date, count, timestamp)) in sortedReadings.prefix(10).enumerated() {
-                        let formatter = DateFormatter()
-                        formatter.dateStyle = .short
-                        formatter.timeStyle = .medium
-                        debug += "  \(index + 1). \(formatter.string(from: date)) - Count: \(count) (Raw: \(timestamp))\n"
-                    }
-                    
-                    // Check data range
-                    if let oldestReading = sortedReadings.last?.0,
-                       let newestReading = sortedReadings.first?.0 {
-                        let calendar = Calendar.current
-                        let daysDiff = calendar.dateComponents([.day], from: oldestReading, to: newestReading).day ?? 0
-                        debug += "Data spans \(daysDiff) days\n"
-                        debug += "Oldest: \(oldestReading)\n"
-                        debug += "Newest: \(newestReading)\n"
-                    }
-                    
-                } else {
-                    debug += "Lightning count data available: NO\n"
-                }
-            } else {
-                debug += "Lightning historical data available: NO\n"
-            }
-        } else {
-            debug += "Historical data available: NO\n"
-        }
-        
-        debug += "=== END DEBUG INFO ===\n"
-        return debug
     }
 }
