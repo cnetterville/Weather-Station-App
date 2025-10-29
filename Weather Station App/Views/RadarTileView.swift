@@ -21,6 +21,15 @@ struct RadarTileView: View {
     @State private var nextRefreshTime = Date()
     @State private var radarRefreshInterval: TimeInterval = 600 // Default 10 minutes
     @State private var countdownTrigger = 0 // Force UI updates
+    @State private var initialLoadDelayTask: Task<Void, Never>? // Track initial load task
+    
+    // Calculate a unique delay for this station's radar based on MAC address
+    private var initialLoadDelay: TimeInterval {
+        // Use the station's MAC address to create a consistent but unique delay
+        let hash = abs(station.macAddress.hashValue)
+        // Create delays between 0-10 seconds, spaced by 2-second intervals
+        return Double(hash % 5) * 2.0
+    }
     
     private var radarHTML: String {
         guard let latitude = station.latitude,
@@ -225,9 +234,25 @@ struct RadarTileView: View {
         }
         .onAppear {
             radarRefreshInterval = UserDefaults.standard.radarRefreshInterval
-            loadRadar()
-            startAutoRefreshTimer()
-            startCountdownTimer()
+            
+            // Start initial load with staggered delay to prevent all radars loading simultaneously
+            initialLoadDelayTask = Task {
+                do {
+                    try await Task.sleep(nanoseconds: UInt64(initialLoadDelay * 1_000_000_000))
+                    
+                    // Check if view is still active before loading
+                    guard !Task.isCancelled else { return }
+                    
+                    await MainActor.run {
+                        loadRadar()
+                        startAutoRefreshTimer()
+                        startCountdownTimer()
+                    }
+                } catch {
+                    // Task was cancelled, no need to load
+                    return
+                }
+            }
             
             // Listen for settings changes
             NotificationCenter.default.addObserver(
@@ -246,6 +271,10 @@ struct RadarTileView: View {
             }
         }
         .onDisappear {
+            // Cancel any pending initial load task
+            initialLoadDelayTask?.cancel()
+            initialLoadDelayTask = nil
+            
             stopAutoRefreshTimer()
             stopCountdownTimer()
             NotificationCenter.default.removeObserver(self, name: .radarSettingsChanged, object: nil)
@@ -275,7 +304,10 @@ struct RadarTileView: View {
         hasError = false
         lastRefreshTime = Date()
         nextRefreshTime = Date().addingTimeInterval(radarRefreshInterval)
-        webView?.reload()
+        
+        // Regenerate HTML with new timestamp and reload
+        let newHTML = radarHTML
+        webView?.loadHTMLString(newHTML, baseURL: URL(string: "https://embed.ventusky.com"))
         
         // Reset the auto-refresh timer
         stopAutoRefreshTimer()
