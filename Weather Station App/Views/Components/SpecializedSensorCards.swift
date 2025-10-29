@@ -992,7 +992,7 @@ struct SunTimesView: View {
     let station: WeatherStation
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) { 
             // Current status
             HStack {
                 Image(systemName: sunTimes.isCurrentlyDaylight ? "sun.max.fill" : "moon.fill")
@@ -1003,23 +1003,24 @@ struct SunTimesView: View {
                 Spacer()
             }
             
-            // Sun Position Arc
+            // Sun Position Arc - Made more compact
             SunPositionArc(sunTimes: sunTimes)
-                .frame(height: 50)
-                .padding(.vertical, 4)
+                .frame(height: 35) 
+                .padding(.vertical, 2) 
             
             // Sunrise and sunset times
             HStack {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 2) { 
                     HStack {
                         Image(systemName: "sunrise.fill")
                             .foregroundColor(.orange)
+                            .font(.caption) 
                         Text("Sunrise")
-                            .font(.subheadline)
+                            .font(.caption) 
                             .foregroundColor(.secondary)
                     }
                     Text(sunTimes.formattedSunrise)
-                        .font(.title2)
+                        .font(.title3) 
                         .fontWeight(.bold)
                 }
                 
@@ -1027,91 +1028,87 @@ struct SunTimesView: View {
                 
                 // Timezone abbreviation in the center
                 Text(getCurrentTimeZoneAbbreviation())
-                    .font(.caption)
+                    .font(.caption2) 
                     .foregroundColor(.secondary)
                     .italic()
                 
                 Spacer()
                 
-                VStack(alignment: .trailing, spacing: 4) {
+                VStack(alignment: .trailing, spacing: 2) { 
                     HStack {
                         Text("Sunset")
-                            .font(.subheadline)
+                            .font(.caption) 
                             .foregroundColor(.secondary)
                         Image(systemName: "sunset.fill")
                             .foregroundColor(.red)
+                            .font(.caption) 
                     }
                     Text(sunTimes.formattedSunset)
-                        .font(.title2)
+                        .font(.title3) 
                         .fontWeight(.bold)
                 }
             }
             
-            // Day length
-            HStack {
-                Text("Day Length:")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                Spacer()
-                Text(sunTimes.formattedDayLength)
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
+            // Day length and daylight left in compact rows
+            VStack(spacing: 3) { 
+                HStack {
+                    Text("Day Length:")
+                        .font(.caption) 
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text(sunTimes.formattedDayLength)
+                        .font(.caption) 
+                        .fontWeight(.semibold)
+                }
+                
+                HStack {
+                    Text("Daylight Left:")
+                        .font(.caption) 
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text(sunTimes.formattedDaylightLeft)
+                        .font(.caption) 
+                        .fontWeight(.semibold)
+                        .foregroundColor(sunTimes.daylightLeft != nil ? .orange : .secondary)
+                }
             }
             
-            // Daylight left
-            HStack {
-                Text("Daylight Left:")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                Spacer()
-                Text(sunTimes.formattedDaylightLeft)
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(sunTimes.daylightLeft != nil ? .orange : .secondary)
-            }
-            
-            // Tomorrow's sunrise and sunset
+            // Tomorrow's sunrise and sunset - More compact horizontal layout
             if let latitude = station.latitude, let longitude = station.longitude {
                 let calendar = Calendar.current
                 let tomorrow = calendar.date(byAdding: .day, value: 1, to: Date()) ?? Date()
                 
                 if let tomorrowSunTimes = SunCalculator.calculateSunTimes(for: tomorrow, latitude: latitude, longitude: longitude, timeZone: station.timeZone) {
                     Divider()
-                    
-                    VStack(alignment: .leading, spacing: 6) {
+                        .padding(.vertical, 2) 
+            
+                    VStack(alignment: .leading, spacing: 4) { 
                         Text("Tomorrow")
                             .font(.caption)
                             .foregroundColor(.secondary)
                             .fontWeight(.semibold)
                         
-                        HStack {
-                            Text("Sunrise:")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
+                        // Compact horizontal layout for tomorrow's data
+                        HStack(spacing: 16) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("↑ \(tomorrowSunTimes.formattedSunrise)")
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                Text("↓ \(tomorrowSunTimes.formattedSunset)")
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                            }
+                            
                             Spacer()
-                            Text(tomorrowSunTimes.formattedSunrise)
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                        }
-                        
-                        HStack {
-                            Text("Sunset:")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                            Spacer()
-                            Text(tomorrowSunTimes.formattedSunset)
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                        }
-                        
-                        HStack {
-                            Text("Day Length:")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                            Spacer()
-                            Text(tomorrowSunTimes.formattedDayLength)
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
+                            
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text("Length:")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                Text(tomorrowSunTimes.formattedDayLength)
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                            }
                         }
                     }
                 }
