@@ -380,7 +380,10 @@ class DailyTemperatureCalculator {
         )
     }
     
-    static func calculateIndoorDailyStats(from historicalData: HistoricalIndoorData?, for date: Date = Date(), timeZone: TimeZone = .current) -> DailyTemperatureStats? {
+    // MARK: - NEW: Flexible Time Range Calculations
+    
+    /// Calculate temperature stats from all available historical data, regardless of time boundaries
+    static func calculateStatsFromAvailableData(from historicalData: HistoricalOutdoorData?) -> DailyTemperatureStats? {
         guard let temperatureData = historicalData?.temperature else {
             return nil
         }
@@ -388,9 +391,43 @@ class DailyTemperatureCalculator {
         let unit = temperatureData.unit
         var tempReadings: [(temp: Double, time: Date)] = []
         
-        let calendar = Calendar.current
-        let targetDay = calendar.startOfDay(for: date)
-        let nextDay = calendar.date(byAdding: .day, value: 1, to: targetDay) ?? targetDay
+        for (timestampString, valueString) in temperatureData.list {
+            guard let timestamp = Double(timestampString),
+                  let temperature = Double(valueString) else {
+                continue
+            }
+            
+            let readingDate = Date(timeIntervalSince1970: timestamp)
+            tempReadings.append((temp: temperature, time: readingDate))
+        }
+        
+        guard !tempReadings.isEmpty else {
+            return nil
+        }
+        
+        let sortedByTemp = tempReadings.sorted { $0.temp < $1.temp }
+        let lowestReading = sortedByTemp.first!
+        let highestReading = sortedByTemp.last!
+        
+        return DailyTemperatureStats(
+            highTemp: highestReading.temp,
+            lowTemp: lowestReading.temp,
+            highTempTime: highestReading.time,
+            lowTempTime: lowestReading.time,
+            unit: unit,
+            dataPointCount: tempReadings.count,
+            isFromHistoricalData: true
+        )
+    }
+    
+    /// Calculate temperature stats for a specific time range
+    static func calculateStatsForTimeRange(from historicalData: HistoricalOutdoorData?, startDate: Date, endDate: Date) -> DailyTemperatureStats? {
+        guard let temperatureData = historicalData?.temperature else {
+            return nil
+        }
+        
+        let unit = temperatureData.unit
+        var tempReadings: [(temp: Double, time: Date)] = []
         
         for (timestampString, valueString) in temperatureData.list {
             guard let timestamp = Double(timestampString),
@@ -400,7 +437,169 @@ class DailyTemperatureCalculator {
             
             let readingDate = Date(timeIntervalSince1970: timestamp)
             
-            if readingDate >= targetDay && readingDate < nextDay {
+            if readingDate >= startDate && readingDate <= endDate {
+                tempReadings.append((temp: temperature, time: readingDate))
+            }
+        }
+        
+        guard !tempReadings.isEmpty else {
+            return nil
+        }
+        
+        let sortedByTemp = tempReadings.sorted { $0.temp < $1.temp }
+        let lowestReading = sortedByTemp.first!
+        let highestReading = sortedByTemp.last!
+        
+        return DailyTemperatureStats(
+            highTemp: highestReading.temp,
+            lowTemp: lowestReading.temp,
+            highTempTime: highestReading.time,
+            lowTempTime: lowestReading.time,
+            unit: unit,
+            dataPointCount: tempReadings.count,
+            isFromHistoricalData: true
+        )
+    }
+    
+    // MARK: - Indoor Temperature - Flexible Calculations
+    
+    /// Calculate indoor temperature stats from all available historical data
+    static func calculateIndoorStatsFromAvailableData(from historicalData: HistoricalIndoorData?) -> DailyTemperatureStats? {
+        guard let temperatureData = historicalData?.temperature else {
+            return nil
+        }
+        
+        let unit = temperatureData.unit
+        var tempReadings: [(temp: Double, time: Date)] = []
+        
+        for (timestampString, valueString) in temperatureData.list {
+            guard let timestamp = Double(timestampString),
+                  let temperature = Double(valueString) else {
+                continue
+            }
+            
+            let readingDate = Date(timeIntervalSince1970: timestamp)
+            tempReadings.append((temp: temperature, time: readingDate))
+        }
+        
+        guard !tempReadings.isEmpty else {
+            return nil
+        }
+        
+        let sortedByTemp = tempReadings.sorted { $0.temp < $1.temp }
+        let lowestReading = sortedByTemp.first!
+        let highestReading = sortedByTemp.last!
+        
+        return DailyTemperatureStats(
+            highTemp: highestReading.temp,
+            lowTemp: lowestReading.temp,
+            highTempTime: highestReading.time,
+            lowTempTime: lowestReading.time,
+            unit: unit,
+            dataPointCount: tempReadings.count,
+            isFromHistoricalData: true
+        )
+    }
+    
+    /// Calculate indoor temperature stats for a specific time range
+    static func calculateIndoorStatsForTimeRange(from historicalData: HistoricalIndoorData?, startDate: Date, endDate: Date) -> DailyTemperatureStats? {
+        guard let temperatureData = historicalData?.temperature else {
+            return nil
+        }
+        
+        let unit = temperatureData.unit
+        var tempReadings: [(temp: Double, time: Date)] = []
+        
+        for (timestampString, valueString) in temperatureData.list {
+            guard let timestamp = Double(timestampString),
+                  let temperature = Double(valueString) else {
+                continue
+            }
+            
+            let readingDate = Date(timeIntervalSince1970: timestamp)
+            
+            if readingDate >= startDate && readingDate <= endDate {
+                tempReadings.append((temp: temperature, time: readingDate))
+            }
+        }
+        
+        guard !tempReadings.isEmpty else {
+            return nil
+        }
+        
+        let sortedByTemp = tempReadings.sorted { $0.temp < $1.temp }
+        let lowestReading = sortedByTemp.first!
+        let highestReading = sortedByTemp.last!
+        
+        return DailyTemperatureStats(
+            highTemp: highestReading.temp,
+            lowTemp: lowestReading.temp,
+            highTempTime: highestReading.time,
+            lowTempTime: lowestReading.time,
+            unit: unit,
+            dataPointCount: tempReadings.count,
+            isFromHistoricalData: true
+        )
+    }
+    
+    // MARK: - Channel Temperature - Flexible Calculations
+    
+    /// Calculate channel temperature stats from all available historical data
+    static func calculateChannelStatsFromAvailableData(from channelData: HistoricalTempHumidityData?) -> DailyTemperatureStats? {
+        guard let temperatureData = channelData?.temperature else {
+            return nil
+        }
+        
+        let unit = temperatureData.unit
+        var tempReadings: [(temp: Double, time: Date)] = []
+        
+        for (timestampString, valueString) in temperatureData.list {
+            guard let timestamp = Double(timestampString),
+                  let temperature = Double(valueString) else {
+                continue
+            }
+            
+            let readingDate = Date(timeIntervalSince1970: timestamp)
+            tempReadings.append((temp: temperature, time: readingDate))
+        }
+        
+        guard !tempReadings.isEmpty else {
+            return nil
+        }
+        
+        let sortedByTemp = tempReadings.sorted { $0.temp < $1.temp }
+        let lowestReading = sortedByTemp.first!
+        let highestReading = sortedByTemp.last!
+        
+        return DailyTemperatureStats(
+            highTemp: highestReading.temp,
+            lowTemp: lowestReading.temp,
+            highTempTime: highestReading.time,
+            lowTempTime: lowestReading.time,
+            unit: unit,
+            dataPointCount: tempReadings.count,
+            isFromHistoricalData: true
+        )
+    }
+    
+    /// Calculate channel temperature stats for a specific time range
+    static func calculateChannelStatsForTimeRange(from channelData: HistoricalTempHumidityData?, startDate: Date, endDate: Date) -> DailyTemperatureStats? {
+        guard let temperatureData = channelData?.temperature else {
+            return nil
+        }
+        
+        let unit = temperatureData.unit
+        var tempReadings: [(temp: Double, time: Date)] = []
+        
+        for (timestampString, valueString) in temperatureData.list {
+            guard let timestamp = Double(timestampString),
+                  let temperature = Double(valueString) else {
+                continue
+            }
+            
+            let readingDate = Date(timeIntervalSince1970: timestamp)
+            
+            if readingDate >= startDate && readingDate <= endDate {
                 tempReadings.append((temp: temperature, time: readingDate))
             }
         }
@@ -425,18 +624,17 @@ class DailyTemperatureCalculator {
     }
     
     // MARK: - Humidity Calculations
+
+    // MARK: - NEW: Flexible Humidity Calculations
     
-    static func calculateDailyHumidityStats(from historicalData: HistoricalOutdoorData?, for date: Date = Date(), timeZone: TimeZone = .current) -> DailyHumidityStats? {
+    /// Calculate humidity stats from all available historical data, regardless of time boundaries
+    static func calculateHumidityStatsFromAvailableData(from historicalData: HistoricalOutdoorData?) -> DailyHumidityStats? {
         guard let humidityData = historicalData?.humidity else {
             return nil
         }
         
         let unit = humidityData.unit
         var humidityReadings: [(humidity: Double, time: Date)] = []
-        
-        let calendar = Calendar.current
-        let targetDay = calendar.startOfDay(for: date)
-        let nextDay = calendar.date(byAdding: .day, value: 1, to: targetDay) ?? targetDay
         
         for (timestampString, valueString) in humidityData.list {
             guard let timestamp = Double(timestampString),
@@ -445,10 +643,7 @@ class DailyTemperatureCalculator {
             }
             
             let readingDate = Date(timeIntervalSince1970: timestamp)
-            
-            if readingDate >= targetDay && readingDate < nextDay {
-                humidityReadings.append((humidity: humidity, time: readingDate))
-            }
+            humidityReadings.append((humidity: humidity, time: readingDate))
         }
         
         guard !humidityReadings.isEmpty else {
@@ -470,17 +665,14 @@ class DailyTemperatureCalculator {
         )
     }
     
-    static func calculateIndoorDailyHumidityStats(from historicalData: HistoricalIndoorData?, for date: Date = Date(), timeZone: TimeZone = .current) -> DailyHumidityStats? {
+    /// Calculate indoor humidity stats from all available historical data
+    static func calculateIndoorHumidityStatsFromAvailableData(from historicalData: HistoricalIndoorData?) -> DailyHumidityStats? {
         guard let humidityData = historicalData?.humidity else {
             return nil
         }
         
         let unit = humidityData.unit
         var humidityReadings: [(humidity: Double, time: Date)] = []
-        
-        let calendar = Calendar.current
-        let targetDay = calendar.startOfDay(for: date)
-        let nextDay = calendar.date(byAdding: .day, value: 1, to: targetDay) ?? targetDay
         
         for (timestampString, valueString) in humidityData.list {
             guard let timestamp = Double(timestampString),
@@ -489,10 +681,7 @@ class DailyTemperatureCalculator {
             }
             
             let readingDate = Date(timeIntervalSince1970: timestamp)
-            
-            if readingDate >= targetDay && readingDate < nextDay {
-                humidityReadings.append((humidity: humidity, time: readingDate))
-            }
+            humidityReadings.append((humidity: humidity, time: readingDate))
         }
         
         guard !humidityReadings.isEmpty else {
@@ -514,6 +703,44 @@ class DailyTemperatureCalculator {
         )
     }
     
+    /// Calculate channel humidity stats from all available historical data
+    static func calculateChannelHumidityStatsFromAvailableData(from channelData: HistoricalTempHumidityData?) -> DailyHumidityStats? {
+        guard let humidityData = channelData?.humidity else {
+            return nil
+        }
+        
+        let unit = humidityData.unit
+        var humidityReadings: [(humidity: Double, time: Date)] = []
+        
+        for (timestampString, valueString) in humidityData.list {
+            guard let timestamp = Double(timestampString),
+                  let humidity = Double(valueString) else {
+                continue
+            }
+            
+            let readingDate = Date(timeIntervalSince1970: timestamp)
+            humidityReadings.append((humidity: humidity, time: readingDate))
+        }
+        
+        guard !humidityReadings.isEmpty else {
+            return nil
+        }
+        
+        let sortedByHumidity = humidityReadings.sorted { $0.humidity < $1.humidity }
+        let lowestReading = sortedByHumidity.first!
+        let highestReading = sortedByHumidity.last!
+        
+        return DailyHumidityStats(
+            highHumidity: highestReading.humidity,
+            lowHumidity: lowestReading.humidity,
+            highHumidityTime: highestReading.time,
+            lowHumidityTime: lowestReading.time,
+            unit: unit,
+            dataPointCount: humidityReadings.count,
+            isFromHistoricalData: true
+        )
+    }
+
     // MARK: - Wind Calculations
     
     static func calculateDailyWindStats(from historicalData: HistoricalWeatherData?, for date: Date = Date(), timeZone: TimeZone = .current) -> DailyWindStats? {
@@ -803,16 +1030,97 @@ class DailyTemperatureCalculator {
         )
     }
     
+    // MARK: - Enhanced Public API with Flexible Time Range Support
+    
+    /// Get temperature stats with automatic fallback to available data when daily data is not found
+    static func getFlexibleDailyStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyTemperatureStats? {
+        guard let historical = historicalData else { return nil }
+        
+        // Try daily stats first
+        if let dailyStats = calculateDailyStats(from: historical.outdoor, for: date, timeZone: station.timeZone) {
+            return dailyStats
+        }
+        
+        // Fallback to any available data if daily data is not found
+        return calculateStatsFromAvailableData(from: historical.outdoor)
+    }
+    
+    /// Get indoor temperature stats with automatic fallback to available data when daily data is not found
+    static func getFlexibleIndoorDailyStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyTemperatureStats? {
+        guard let historical = historicalData else { return nil }
+        
+        // Try daily stats first
+        if let dailyStats = calculateIndoorDailyStats(from: historical.indoor, for: date, timeZone: station.timeZone) {
+            return dailyStats
+        }
+        
+        // Fallback to any available data if daily data is not found
+        return calculateIndoorStatsFromAvailableData(from: historical.indoor)
+    }
+    
+    /// Get channel 1 temperature stats with automatic fallback to available data when daily data is not found
+    static func getFlexibleTempHumidityCh1DailyStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyTemperatureStats? {
+        guard let historical = historicalData else { return nil }
+        
+        // Try daily stats first
+        if let dailyStats = calculateChannelDailyStats(from: historical.tempAndHumidityCh1, for: date, timeZone: station.timeZone) {
+            return dailyStats
+        }
+        
+        // Fallback to any available data if daily data is not found
+        return calculateChannelStatsFromAvailableData(from: historical.tempAndHumidityCh1)
+    }
+    
+    /// Get channel 2 temperature stats with automatic fallback to available data when daily data is not found
+    static func getFlexibleTempHumidityCh2DailyStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyTemperatureStats? {
+        guard let historical = historicalData else { return nil }
+        
+        // Try daily stats first
+        if let dailyStats = calculateChannelDailyStats(from: historical.tempAndHumidityCh2, for: date, timeZone: station.timeZone) {
+            return dailyStats
+        }
+        
+        // Fallback to any available data if daily data is not found
+        return calculateChannelStatsFromAvailableData(from: historical.tempAndHumidityCh2)
+    }
+    
+    /// Get channel 3 temperature stats with automatic fallback to available data when daily data is not found
+    static func getFlexibleTempHumidityCh3DailyStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyTemperatureStats? {
+        guard let historical = historicalData else { return nil }
+        
+        // Try daily stats first
+        if let dailyStats = calculateChannelDailyStats(from: historical.tempAndHumidityCh3, for: date, timeZone: station.timeZone) {
+            return dailyStats
+        }
+        
+        // Fallback to any available data if daily data is not found
+        return calculateChannelStatsFromAvailableData(from: historical.tempAndHumidityCh3)
+    }
+    
     // MARK: - Public API
     
     static func getDailyStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyTemperatureStats? {
         guard let historical = historicalData else { return nil }
-        return calculateDailyStats(from: historical.outdoor, for: date, timeZone: station.timeZone)
+        
+        // Try daily stats first (for full calendar day)
+        if let dailyStats = calculateDailyStats(from: historical.outdoor, for: date, timeZone: station.timeZone) {
+            return dailyStats
+        }
+        
+        // Fallback to any available data if daily data is not found (for short time ranges like 1 hour)
+        return calculateStatsFromAvailableData(from: historical.outdoor)
     }
     
     static func getDailyHumidityStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyHumidityStats? {
         guard let historical = historicalData else { return nil }
-        return calculateDailyHumidityStats(from: historical.outdoor, for: date, timeZone: station.timeZone)
+        
+        // Try daily stats first (for full calendar day)
+        if let dailyStats = calculateDailyHumidityStats(from: historical.outdoor, for: date, timeZone: station.timeZone) {
+            return dailyStats
+        }
+        
+        // Fallback to any available data if daily data is not found (for short time ranges like 1 hour)
+        return calculateHumidityStatsFromAvailableData(from: historical.outdoor)
     }
     
     static func getDailyWindStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyWindStats? {
@@ -861,47 +1169,127 @@ class DailyTemperatureCalculator {
     
     static func getIndoorDailyStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyTemperatureStats? {
         guard let historical = historicalData else { return nil }
-        return calculateIndoorDailyStats(from: historical.indoor, for: date, timeZone: station.timeZone)
+        
+        // Try daily stats first (for full calendar day)
+        if let dailyStats = calculateIndoorDailyStats(from: historical.indoor, for: date, timeZone: station.timeZone) {
+            return dailyStats
+        }
+        
+        // Fallback to any available data if daily data is not found (for short time ranges like 1 hour)
+        return calculateIndoorStatsFromAvailableData(from: historical.indoor)
     }
     
     static func getIndoorDailyHumidityStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyHumidityStats? {
         guard let historical = historicalData else { return nil }
-        return calculateIndoorDailyHumidityStats(from: historical.indoor, for: date, timeZone: station.timeZone)
+        
+        // Try daily stats first (for full calendar day)
+        if let dailyStats = calculateIndoorDailyHumidityStats(from: historical.indoor, for: date, timeZone: station.timeZone) {
+            return dailyStats
+        }
+        
+        // Fallback to any available data if daily data is not found (for short time ranges like 1 hour)
+        return calculateIndoorHumidityStatsFromAvailableData(from: historical.indoor)
     }
     
     // MARK: - Channel Temperature Stats (Now with Historical Data Support)
     
     static func getTempHumidityCh1DailyStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyTemperatureStats? {
         guard let historical = historicalData else { return nil }
-        return calculateChannelDailyStats(from: historical.tempAndHumidityCh1, for: date, timeZone: station.timeZone)
+        
+        // Try daily stats first (for full calendar day)
+        if let dailyStats = calculateChannelDailyStats(from: historical.tempAndHumidityCh1, for: date, timeZone: station.timeZone) {
+            return dailyStats
+        }
+        
+        // Fallback to any available data if daily data is not found (for short time ranges like 1 hour)
+        return calculateChannelStatsFromAvailableData(from: historical.tempAndHumidityCh1)
     }
     
     static func getTempHumidityCh1DailyHumidityStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyHumidityStats? {
         guard let historical = historicalData else { return nil }
-        return calculateChannelDailyHumidityStats(from: historical.tempAndHumidityCh1, for: date, timeZone: station.timeZone)
+        
+        // Try daily stats first (for full calendar day)
+        if let dailyStats = calculateChannelDailyHumidityStats(from: historical.tempAndHumidityCh1, for: date, timeZone: station.timeZone) {
+            return dailyStats
+        }
+        
+        // Fallback to any available data if daily data is not found (for short time ranges like 1 hour)
+        return calculateChannelHumidityStatsFromAvailableData(from: historical.tempAndHumidityCh1)
     }
     
     static func getTempHumidityCh2DailyStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyTemperatureStats? {
         guard let historical = historicalData else { return nil }
-        return calculateChannelDailyStats(from: historical.tempAndHumidityCh2, for: date, timeZone: station.timeZone)
+        
+        // Try daily stats first (for full calendar day)
+        if let dailyStats = calculateChannelDailyStats(from: historical.tempAndHumidityCh2, for: date, timeZone: station.timeZone) {
+            return dailyStats
+        }
+        
+        // Fallback to any available data if daily data is not found (for short time ranges like 1 hour)
+        return calculateChannelStatsFromAvailableData(from: historical.tempAndHumidityCh2)
     }
     
     static func getTempHumidityCh2DailyHumidityStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyHumidityStats? {
         guard let historical = historicalData else { return nil }
-        return calculateChannelDailyHumidityStats(from: historical.tempAndHumidityCh2, for: date, timeZone: station.timeZone)
+        
+        // Try daily stats first (for full calendar day)
+        if let dailyStats = calculateChannelDailyHumidityStats(from: historical.tempAndHumidityCh2, for: date, timeZone: station.timeZone) {
+            return dailyStats
+        }
+        
+        // Fallback to any available data if daily data is not found (for short time ranges like 1 hour)
+        return calculateChannelHumidityStatsFromAvailableData(from: historical.tempAndHumidityCh2)
     }
     
     static func getTempHumidityCh3DailyStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyTemperatureStats? {
         guard let historical = historicalData else { return nil }
-        return calculateChannelDailyStats(from: historical.tempAndHumidityCh3, for: date, timeZone: station.timeZone)
+        
+        // Try daily stats first (for full calendar day)
+        if let dailyStats = calculateChannelDailyStats(from: historical.tempAndHumidityCh3, for: date, timeZone: station.timeZone) {
+            return dailyStats
+        }
+        
+        // Fallback to any available data if daily data is not found (for short time ranges like 1 hour)
+        return calculateChannelStatsFromAvailableData(from: historical.tempAndHumidityCh3)
     }
     
     static func getTempHumidityCh3DailyHumidityStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyHumidityStats? {
         guard let historical = historicalData else { return nil }
-        return calculateChannelDailyHumidityStats(from: historical.tempAndHumidityCh3, for: date, timeZone: station.timeZone)
+        
+        // Try daily stats first (for full calendar day)
+        if let dailyStats = calculateChannelDailyHumidityStats(from: historical.tempAndHumidityCh3, for: date, timeZone: station.timeZone) {
+            return dailyStats
+        }
+        
+        // Fallback to any available data if daily data is not found (for short time ranges like 1 hour)
+        return calculateChannelHumidityStatsFromAvailableData(from: historical.tempAndHumidityCh3)
+    }
+
+    /// Get humidity stats with automatic fallback to available data when daily data is not found
+    static func getFlexibleDailyHumidityStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyHumidityStats? {
+        guard let historical = historicalData else { return nil }
+        
+        // Try daily stats first
+        if let dailyStats = calculateDailyHumidityStats(from: historical.outdoor, for: date, timeZone: station.timeZone) {
+            return dailyStats
+        }
+        
+        // Fallback to any available data if daily data is not found
+        return calculateHumidityStatsFromAvailableData(from: historical.outdoor)
     }
     
-    // MARK: - Channel Data Calculation Methods
+    /// Get indoor humidity stats with automatic fallback to available data when daily data is not found
+    static func getFlexibleIndoorDailyHumidityStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyHumidityStats? {
+        guard let historical = historicalData else { return nil }
+        
+        // Try daily stats first
+        if let dailyStats = calculateIndoorDailyHumidityStats(from: historical.indoor, for: date, timeZone: station.timeZone) {
+            return dailyStats
+        }
+        
+        // Fallback to any available data if daily data is not found
+        return calculateIndoorHumidityStatsFromAvailableData(from: historical.indoor)
+    }
     
     static func calculateChannelDailyStats(from channelData: HistoricalTempHumidityData?, for date: Date = Date(), timeZone: TimeZone = .current) -> DailyTemperatureStats? {
         guard let temperatureData = channelData?.temperature else {
@@ -949,6 +1337,138 @@ class DailyTemperatureCalculator {
     
     static func calculateChannelDailyHumidityStats(from channelData: HistoricalTempHumidityData?, for date: Date = Date(), timeZone: TimeZone = .current) -> DailyHumidityStats? {
         guard let humidityData = channelData?.humidity else {
+            return nil
+        }
+        
+        let unit = humidityData.unit
+        var humidityReadings: [(humidity: Double, time: Date)] = []
+        
+        let calendar = Calendar.current
+        let targetDay = calendar.startOfDay(for: date)
+        let nextDay = calendar.date(byAdding: .day, value: 1, to: targetDay) ?? targetDay
+        
+        for (timestampString, valueString) in humidityData.list {
+            guard let timestamp = Double(timestampString),
+                  let humidity = Double(valueString) else {
+                continue
+            }
+            
+            let readingDate = Date(timeIntervalSince1970: timestamp)
+            
+            if readingDate >= targetDay && readingDate < nextDay {
+                humidityReadings.append((humidity: humidity, time: readingDate))
+            }
+        }
+        
+        guard !humidityReadings.isEmpty else {
+            return nil
+        }
+        
+        let sortedByHumidity = humidityReadings.sorted { $0.humidity < $1.humidity }
+        let lowestReading = sortedByHumidity.first!
+        let highestReading = sortedByHumidity.last!
+        
+        return DailyHumidityStats(
+            highHumidity: highestReading.humidity,
+            lowHumidity: lowestReading.humidity,
+            highHumidityTime: highestReading.time,
+            lowHumidityTime: lowestReading.time,
+            unit: unit,
+            dataPointCount: humidityReadings.count,
+            isFromHistoricalData: true
+        )
+    }
+    
+    static func calculateDailyHumidityStats(from historicalData: HistoricalOutdoorData?, for date: Date = Date(), timeZone: TimeZone = .current) -> DailyHumidityStats? {
+        guard let humidityData = historicalData?.humidity else {
+            return nil
+        }
+        
+        let unit = humidityData.unit
+        var humidityReadings: [(humidity: Double, time: Date)] = []
+        
+        let calendar = Calendar.current
+        let targetDay = calendar.startOfDay(for: date)
+        let nextDay = calendar.date(byAdding: .day, value: 1, to: targetDay) ?? targetDay
+        
+        for (timestampString, valueString) in humidityData.list {
+            guard let timestamp = Double(timestampString),
+                  let humidity = Double(valueString) else {
+                continue
+            }
+            
+            let readingDate = Date(timeIntervalSince1970: timestamp)
+            
+            if readingDate >= targetDay && readingDate < nextDay {
+                humidityReadings.append((humidity: humidity, time: readingDate))
+            }
+        }
+        
+        guard !humidityReadings.isEmpty else {
+            return nil
+        }
+        
+        let sortedByHumidity = humidityReadings.sorted { $0.humidity < $1.humidity }
+        let lowestReading = sortedByHumidity.first!
+        let highestReading = sortedByHumidity.last!
+        
+        return DailyHumidityStats(
+            highHumidity: highestReading.humidity,
+            lowHumidity: lowestReading.humidity,
+            highHumidityTime: highestReading.time,
+            lowHumidityTime: lowestReading.time,
+            unit: unit,
+            dataPointCount: humidityReadings.count,
+            isFromHistoricalData: true
+        )
+    }
+    
+    static func calculateIndoorDailyStats(from historicalData: HistoricalIndoorData?, for date: Date = Date(), timeZone: TimeZone = .current) -> DailyTemperatureStats? {
+        guard let temperatureData = historicalData?.temperature else {
+            return nil
+        }
+        
+        let unit = temperatureData.unit
+        var tempReadings: [(temp: Double, time: Date)] = []
+        
+        let calendar = Calendar.current
+        let targetDay = calendar.startOfDay(for: date)
+        let nextDay = calendar.date(byAdding: .day, value: 1, to: targetDay) ?? targetDay
+        
+        for (timestampString, valueString) in temperatureData.list {
+            guard let timestamp = Double(timestampString),
+                  let temperature = Double(valueString) else {
+                continue
+            }
+            
+            let readingDate = Date(timeIntervalSince1970: timestamp)
+            
+            if readingDate >= targetDay && readingDate < nextDay {
+                tempReadings.append((temp: temperature, time: readingDate))
+            }
+        }
+        
+        guard !tempReadings.isEmpty else {
+            return nil
+        }
+        
+        let sortedByTemp = tempReadings.sorted { $0.temp < $1.temp }
+        let lowestReading = sortedByTemp.first!
+        let highestReading = sortedByTemp.last!
+        
+        return DailyTemperatureStats(
+            highTemp: highestReading.temp,
+            lowTemp: lowestReading.temp,
+            highTempTime: highestReading.time,
+            lowTempTime: lowestReading.time,
+            unit: unit,
+            dataPointCount: tempReadings.count,
+            isFromHistoricalData: true
+        )
+    }
+    
+    static func calculateIndoorDailyHumidityStats(from historicalData: HistoricalIndoorData?, for date: Date = Date(), timeZone: TimeZone = .current) -> DailyHumidityStats? {
+        guard let humidityData = historicalData?.humidity else {
             return nil
         }
         
