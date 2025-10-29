@@ -26,6 +26,8 @@ struct RadarTileView: View {
     @State private var hasInitiallyLoaded = false
     @State private var loadAttempts = 0
     @State private var currentStationId: String = ""
+    @State private var showSatelliteOverlay = false // Start with radar only
+    @State private var useWindyRadar = true // Default to Windy instead of Ventusky
     
     // Calculate a unique delay for this station's radar based on MAC address
     private var initialLoadDelay: TimeInterval {
@@ -36,13 +38,55 @@ struct RadarTileView: View {
     private var radarHTML: String {
         guard let latitude = station.latitude,
               let longitude = station.longitude else {
-            return generateRadarHTML(lat: 39.83, lon: -98.58)
+            return useWindyRadar ?
+                generateWindyRadarHTML(lat: 39.83, lon: -98.58) :
+                generateVentuskyRadarHTML(lat: 39.83, lon: -98.58)
         }
         
-        return generateRadarHTML(lat: latitude, lon: longitude)
+        return useWindyRadar ?
+            generateWindyRadarHTML(lat: latitude, lon: longitude) :
+            generateVentuskyRadarHTML(lat: latitude, lon: longitude)
     }
     
-    private func generateRadarHTML(lat: Double, lon: Double) -> String {
+    private func generateWindyRadarHTML(lat: Double, lon: Double) -> String {
+        let zoom = 8
+        let overlay = showSatelliteOverlay ? "radar,satellite" : "radar"
+        let timestamp = Int(Date().timeIntervalSince1970)
+        
+        return """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+                body { 
+                    margin: 0; 
+                    padding: 0; 
+                    background-color: #0f1419;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segui UI', sans-serif;
+                    height: 100vh;
+                    overflow: hidden;
+                }
+                iframe {
+                    width: 100%;
+                    height: 100%;
+                    border: none;
+                    border-radius: 8px;
+                }
+            </style>
+        </head>
+        <body>
+            <iframe 
+                src="https://embed.windy.com/embed2.html?lat=\(lat)&lon=\(lon)&detailLat=\(lat)&detailLon=\(lon)&width=100%&height=100%&zoom=\(zoom)&level=surface&overlay=\(overlay)&product=ecmwf&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=mph&metricTemp=°F&radarRange=-1&timestamp=\(timestamp)"
+                frameborder="0">
+            </iframe>
+        </body>
+        </html>
+        """
+    }
+    
+    private func generateVentuskyRadarHTML(lat: Double, lon: Double) -> String {
         return """
         <!DOCTYPE html>
         <html>
@@ -76,6 +120,46 @@ struct RadarTileView: View {
                     console.log('Radar iframe should be loaded by now');
                 }, 5000);
             </script>
+        </body>
+        </html>
+        """
+    }
+    
+    // Alternative method with satellite overlay option
+    private func generateWindyRadarWithSatelliteHTML(lat: Double, lon: Double, showSatellite: Bool = true) -> String {
+        let zoom = 8
+        let baseLayer = showSatellite ? "satellite" : "wind"
+        let overlay = "radar"
+        let timestamp = Int(Date().timeIntervalSince1970)
+        
+        return """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+                body { 
+                    margin: 0; 
+                    padding: 0; 
+                    background-color: #1a1a2e;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segui UI', sans-serif;
+                    height: 100vh;
+                    overflow: hidden;
+                }
+                iframe {
+                    width: 100%;
+                    height: 100%;
+                    border: none;
+                    border-radius: 8px;
+                }
+            </style>
+        </head>
+        <body>
+            <iframe 
+                src="https://embed.windy.com/embed2.html?lat=\(lat)&lon=\(lon)&detailLat=\(lat)&detailLon=\(lon)&width=100%&height=100%&zoom=\(zoom)&level=surface&overlay=\(overlay)&product=ecmwf&menu=&message=true&marker=dot&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=mph&metricTemp=°F&radarRange=-1&timestamp=\(timestamp)&layer=\(baseLayer)"
+                frameborder="0">
+            </iframe>
         </body>
         </html>
         """
@@ -186,20 +270,42 @@ struct RadarTileView: View {
                     }
                     
                     // Control bar
-                    HStack {
-                        Spacer()
-                        
-                        Button("Refresh") {
-                            refreshRadar()
+                    VStack(spacing: 4) {
+                        // First row - Provider and satellite toggle
+                        HStack {
+                            // Provider toggle
+                            Picker("Radar Source", selection: $useWindyRadar) {
+                                Text("Ventusky").tag(false)
+                                Text("Windy").tag(true)
+                            }
+                            .pickerStyle(SegmentedPickerStyle())
+                            .controlSize(.mini)
+                            
+                            if useWindyRadar {
+                                Toggle("Satellite", isOn: $showSatelliteOverlay)
+                                    .controlSize(.mini)
+                                    .toggleStyle(.checkbox)
+                            }
+                            
+                            Spacer()
                         }
-                        .buttonStyle(.bordered)
-                        .controlSize(.mini)
                         
-                        Button("Open Full") {
-                            openFullRadar()
+                        // Second row - Action buttons
+                        HStack {
+                            Spacer()
+                            
+                            Button("Refresh") {
+                                refreshRadar()
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.mini)
+                            
+                            Button("Open Full") {
+                                openFullRadar()
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.mini)
                         }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.mini)
                     }
                     .padding(.top, 4)
                 }
@@ -259,6 +365,14 @@ struct RadarTileView: View {
             stopCountdownTimer()
             stopLoadingTimeout()
             NotificationCenter.default.removeObserver(self, name: .radarSettingsChanged, object: nil)
+        }
+        .onChange(of: useWindyRadar) { _, _ in
+            refreshRadar()
+        }
+        .onChange(of: showSatelliteOverlay) { _, _ in
+            if useWindyRadar {
+                refreshRadar()
+            }
         }
     }
     
@@ -376,14 +490,25 @@ struct RadarTileView: View {
     
     private func openFullRadar() {
         guard let latitude = station.latitude, let longitude = station.longitude else {
-            // Open default location if no coordinates
-            if let url = URL(string: "https://www.ventusky.com/?p=39.83;-98.58;4&l=radar") {
+            // Open default location if no coordinates - default to Windy
+            let defaultURL = useWindyRadar ? 
+                "https://www.windy.com/?radar,39.83,-98.58,5" :
+                "https://www.ventusky.com/?p=39.83;-98.58;4&l=radar"
+            
+            if let url = URL(string: defaultURL) {
                 NSWorkspace.shared.open(url)
             }
             return
         }
         
-        let fullURL = "https://www.ventusky.com/?p=\(latitude);\(longitude);8&l=radar"
+        let fullURL: String
+        if useWindyRadar {
+            let layers = showSatelliteOverlay ? "radar,satellite" : "radar"
+            fullURL = "https://www.windy.com/?\(layers),\(latitude),\(longitude),8"
+        } else {
+            fullURL = "https://www.ventusky.com/?p=\(latitude);\(longitude);8&l=radar"
+        }
+        
         if let url = URL(string: fullURL) {
             NSWorkspace.shared.open(url)
         }
