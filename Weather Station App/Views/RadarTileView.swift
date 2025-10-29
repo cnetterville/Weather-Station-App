@@ -58,50 +58,15 @@ struct RadarTileView: View {
                     height: 100vh;
                     overflow: hidden;
                 }
-                .radar-container {
-                    display: block !important;
-                    position: relative !important;
-                    width: 100% !important;
-                    height: 100vh !important;
-                    margin: 0 !important;
-                    padding: 0 !important;
-                    border: 0 !important;
-                    background: #f0f0f0;
-                    text-align: center;
-                    overflow: hidden;
-                }
-                .radar-wrapper {
-                    display: block !important;
-                    position: relative !important;
-                    width: 100% !important;
-                    height: 100% !important;
-                    margin: 0 !important;
-                    border: 0 !important;
-                    padding: 0 !important;
-                }
-                .radar-iframe {
-                    display: block !important;
-                    position: absolute !important;
-                    left: 0 !important;
-                    top: 0 !important;
-                    width: 100% !important;
-                    height: 100% !important;
-                    margin: 0 !important;
-                    padding: 0 !important;
-                    border: 0 !important;
-                    border-radius: 8px;
-                    object-fit: cover;
-                }
             </style>
         </head>
         <body>
-            <div class="radar-container">
-                <div class="radar-wrapper">
+            <div style="display:block!important;position:relative!important;width:100%!important;margin:auto!important;padding:0!important;border:0!important">
+                <div style="display:block!important;position:relative!important;width:100%!important;height:0!important;box-sizing:content-box!important;margin:0!important;border:0!important;padding:0 0 61.794%!important;left:0!important;top:0!important;right:0!important;bottom:0!important">
                     <iframe 
-                        class="radar-iframe" 
-                        src="https://embed.ventusky.com/?p=\(lat);\(lon);8&l=radar&w=320&h=225&ssl=1&t=\(Int(Date().timeIntervalSince1970))" 
-                        loading="lazy"
-                        frameborder="0">
+                        src="https://embed.ventusky.com/?p=\(lat);\(lon);7&l=radar&t=\(Int(Date().timeIntervalSince1970))" 
+                        style="display:block!important;position:absolute!important;left:0!important;top:0!important;width:100%!important;height:100%!important;margin:0!important;padding:0!important;border:0!important;border-radius:8px!important;right:auto!important;bottom:auto!important" 
+                        loading="lazy">
                     </iframe>
                 </div>
             </div>
@@ -149,7 +114,7 @@ struct RadarTileView: View {
                         .controlSize(.small)
                     }
                     .frame(maxWidth: .infinity)
-                    .frame(height: 225)
+                    .frame(height: 160) // Reduced height to eliminate white space
                 } else {
                     // Radar content
                     ZStack {
@@ -160,14 +125,14 @@ struct RadarTileView: View {
                             isLoading: $isLoading,
                             hasError: $hasError
                         )
-                        .frame(height: 225) // Match iframe height
+                        .frame(height: 160) // Reduced height to eliminate white space
                         .cornerRadius(8)
                         
                         // Loading overlay
                         if isLoading {
                             Rectangle()
                                 .fill(Color(NSColor.controlBackgroundColor))
-                                .frame(height: 225)
+                                .frame(height: 160)
                                 .cornerRadius(8)
                                 .overlay(
                                     VStack(spacing: 12) {
@@ -206,7 +171,7 @@ struct RadarTileView: View {
                                     .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
                                 }
                                 .padding(.trailing, 8)
-                                .padding(.top, 35) // Position below Ventusky logo area
+                                .padding(.top, 30) // Adjusted for new layout
                                 
                                 Spacer()
                             }
