@@ -17,25 +17,25 @@ struct RadarTileView: View {
     @State private var hasError = false
     @State private var autoRefreshTimer: Timer?
     @State private var countdownTimer: Timer?
+    @State private var loadingTimeoutTimer: Timer?
     @State private var lastRefreshTime = Date()
     @State private var nextRefreshTime = Date()
-    @State private var radarRefreshInterval: TimeInterval = 600 // Default 10 minutes
-    @State private var countdownTrigger = 0 // Force UI updates
-    @State private var initialLoadDelayTask: Task<Void, Never>? // Track initial load task
-    @State private var hasInitiallyLoaded = false // Track if we've done the initial load
+    @State private var radarRefreshInterval: TimeInterval = 600
+    @State private var countdownTrigger = 0
+    @State private var initialLoadDelayTask: Task<Void, Never>?
+    @State private var hasInitiallyLoaded = false
+    @State private var loadAttempts = 0
+    @State private var currentStationId: String = ""
     
     // Calculate a unique delay for this station's radar based on MAC address
     private var initialLoadDelay: TimeInterval {
-        // Use the station's MAC address to create a consistent but unique delay
         let hash = abs(station.macAddress.hashValue)
-        // Create delays between 0-10 seconds, spaced by 2-second intervals
         return Double(hash % 5) * 2.0
     }
     
     private var radarHTML: String {
         guard let latitude = station.latitude,
               let longitude = station.longitude else {
-            // Default coordinates (center of US)
             return generateRadarHTML(lat: 39.83, lon: -98.58)
         }
         
@@ -70,6 +70,12 @@ struct RadarTileView: View {
                     </iframe>
                 </div>
             </div>
+            <script>
+                // Simple timeout to clear loading state
+                setTimeout(function() {
+                    console.log('Radar iframe should be loaded by now');
+                }, 5000);
+            </script>
         </body>
         </html>
         """
@@ -114,19 +120,20 @@ struct RadarTileView: View {
                         .controlSize(.small)
                     }
                     .frame(maxWidth: .infinity)
-                    .frame(height: 160) // Reduced height to eliminate white space
+                    .frame(height: 160)
                 } else {
                     // Radar content
                     ZStack {
-                        // WebKit view for radar
+                        // WebKit view for radar - only use station ID to force recreation on station change
                         RadarWebView(
                             htmlContent: radarHTML,
                             webView: $webView,
                             isLoading: $isLoading,
                             hasError: $hasError
                         )
-                        .frame(height: 160) // Reduced height to eliminate white space
+                        .frame(height: 160)
                         .cornerRadius(8)
+                        .id("radar-\(station.macAddress)")
                         
                         // Loading overlay
                         if isLoading {
@@ -145,7 +152,7 @@ struct RadarTileView: View {
                                 )
                         }
                         
-                        // Auto-refresh status overlay - positioned in top-right corner
+                        // Auto-refresh status overlay
                         if !hasError && !isLoading {
                             VStack {
                                 HStack {
@@ -171,7 +178,7 @@ struct RadarTileView: View {
                                     .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
                                 }
                                 .padding(.trailing, 8)
-                                .padding(.top, 30) // Adjusted for new layout
+                                .padding(.top, 30)
                                 
                                 Spacer()
                             }
@@ -201,23 +208,31 @@ struct RadarTileView: View {
         .onAppear {
             radarRefreshInterval = UserDefaults.standard.radarRefreshInterval
             
-            // Start initial load with staggered delay to prevent all radars loading simultaneously
-            initialLoadDelayTask = Task {
-                do {
-                    try await Task.sleep(nanoseconds: UInt64(initialLoadDelay * 1_000_000_000))
-                    
-                    // Check if view is still active before loading
-                    guard !Task.isCancelled else { return }
-                    
-                    await MainActor.run {
-                        loadRadar()
-                        hasInitiallyLoaded = true
-                        startAutoRefreshTimer()
-                        startCountdownTimer()
+            // Check if station has changed
+            let stationChanged = currentStationId != station.macAddress
+            if stationChanged {
+                currentStationId = station.macAddress
+                hasInitiallyLoaded = false
+                loadAttempts = 0
+                print("Station changed to: \(station.name)")
+            }
+            
+            // Only start initial load if not already loaded for this station
+            if !hasInitiallyLoaded {
+                initialLoadDelayTask = Task {
+                    do {
+                        try await Task.sleep(nanoseconds: UInt64(initialLoadDelay * 1_000_000_000))
+                        guard !Task.isCancelled else { return }
+                        
+                        await MainActor.run {
+                            loadRadar()
+                            hasInitiallyLoaded = true
+                            startAutoRefreshTimer()
+                            startCountdownTimer()
+                        }
+                    } catch {
+                        return
                     }
-                } catch {
-                    // Task was cancelled, no need to load
-                    return
                 }
             }
             
@@ -231,19 +246,18 @@ struct RadarTileView: View {
                     radarRefreshInterval = newInterval
                     nextRefreshTime = lastRefreshTime.addingTimeInterval(radarRefreshInterval)
                     
-                    // Restart timer with new interval
                     stopAutoRefreshTimer()
                     startAutoRefreshTimer()
                 }
             }
         }
         .onDisappear {
-            // Cancel any pending initial load task
             initialLoadDelayTask?.cancel()
             initialLoadDelayTask = nil
             
             stopAutoRefreshTimer()
             stopCountdownTimer()
+            stopLoadingTimeout()
             NotificationCenter.default.removeObserver(self, name: .radarSettingsChanged, object: nil)
         }
     }
@@ -255,7 +269,6 @@ struct RadarTileView: View {
             return
         }
         
-        // Only set loading state if this isn't the initial delayed load
         if hasInitiallyLoaded {
             isLoading = true
         }
@@ -263,8 +276,10 @@ struct RadarTileView: View {
         hasError = false
         lastRefreshTime = Date()
         nextRefreshTime = Date().addingTimeInterval(radarRefreshInterval)
+        loadAttempts += 1
         
-        // WebView will handle the actual loading through the delegate
+        // Start a simple timeout
+        startLoadingTimeout()
     }
     
     private func refreshRadar() {
@@ -272,14 +287,34 @@ struct RadarTileView: View {
         hasError = false
         lastRefreshTime = Date()
         nextRefreshTime = Date().addingTimeInterval(radarRefreshInterval)
+        loadAttempts = 0
         
-        // Regenerate HTML with new timestamp and reload
+        startLoadingTimeout()
+        
+        // Force reload by recreating the WebView
         let newHTML = radarHTML
         webView?.loadHTMLString(newHTML, baseURL: URL(string: "https://embed.ventusky.com"))
         
-        // Reset the auto-refresh timer
         stopAutoRefreshTimer()
         startAutoRefreshTimer()
+    }
+    
+    private func startLoadingTimeout() {
+        stopLoadingTimeout()
+        
+        loadingTimeoutTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: false) { _ in
+            DispatchQueue.main.async {
+                if isLoading {
+                    print("Radar loading timeout - clearing loading state")
+                    isLoading = false
+                }
+            }
+        }
+    }
+    
+    private func stopLoadingTimeout() {
+        loadingTimeoutTimer?.invalidate()
+        loadingTimeoutTimer = nil
     }
     
     private func startAutoRefreshTimer() {
@@ -373,15 +408,13 @@ struct RadarWebView: NSViewRepresentable {
             self.webView = webView
         }
         
-        // Load the HTML content
         webView.loadHTMLString(htmlContent, baseURL: URL(string: "https://embed.ventusky.com"))
         
         return webView
     }
     
     func updateNSView(_ nsView: WKWebView, context: Context) {
-        // Only reload if content has changed significantly
-        // This prevents constant reloading
+        // Don't reload constantly - let the .id() modifier handle station changes
     }
     
     func makeCoordinator() -> Coordinator {
@@ -403,13 +436,12 @@ struct RadarWebView: NSViewRepresentable {
         }
         
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            DispatchQueue.main.async {
-                // Small delay to ensure the iframe content has loaded
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                    self.parent.isLoading = false
-                    self.parent.hasError = false
-                }
+            // Give iframe time to load, then clear loading state
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                self.parent.isLoading = false
+                self.parent.hasError = false
             }
+            print("Radar WebView didFinish navigation - iframe should load in 3 seconds")
         }
         
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
