@@ -17,7 +17,7 @@ struct HistoricalChartView: View {
     @State private var showDataAvailabilityInfo = false
     
     var historicalData: HistoricalWeatherData? {
-        weatherService.historicalData[station.macAddress]
+        weatherService.chartHistoricalData[station.macAddress]
     }
     
     var chartData: [ChartDataPoint] {

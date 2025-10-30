@@ -25,6 +25,7 @@ class WeatherStationService: ObservableObject {
     @Published var discoveredStations: [EcowittDevice] = []
     @Published var weatherData: [String: WeatherStationData] = [:]
     @Published var historicalData: [String: HistoricalWeatherData] = [:]
+    @Published var chartHistoricalData: [String: HistoricalWeatherData] = [:] // NEW: Separate data for charts
     @Published var isLoading = false
     @Published var isLoadingHistory = false
     @Published var isDiscoveringStations = false
@@ -535,6 +536,7 @@ class WeatherStationService: ObservableObject {
         print(" [Extended Lightning: \(station.name)] Requesting \(timeRange.rawValue)")
         print(" Date range: \(startDateString) to \(endDateString)")
         print(" Cycle type: \(timeRange.cycleType)")
+        print(" URL: \(url.absoluteString)")
         
         do {
             var request = URLRequest(url: url)
@@ -752,9 +754,14 @@ class WeatherStationService: ObservableObject {
             
             await MainActor.run {
                 if historicalResponse.code == 0 {
-                    if timeRange == .lastHour || timeRange == .last6Hours {
-                        historicalData[station.macAddress] = historicalResponse.data
-                    } else {
+                    // FIXED: Store chart data separately from weather card daily stats data
+                    // Chart data goes to chartHistoricalData (for user-requested time ranges)
+                    chartHistoricalData[station.macAddress] = historicalResponse.data
+                    
+                    // Only update main historicalData for daily stats if this is the daily range
+                    // This preserves weather card daily stats while allowing chart flexibility
+                    if timeRange == .todayFrom00 {
+                        // This is daily data - merge it properly for weather cards
                         if let existingData = historicalData[station.macAddress] {
                             let mergedData = mergeHistoricalDataPreservingDaily(
                                 existing: existingData, 
@@ -786,80 +793,146 @@ class WeatherStationService: ObservableObject {
     }
     
     private func mergeHistoricalDataPreservingDaily(existing: HistoricalWeatherData, new: HistoricalWeatherData, newTimeRange: HistoricalTimeRange) -> HistoricalWeatherData {
-        // For sensors that were requested in the new data, use the new data for charts
-        // But preserve any existing daily data that has more comprehensive coverage
+        // For short time ranges (1-hour, 6-hour), we want to preserve existing daily data
+        // but update with the new data for chart display
+        // For longer time ranges, we replace with the comprehensive new data
+        
+        let shouldPreserveDailyData = (newTimeRange == .lastHour || newTimeRange == .last6Hours)
         
         return HistoricalWeatherData(
-            outdoor: mergeOutdoorData(existing: existing.outdoor, new: new.outdoor),
-            indoor: mergeIndoorData(existing: existing.indoor, new: new.indoor),
-            solarAndUvi: new.solarAndUvi ?? existing.solarAndUvi, // Use new if available, fallback to existing
-            rainfall: new.rainfall ?? existing.rainfall,
-            rainfallPiezo: new.rainfallPiezo ?? existing.rainfallPiezo,
-            wind: new.wind ?? existing.wind,
-            pressure: new.pressure ?? existing.pressure,
+            outdoor: mergeOutdoorData(existing: existing.outdoor, new: new.outdoor, preserveExisting: shouldPreserveDailyData),
+            indoor: mergeIndoorData(existing: existing.indoor, new: new.indoor, preserveExisting: shouldPreserveDailyData),
+            solarAndUvi: shouldPreserveDailyData ? (existing.solarAndUvi ?? new.solarAndUvi) : (new.solarAndUvi ?? existing.solarAndUvi),
+            rainfall: shouldPreserveDailyData ? (existing.rainfall ?? new.rainfall) : (new.rainfall ?? existing.rainfall),
+            rainfallPiezo: shouldPreserveDailyData ? (existing.rainfallPiezo ?? new.rainfallPiezo) : (new.rainfallPiezo ?? existing.rainfallPiezo),
+            wind: shouldPreserveDailyData ? (existing.wind ?? new.wind) : (new.wind ?? existing.wind),
+            pressure: shouldPreserveDailyData ? (existing.pressure ?? new.pressure) : (new.pressure ?? existing.pressure),
             lightning: existing.lightning, // Always preserve lightning data (it's special long-term data)
-            pm25Ch1: new.pm25Ch1 ?? existing.pm25Ch1,
-            pm25Ch2: new.pm25Ch2 ?? existing.pm25Ch2,
-            pm25Ch3: new.pm25Ch3 ?? existing.pm25Ch3,
-            tempAndHumidityCh1: mergeTempHumidityData(existing: existing.tempAndHumidityCh1, new: new.tempAndHumidityCh1),
-            tempAndHumidityCh2: mergeTempHumidityData(existing: existing.tempAndHumidityCh2, new: new.tempAndHumidityCh2),
-            tempAndHumidityCh3: mergeTempHumidityData(existing: existing.tempAndHumidityCh3, new: new.tempAndHumidityCh3)
+            pm25Ch1: shouldPreserveDailyData ? (existing.pm25Ch1 ?? new.pm25Ch1) : (new.pm25Ch1 ?? existing.pm25Ch1),
+            pm25Ch2: shouldPreserveDailyData ? (existing.pm25Ch2 ?? new.pm25Ch2) : (new.pm25Ch2 ?? existing.pm25Ch2),
+            pm25Ch3: shouldPreserveDailyData ? (existing.pm25Ch3 ?? new.pm25Ch3) : (new.pm25Ch3 ?? existing.pm25Ch3),
+            tempAndHumidityCh1: mergeTempHumidityData(existing: existing.tempAndHumidityCh1, new: new.tempAndHumidityCh1, preserveExisting: shouldPreserveDailyData),
+            tempAndHumidityCh2: mergeTempHumidityData(existing: existing.tempAndHumidityCh2, new: new.tempAndHumidityCh2, preserveExisting: shouldPreserveDailyData),
+            tempAndHumidityCh3: mergeTempHumidityData(existing: existing.tempAndHumidityCh3, new: new.tempAndHumidityCh3, preserveExisting: shouldPreserveDailyData)
         )
     }
     
-    private func mergeOutdoorData(existing: HistoricalOutdoorData?, new: HistoricalOutdoorData?) -> HistoricalOutdoorData? {
+    private func mergeOutdoorData(existing: HistoricalOutdoorData?, new: HistoricalOutdoorData?, preserveExisting: Bool) -> HistoricalOutdoorData? {
         guard let existing = existing else { return new }
         guard let new = new else { return existing }
         
-        return HistoricalOutdoorData(
-            temperature: mergeTemperatureData(existing: existing.temperature, new: new.temperature),
-            feelsLike: new.feelsLike ?? existing.feelsLike,
-            appTemp: new.appTemp ?? existing.appTemp,
-            dewPoint: new.dewPoint ?? existing.dewPoint,
-            humidity: mergeHumidityData(existing: existing.humidity, new: new.humidity)
-        )
+        if preserveExisting {
+            // For short time ranges, preserve existing comprehensive data but merge in new data
+            return HistoricalOutdoorData(
+                temperature: mergeTemperatureData(existing: existing.temperature, new: new.temperature, preserveExisting: true),
+                feelsLike: existing.feelsLike ?? new.feelsLike,
+                appTemp: existing.appTemp ?? new.appTemp,
+                dewPoint: existing.dewPoint ?? new.dewPoint,
+                humidity: mergeHumidityData(existing: existing.humidity, new: new.humidity, preserveExisting: true)
+            )
+        } else {
+            // For longer time ranges, prefer new comprehensive data
+            return HistoricalOutdoorData(
+                temperature: mergeTemperatureData(existing: existing.temperature, new: new.temperature, preserveExisting: false),
+                feelsLike: new.feelsLike ?? existing.feelsLike,
+                appTemp: new.appTemp ?? existing.appTemp,
+                dewPoint: new.dewPoint ?? existing.dewPoint,
+                humidity: mergeHumidityData(existing: existing.humidity, new: new.humidity, preserveExisting: false)
+            )
+        }
     }
     
-    private func mergeIndoorData(existing: HistoricalIndoorData?, new: HistoricalIndoorData?) -> HistoricalIndoorData? {
+    private func mergeIndoorData(existing: HistoricalIndoorData?, new: HistoricalIndoorData?, preserveExisting: Bool) -> HistoricalIndoorData? {
         guard let existing = existing else { return new }
         guard let new = new else { return existing }
         
-        return HistoricalIndoorData(
-            temperature: mergeTemperatureData(existing: existing.temperature, new: new.temperature),
-            humidity: mergeHumidityData(existing: existing.humidity, new: new.humidity),
-            dewPoint: new.dewPoint ?? existing.dewPoint,
-            feelsLike: new.feelsLike ?? existing.feelsLike
-        )
+        if preserveExisting {
+            return HistoricalIndoorData(
+                temperature: mergeTemperatureData(existing: existing.temperature, new: new.temperature, preserveExisting: true),
+                humidity: mergeHumidityData(existing: existing.humidity, new: new.humidity, preserveExisting: true),
+                dewPoint: existing.dewPoint ?? new.dewPoint,
+                feelsLike: existing.feelsLike ?? new.feelsLike
+            )
+        } else {
+            return HistoricalIndoorData(
+                temperature: mergeTemperatureData(existing: existing.temperature, new: new.temperature, preserveExisting: false),
+                humidity: mergeHumidityData(existing: existing.humidity, new: new.humidity, preserveExisting: false),
+                dewPoint: new.dewPoint ?? existing.dewPoint,
+                feelsLike: new.feelsLike ?? existing.feelsLike
+            )
+        }
     }
     
-    private func mergeTempHumidityData(existing: HistoricalTempHumidityData?, new: HistoricalTempHumidityData?) -> HistoricalTempHumidityData? {
+    private func mergeTempHumidityData(existing: HistoricalTempHumidityData?, new: HistoricalTempHumidityData?, preserveExisting: Bool) -> HistoricalTempHumidityData? {
         guard let existing = existing else { return new }
         guard let new = new else { return existing }
         
         return HistoricalTempHumidityData(
-            temperature: mergeTemperatureData(existing: existing.temperature, new: new.temperature),
-            humidity: mergeHumidityData(existing: existing.humidity, new: new.humidity)
+            temperature: mergeTemperatureData(existing: existing.temperature, new: new.temperature, preserveExisting: preserveExisting),
+            humidity: mergeHumidityData(existing: existing.humidity, new: new.humidity, preserveExisting: preserveExisting)
         )
     }
     
-    private func mergeTemperatureData(existing: HistoricalMeasurement?, new: HistoricalMeasurement?) -> HistoricalMeasurement? {
+    private func mergeTemperatureData(existing: HistoricalMeasurement?, new: HistoricalMeasurement?, preserveExisting: Bool) -> HistoricalMeasurement? {
         guard let existing = existing else { return new }
         guard let new = new else { return existing }
         
-        print("   Temperature data comparison: existing=\(existing.list.count) points, new=\(new.list.count) points")
-        
-        // Always use new data for display - it represents the specific time range the user requested
-        print("   Using NEW temperature data (\(new.list.count) points) for chart display")
-        return new
+        if preserveExisting {
+            print("   Temperature data merge: preserving existing \(existing.list.count) points, adding new \(new.list.count) points")
+            
+            // Merge the data: combine existing comprehensive data with new specific time range data
+            var mergedList = existing.list
+            for (timestamp, value) in new.list {
+                mergedList[timestamp] = value  // New data overwrites existing for same timestamps
+            }
+            
+            return HistoricalMeasurement(unit: existing.unit, list: mergedList)
+        } else {
+            print("   Temperature data merge: using new data (\(new.list.count) points) for chart display")
+            return new
+        }
     }
     
-    private func mergeHumidityData(existing: HistoricalMeasurement?, new: HistoricalMeasurement?) -> HistoricalMeasurement? {
+    private func mergeHumidityData(existing: HistoricalMeasurement?, new: HistoricalMeasurement?, preserveExisting: Bool) -> HistoricalMeasurement? {
         guard let existing = existing else { return new }
         guard let new = new else { return existing }
         
-        print("   Humidity data comparison: existing=\(existing.list.count) points, new=\(new.list.count) points")
-        print("   Using NEW humidity data (\(new.list.count) points) for chart display")
-        return new
+        if preserveExisting {
+            print("   Humidity data merge: preserving existing \(existing.list.count) points, adding new \(new.list.count) points")
+            
+            // Merge the data: combine existing comprehensive data with new specific time range data
+            var mergedList = existing.list
+            for (timestamp, value) in new.list {
+                mergedList[timestamp] = value  // New data overwrites existing for same timestamps
+            }
+            
+            return HistoricalMeasurement(unit: existing.unit, list: mergedList)
+        } else {
+            print("   Humidity data merge: using new data (\(new.list.count) points) for chart display")
+            return new
+        }
+    }
+    
+    // Helper function to convert historical measurement to chart data points
+    func getChartData(from measurement: HistoricalMeasurement?) -> [ChartDataPoint] {
+        guard let measurement = measurement else { return [] }
+        
+        var dataPoints: [ChartDataPoint] = []
+        
+        for (timestampString, valueString) in measurement.list {
+            if let timestamp = Double(timestampString),
+               let value = Double(valueString) {
+                let date = Date(timeIntervalSince1970: timestamp)
+                dataPoints.append(ChartDataPoint(timestamp: date, value: value))
+            }
+        }
+        
+        return dataPoints.sorted { $0.timestamp < $1.timestamp }
+    }
+    
+    // NEW: Get chart data from the separate chart historical data
+    func getChartHistoricalData(for station: WeatherStation) -> HistoricalWeatherData? {
+        return chartHistoricalData[station.macAddress]
     }
     
     func discoverWeatherStations() async -> (success: Bool, message: String) {
@@ -1072,23 +1145,6 @@ class WeatherStationService: ObservableObject {
         
         Note: Longer time ranges use less frequent data points but cover more time.
         """
-    }
-    
-    // Helper function to convert historical measurement to chart data points
-    func getChartData(from measurement: HistoricalMeasurement?) -> [ChartDataPoint] {
-        guard let measurement = measurement else { return [] }
-        
-        var dataPoints: [ChartDataPoint] = []
-        
-        for (timestampString, valueString) in measurement.list {
-            if let timestamp = Double(timestampString),
-               let value = Double(valueString) {
-                let date = Date(timeIntervalSince1970: timestamp)
-                dataPoints.append(ChartDataPoint(timestamp: date, value: value))
-            }
-        }
-        
-        return dataPoints.sorted { $0.timestamp < $1.timestamp }
     }
     
     func testAPIConnection() async -> (success: Bool, message: String) {
