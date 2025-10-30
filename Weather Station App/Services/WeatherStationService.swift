@@ -450,19 +450,20 @@ class WeatherStationService: ObservableObject {
     
     // Fetch today's historical data for high/low temperature calculations
     private func fetchTodaysHistoricalData(for station: WeatherStation) async {
-        print(" Fetching today's historical data for \(station.name)...")
+        print("🌡️ Fetching today's historical data (from 00:00) for \(station.name)...")
         
         // First fetch extended lightning data (30 days) and store it
-        print(" Fetching extended lightning historical data for \(station.name)...")
+        print("⚡ Fetching extended lightning historical data for \(station.name)...")
         await fetchExtendedLightningData(for: station)
         
         // Store the lightning data before it gets overwritten
         let lightningData = historicalData[station.macAddress]?.lightning
         
-        // Then fetch today's detailed data for other sensors (excluding lightning)
+        // UPDATED: Use today from 00:00 with 5-minute resolution for accurate daily high/low
+        // This provides precise timing and covers the actual calendar day
         await fetchHistoricalData(
             for: station,
-            timeRange: .last24Hours, 
+            timeRange: .todayFrom00, // NEW: From midnight today with 5-minute resolution
             sensors: ["outdoor", "indoor", "temp_and_humidity_ch1", "temp_and_humidity_ch2", "temp_and_humidity_ch3", "rainfall", "rainfall_piezo", "wind", "pressure", "pm25_ch1", "pm25_ch2", "pm25_ch3"] 
         )
         
@@ -485,12 +486,12 @@ class WeatherStationService: ObservableObject {
                 tempAndHumidityCh3: existingData.tempAndHumidityCh3
             )
             historicalData[station.macAddress] = mergedData
-            print(" Lightning data preserved: \(savedLightningData.count?.list.count ?? 0) readings")
+            print("⚡ Lightning data preserved: \(savedLightningData.count?.list.count ?? 0) readings")
         }
         
         // DEBUG: Check final lightning data
         if let lightningData = historicalData[station.macAddress]?.lightning?.count {
-            print(" Final lightning data: \(lightningData.list.count) readings")
+            print("⚡ Final lightning data: \(lightningData.list.count) readings")
             
             // Show sample of recent data
             let recent = lightningData.list.prefix(5)
@@ -501,10 +502,10 @@ class WeatherStationService: ObservableObject {
                 }
             }
         } else {
-            print(" No lightning data in final result")
+            print("⚡ No lightning data in final result")
         }
         
-        print(" Completed historical data fetch for: \(station.name)")
+        print("🌡️ Completed today's 5-minute resolution historical data fetch from 00:00 for: \(station.name)")
     }
     
     private func fetchExtendedLightningData(for station: WeatherStation) async {
@@ -634,10 +635,27 @@ class WeatherStationService: ObservableObject {
         let endDate: Date
         
         switch timeRange {
+        case .lastHour:
+            // Last hour from current time
+            endDate = now
+            startDate = endDate.addingTimeInterval(-3600)
+            
+        case .last6Hours:
+            // Last 6 hours from current time  
+            endDate = now
+            startDate = endDate.addingTimeInterval(-6 * 3600)
+            
         case .last24Hours:
-            // Today from 00:00:00 to 23:59:59
+            // Last 24 hours from current time
+            endDate = now
+            startDate = endDate.addingTimeInterval(-24 * 3600)
+            
+        case .todayFrom00:
+            // NEW: From midnight (00:00:00) of current day to now
+            // This gives us the actual daily high/low for today's calendar day
             startDate = calendar.startOfDay(for: now)
-            endDate = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: now) ?? now
+            endDate = now
+            print("🌡️ Today from 00:00 range: \(startDate) to \(endDate)")
             
         case .last7Days:
             // Last 7 full calendar days
@@ -658,11 +676,6 @@ class WeatherStationService: ObservableObject {
             // Last 365 full calendar days
             endDate = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: now) ?? now
             startDate = calendar.date(byAdding: .day, value: -364, to: calendar.startOfDay(for: now)) ?? now
-            
-        default:
-            // For hourly ranges, use rolling time periods from current time
-            endDate = now
-            startDate = endDate.addingTimeInterval(-timeRange.timeInterval)
         }
         
         // For longer periods, we need to adjust the start date based on API retention limits
@@ -675,6 +688,8 @@ class WeatherStationService: ObservableObject {
         case .last365Days:
             // Use weekly data which has 1 year retention - no additional limiting needed
             adjustedStartDate = startDate
+        case .todayFrom00:
+            adjustedStartDate = calendar.startOfDay(for: Date())
         default:
             adjustedStartDate = startDate
         }

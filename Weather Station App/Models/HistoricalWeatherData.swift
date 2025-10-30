@@ -196,6 +196,7 @@ enum HistoricalTimeRange: String, CaseIterable {
     case lastHour = "1 Hour"
     case last6Hours = "6 Hours"
     case last24Hours = "24 Hours"
+    case todayFrom00 = "Today from 00:00"  // NEW: From midnight of current day
     case last7Days = "7 Days" 
     case last30Days = "30 Days"
     case last90Days = "90 Days"
@@ -206,6 +207,7 @@ enum HistoricalTimeRange: String, CaseIterable {
         case .lastHour: return 3600
         case .last6Hours: return 6 * 3600
         case .last24Hours: return 24 * 3600
+        case .todayFrom00: return 24 * 3600  // Max possible for current day
         case .last7Days: return 7 * 24 * 3600
         case .last30Days: return 30 * 24 * 3600
         case .last90Days: return 90 * 24 * 3600
@@ -217,6 +219,7 @@ enum HistoricalTimeRange: String, CaseIterable {
         switch self {
         case .lastHour, .last6Hours: return "5min"
         case .last24Hours: return "30min"
+        case .todayFrom00: return "5min"  // NEW: 5-minute resolution for precise daily high/low timing
         case .last7Days: return "4hour"
         case .last30Days, .last90Days: return "1day"  // 1day cycle only has 3 months retention
         case .last365Days: return "1week"  // Use weekly data for 1 year (has 1 year retention)
@@ -226,6 +229,7 @@ enum HistoricalTimeRange: String, CaseIterable {
     var maxDaysPerRequest: Int {
         switch self {
         case .lastHour, .last6Hours, .last24Hours: return 1
+        case .todayFrom00: return 1  // Single day from midnight
         case .last7Days: return 7
         case .last30Days: return 30
         case .last90Days: return 90  // Limited to ~90 days max for daily data
@@ -238,6 +242,7 @@ enum HistoricalTimeRange: String, CaseIterable {
         case .lastHour: return "1H"
         case .last6Hours: return "6H" 
         case .last24Hours: return "24H"
+        case .todayFrom00: return "Today"  // NEW: Display name for today from midnight
         case .last7Days: return "7D"
         case .last30Days: return "30D"
         case .last90Days: return "90D"

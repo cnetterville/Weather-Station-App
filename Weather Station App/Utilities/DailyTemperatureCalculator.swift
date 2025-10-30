@@ -344,9 +344,16 @@ class DailyTemperatureCalculator {
         let unit = temperatureData.unit
         var tempReadings: [(temp: Double, time: Date)] = []
         
+        // Use the station's timezone for proper daily boundary calculation
         let calendar = Calendar.current
-        let targetDay = calendar.startOfDay(for: date)
-        let nextDay = calendar.date(byAdding: .day, value: 1, to: targetDay) ?? targetDay
+        var adjustedCalendar = calendar
+        adjustedCalendar.timeZone = timeZone
+        
+        let targetDay = adjustedCalendar.startOfDay(for: date)
+        let nextDay = adjustedCalendar.date(byAdding: .day, value: 1, to: targetDay) ?? targetDay
+        
+        print("🌡️ Calculating daily stats for timezone: \(timeZone.identifier)")
+        print("🌡️ Day boundaries: \(targetDay) to \(nextDay)")
         
         for (timestampString, valueString) in temperatureData.list {
             guard let timestamp = Double(timestampString),
@@ -362,12 +369,17 @@ class DailyTemperatureCalculator {
         }
         
         guard !tempReadings.isEmpty else {
+            print("🌡️ No temperature readings found for target day")
             return nil
         }
         
         let sortedByTemp = tempReadings.sorted { $0.temp < $1.temp }
         let lowestReading = sortedByTemp.first!
         let highestReading = sortedByTemp.last!
+        
+        print("🌡️ Found \(tempReadings.count) readings for daily stats")
+        print("🌡️ High: \(highestReading.temp)° at \(highestReading.time)")
+        print("🌡️ Low: \(lowestReading.temp)° at \(lowestReading.time)")
         
         return DailyTemperatureStats(
             highTemp: highestReading.temp,
@@ -624,7 +636,7 @@ class DailyTemperatureCalculator {
     }
     
     // MARK: - Humidity Calculations
-
+    
     // MARK: - NEW: Flexible Humidity Calculations
     
     /// Calculate humidity stats from all available historical data, regardless of time boundaries
