@@ -95,16 +95,11 @@ struct EditableWeatherCard<Content: View>: View {
                 Spacer()
             }
             
-            // Content with scrollable area for overflow
-            ScrollView {
-                content
-            }
-            .frame(maxHeight: 280) // Increased from 250 to 280 for more content space
-            
-            Spacer(minLength: 0)
+            // Content - now adaptive to content size
+            content
         }
-        .frame(height: 350) // Increased from 320 to accommodate rain amounts
-        .padding(20)
+        .frame(maxWidth: .infinity, minHeight: 120, alignment: .topLeading) // Fixed parameter order
+        .padding(16) // Slightly reduced padding
         .background {
             // Modern multi-layer background effect
             ZStack {
@@ -124,12 +119,12 @@ struct EditableWeatherCard<Content: View>: View {
                 )
             }
         }
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 2)
         .shadow(color: .black.opacity(0.04), radius: 2, x: 0, y: 1)
         .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .strokeBorder(.linearGradient(
                     colors: [
                         Color.white.opacity(0.3),
