@@ -1,4 +1,4 @@
-// 
+//
 //  SpecializedSensorCards.swift
 //  Weather Station App
 // 
@@ -1005,6 +1005,49 @@ struct SunTimesView: View {
     let sunTimes: SunTimes
     let station: WeatherStation
     
+    // Computed property for day length difference calculation
+    private var tomorrowDayLengthDifference: (changeText: String, changeColor: Color)? {
+        guard let latitude = station.latitude, let longitude = station.longitude else { return nil }
+        
+        let calendar = Calendar.current
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: Date()) ?? Date()
+        
+        guard let tomorrowSunTimes = SunCalculator.calculateSunTimes(for: tomorrow, latitude: latitude, longitude: longitude, timeZone: station.timeZone) else { return nil }
+        
+        // Day length difference calculation
+        let todayLength = sunTimes.sunset.timeIntervalSince(sunTimes.sunrise)
+        let tomorrowLength = tomorrowSunTimes.sunset.timeIntervalSince(tomorrowSunTimes.sunrise)
+        let difference = tomorrowLength - todayLength
+        let diffMinutes = Int(difference / 60)
+        let diffSeconds = Int(difference.truncatingRemainder(dividingBy: 60))
+        
+        let changeText: String
+        let changeColor: Color
+        
+        if abs(diffMinutes) > 0 {
+            if diffMinutes > 0 {
+                changeText = "+\(diffMinutes)m \(abs(diffSeconds))s"
+                changeColor = .green
+            } else {
+                changeText = "\(diffMinutes)m \(abs(diffSeconds))s"
+                changeColor = .orange
+            }
+        } else {
+            if diffSeconds > 0 {
+                changeText = "+\(diffSeconds)s"
+                changeColor = .green
+            } else if diffSeconds < 0 {
+                changeText = "\(diffSeconds)s"
+                changeColor = .orange
+            } else {
+                changeText = "Same"
+                changeColor = .secondary
+            }
+        }
+        
+        return (changeText, changeColor)
+    }
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 6) { 
             // Current status
@@ -1102,13 +1145,13 @@ struct SunTimesView: View {
                             .foregroundColor(.secondary)
                             .fontWeight(.semibold)
                         
-                        // Compact horizontal layout for tomorrow's data
+                        // Compact horizontal layout for tomorrow's data with clear labels
                         HStack(spacing: 16) {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("↑ \(tomorrowSunTimes.formattedSunrise)")
+                                Text("Sunrise \(tomorrowSunTimes.formattedSunrise)")
                                     .font(.caption)
                                     .fontWeight(.semibold)
-                                Text("↓ \(tomorrowSunTimes.formattedSunset)")
+                                Text("Sunset \(tomorrowSunTimes.formattedSunset)")
                                     .font(.caption)
                                     .fontWeight(.semibold)
                             }
@@ -1116,12 +1159,20 @@ struct SunTimesView: View {
                             Spacer()
                             
                             VStack(alignment: .trailing, spacing: 2) {
-                                Text("Length:")
+                                Text("Day Length:")
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
                                 Text(tomorrowSunTimes.formattedDayLength)
                                     .font(.caption)
                                     .fontWeight(.semibold)
+                                
+                                // Day length difference display using computed property
+                                if let diff = tomorrowDayLengthDifference {
+                                    Text(diff.changeText)
+                                        .font(.caption2)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(diff.changeColor)
+                                }
                             }
                         }
                     }
@@ -1389,8 +1440,8 @@ struct MoonPhaseMask: View {
             Path { path in
                 // Create the moon phase shape
                 if illumination <= 0.01 {
-                    // New moon - no illumination
-                    return
+                    // New moon - no illumination - create empty path
+                    // Don't return early, just leave path empty
                 } else if illumination >= 0.99 {
                     // Full moon - complete circle
                     path.addEllipse(in: CGRect(x: 0, y: 0, width: size, height: size))
