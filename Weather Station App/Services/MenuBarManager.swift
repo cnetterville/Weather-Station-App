@@ -28,6 +28,15 @@ class MenuBarManager: ObservableObject {
         }
     }
     
+    @Published var hideDockIcon: Bool = false {
+        didSet {
+            UserDefaults.standard.set(hideDockIcon, forKey: "HideDockIcon")
+            DispatchQueue.main.async {
+                self.updateDockVisibility()
+            }
+        }
+    }
+    
     @Published var selectedStationMac: String = "" {
         didSet {
             UserDefaults.standard.set(selectedStationMac, forKey: "MenuBarSelectedStation")
@@ -175,6 +184,7 @@ class MenuBarManager: ObservableObject {
     
     private func loadSettings() {
         isMenuBarEnabled = UserDefaults.standard.bool(forKey: "MenuBarEnabled")
+        hideDockIcon = UserDefaults.standard.bool(forKey: "HideDockIcon")
         selectedStationMac = UserDefaults.standard.string(forKey: "MenuBarSelectedStation") ?? ""
         showStationName = UserDefaults.standard.bool(forKey: "MenuBarShowStationName")
         cycleInterval = UserDefaults.standard.object(forKey: "MenuBarCycleInterval") as? TimeInterval ?? 10.0
@@ -183,6 +193,11 @@ class MenuBarManager: ObservableObject {
         showUVIcon = UserDefaults.standard.object(forKey: "MenuBarShowUVIcon") as? Bool ?? true
         showNightIcon = UserDefaults.standard.bool(forKey: "MenuBarShowNightIcon")
         showCloudyIcon = UserDefaults.standard.object(forKey: "MenuBarShowCloudyIcon") as? Bool ?? true
+        
+        // Apply dock visibility setting on load
+        DispatchQueue.main.async {
+            self.updateDockVisibility()
+        }
         
         if let modeRawValue = UserDefaults.standard.object(forKey: "MenuBarTemperatureMode") as? String,
            let mode = MenuBarTemperatureMode(rawValue: modeRawValue) {
@@ -823,6 +838,20 @@ class MenuBarManager: ObservableObject {
         updateMenuBarTitle()
         
         print("🔄 Cycled to station: \(nextStation.name)")
+    }
+    
+    // MARK: - Dock Visibility
+    
+    private func updateDockVisibility() {
+        if hideDockIcon {
+            // Hide the dock icon
+            NSApp.setActivationPolicy(.accessory)
+            print("🙈 Dock icon hidden")
+        } else {
+            // Show the dock icon
+            NSApp.setActivationPolicy(.regular)
+            print("👁️ Dock icon shown")
+        }
     }
 }
 

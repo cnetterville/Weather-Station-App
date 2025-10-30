@@ -105,211 +105,236 @@ struct SettingsView: View {
                             .font(.title2)
                             .fontWeight(.semibold)
                         
-                        VStack(alignment: .leading, spacing: 12) {
-                            Toggle("Show temperature in menu bar", isOn: $menuBarManager.isMenuBarEnabled)
-                                .toggleStyle(.checkbox)
-                            
-                            if menuBarManager.isMenuBarEnabled {
+                        VStack(alignment: .leading, spacing: 16) {
+                            Group {
                                 VStack(alignment: .leading, spacing: 12) {
-                                    // Display Mode Selection
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        Text("Display Mode:")
-                                            .font(.headline)
-                                        
-                                        Picker("Display Mode", selection: $menuBarManager.displayMode) {
-                                            ForEach(MenuBarDisplayMode.allCases, id: \.self) { mode in
-                                                VStack(alignment: .leading) {
-                                                    Text(mode.displayName)
-                                                    Text(mode.description)
+                                    Toggle("Show temperature in menu bar", isOn: $menuBarManager.isMenuBarEnabled)
+                                        .toggleStyle(.checkbox)
+                                    
+                                    Toggle("Hide app from dock", isOn: $menuBarManager.hideDockIcon)
+                                        .toggleStyle(.checkbox)
+                                        .disabled(!menuBarManager.isMenuBarEnabled)
+                                        .opacity(menuBarManager.isMenuBarEnabled ? 1.0 : 0.6)
+                                    
+                                    if !menuBarManager.isMenuBarEnabled && menuBarManager.hideDockIcon {
+                                        HStack {
+                                            Image(systemName: "exclamationmark.triangle")
+                                                .foregroundColor(.orange)
+                                            Text("Warning: Enable menu bar first to avoid losing access to the app")
+                                                .font(.caption)
+                                                .foregroundColor(.orange)
+                                        }
+                                    }
+                                    
+                                    if menuBarManager.isMenuBarEnabled {
+                                        VStack(alignment: .leading, spacing: 12) {
+                                            // Display Mode Selection
+                                            VStack(alignment: .leading, spacing: 8) {
+                                                Text("Display Mode:")
+                                                    .font(.headline)
+                                                
+                                                Picker("Display Mode", selection: $menuBarManager.displayMode) {
+                                                    ForEach(MenuBarDisplayMode.allCases, id: \.self) { mode in
+                                                        VStack(alignment: .leading) {
+                                                            Text(mode.displayName)
+                                                            Text(mode.description)
+                                                                .font(.caption)
+                                                                .foregroundColor(.secondary)
+                                                        }
+                                                        .tag(mode)
+                                                    }
+                                                }
+                                                .pickerStyle(.menu)
+                                            }
+                                            
+                                            // Station Selection (only for single station mode)
+                                            if menuBarManager.displayMode == .singleStation {
+                                                VStack(alignment: .leading, spacing: 8) {
+                                                    Text("Weather Station:")
+                                                        .font(.headline)
+                                                    
+                                                    if menuBarManager.availableStations.isEmpty {
+                                                        Text("No active weather stations available")
+                                                            .font(.caption)
+                                                            .foregroundColor(.secondary)
+                                                    } else {
+                                                        Picker("Station", selection: $menuBarManager.selectedStationMac) {
+                                                            Text("First available station")
+                                                                .tag("")
+                                                            
+                                                            ForEach(menuBarManager.availableStations, id: \.macAddress) { station in
+                                                                Text(station.name)
+                                                                    .tag(station.macAddress)
+                                                            }
+                                                        }
+                                                        .pickerStyle(.menu)
+                                                    }
+                                                }
+                                            }
+                                            
+                                            // Cycling Options (only for cycle mode)
+                                            if menuBarManager.displayMode == .cycleThrough {
+                                                VStack(alignment: .leading, spacing: 8) {
+                                                    Text("Cycling Options:")
+                                                        .font(.headline)
+                                                    
+                                                    HStack {
+                                                        Text("Cycle Interval:")
+                                                            .font(.subheadline)
+                                                        
+                                                        Spacer()
+                                                        
+                                                        Picker("Interval", selection: $menuBarManager.cycleInterval) {
+                                                            Text("5 seconds").tag(5.0)
+                                                            Text("10 seconds").tag(10.0)
+                                                            Text("15 seconds").tag(15.0)
+                                                            Text("30 seconds").tag(30.0)
+                                                            Text("1 minute").tag(60.0)
+                                                            Text("2 minutes").tag(120.0)
+                                                        }
+                                                        .pickerStyle(.menu)
+                                                        .frame(width: 120)
+                                                    }
+                                                    
+                                                    Text("Cycling through \(menuBarManager.availableStations.count) active station\(menuBarManager.availableStations.count == 1 ? "" : "s")")
                                                         .font(.caption)
                                                         .foregroundColor(.secondary)
                                                 }
-                                                .tag(mode)
                                             }
-                                        }
-                                        .pickerStyle(.menu)
-                                    }
-                                    
-                                    // Station Selection (only for single station mode)
-                                    if menuBarManager.displayMode == .singleStation {
-                                        VStack(alignment: .leading, spacing: 8) {
-                                            Text("Weather Station:")
-                                                .font(.headline)
                                             
-                                            if menuBarManager.availableStations.isEmpty {
-                                                Text("No active weather stations available")
-                                                    .font(.caption)
-                                                    .foregroundColor(.secondary)
-                                            } else {
-                                                Picker("Station", selection: $menuBarManager.selectedStationMac) {
-                                                    Text("First available station")
-                                                        .tag("")
-                                                    
-                                                    ForEach(menuBarManager.availableStations, id: \.macAddress) { station in
-                                                        Text(station.name)
-                                                            .tag(station.macAddress)
+                                            // Temperature Display Mode
+                                            VStack(alignment: .leading, spacing: 8) {
+                                                Text("Temperature Display:")
+                                                    .font(.headline)
+                                                
+                                                Picker("Temperature Mode", selection: $menuBarManager.temperatureDisplayMode) {
+                                                    ForEach(MenuBarTemperatureMode.allCases, id: \.self) { mode in
+                                                        Text(mode.displayName)
+                                                            .tag(mode)
                                                     }
                                                 }
                                                 .pickerStyle(.menu)
                                             }
-                                        }
-                                    }
-                                    
-                                    // Cycling Options (only for cycle mode)
-                                    if menuBarManager.displayMode == .cycleThrough {
-                                        VStack(alignment: .leading, spacing: 8) {
-                                            Text("Cycling Options:")
-                                                .font(.headline)
                                             
-                                            HStack {
-                                                Text("Cycle Interval:")
-                                                    .font(.subheadline)
-                                                
-                                                Spacer()
-                                                
-                                                Picker("Interval", selection: $menuBarManager.cycleInterval) {
-                                                    Text("5 seconds").tag(5.0)
-                                                    Text("10 seconds").tag(10.0)
-                                                    Text("15 seconds").tag(15.0)
-                                                    Text("30 seconds").tag(30.0)
-                                                    Text("1 minute").tag(60.0)
-                                                    Text("2 minutes").tag(120.0)
-                                                }
-                                                .pickerStyle(.menu)
-                                                .frame(width: 120)
-                                            }
-                                            
-                                            Text("Cycling through \(menuBarManager.availableStations.count) active station\(menuBarManager.availableStations.count == 1 ? "" : "s")")
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
-                                        }
-                                    }
-                                    
-                                    // Temperature Display Mode
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        Text("Temperature Display:")
-                                            .font(.headline)
-                                        
-                                        Picker("Temperature Mode", selection: $menuBarManager.temperatureDisplayMode) {
-                                            ForEach(MenuBarTemperatureMode.allCases, id: \.self) { mode in
-                                                Text(mode.displayName)
-                                                    .tag(mode)
-                                            }
-                                        }
-                                        .pickerStyle(.menu)
-                                    }
-                                    
-                                    // Display Options
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        Text("Display Options:")
-                                            .font(.headline)
-                                        
-                                        Toggle("Show station names", isOn: $menuBarManager.showStationName)
-                                            .toggleStyle(.checkbox)
-                                            .disabled(menuBarManager.displayMode == .allStations) // Always shows names in all stations mode
-                                        
-                                        Toggle("Show decimal places", isOn: $menuBarManager.showDecimals)
-                                            .toggleStyle(.checkbox)
-                                        
-                                        Toggle("Show rain icon when raining", isOn: $menuBarManager.showRainIcon)
-                                            .toggleStyle(.checkbox)
-                                        
-                                        Toggle("Show sun icon for high solar (600+ W/m²)", isOn: $menuBarManager.showUVIcon)
-                                            .toggleStyle(.checkbox)
-                                        
-                                        Toggle("Show cloud icon for moderate solar", isOn: $menuBarManager.showCloudyIcon)
-                                            .toggleStyle(.checkbox)
-                                        
-                                        Toggle("Show moon icon between sunset and sunrise", isOn: $menuBarManager.showNightIcon)
-                                            .toggleStyle(.checkbox)
-                                        
-                                        // Custom menubar labels section
-                                        if !menuBarManager.availableStations.isEmpty {
-                                            Divider()
-                                                .padding(.vertical, 4)
-                                            
+                                            // Display Options
                                             VStack(alignment: .leading, spacing: 8) {
-                                                HStack {
-                                                    Text("Custom MenuBar Labels:")
-                                                        .font(.subheadline)
-                                                        .fontWeight(.medium)
+                                                Text("Display Options:")
+                                                    .font(.headline)
+                                                
+                                                Toggle("Show station names", isOn: $menuBarManager.showStationName)
+                                                    .toggleStyle(.checkbox)
+                                                    .disabled(menuBarManager.displayMode == .allStations) // Always shows names in all stations mode
+                                                
+                                                Toggle("Show decimal places", isOn: $menuBarManager.showDecimals)
+                                                    .toggleStyle(.checkbox)
+                                                
+                                                Toggle("Show rain icon when raining", isOn: $menuBarManager.showRainIcon)
+                                                    .toggleStyle(.checkbox)
+                                                
+                                                Toggle("Show sun icon for high solar (600+ W/m²)", isOn: $menuBarManager.showUVIcon)
+                                                    .toggleStyle(.checkbox)
+                                                
+                                                Toggle("Show cloud icon for moderate solar", isOn: $menuBarManager.showCloudyIcon)
+                                                    .toggleStyle(.checkbox)
+                                                
+                                                Toggle("Show moon icon between sunset and sunrise", isOn: $menuBarManager.showNightIcon)
+                                                    .toggleStyle(.checkbox)
+                                                
+                                                // Custom menubar labels section
+                                                if !menuBarManager.availableStations.isEmpty {
+                                                    Divider()
+                                                        .padding(.vertical, 4)
                                                     
-                                                    Spacer()
-                                                    
-                                                    // Preview of how it will look in menubar
-                                                    if let previewText = getMenuBarPreview() {
-                                                        VStack(alignment: .trailing) {
-                                                            Text("Preview:")
-                                                                .font(.caption2)
-                                                                .foregroundColor(.secondary)
-                                                            Text(previewText)
-                                                                .font(.system(.caption, design: .monospaced))
-                                                                .padding(.horizontal, 6)
-                                                                .padding(.vertical, 2)
-                                                                .background(Color.black.opacity(0.8))
-                                                                .foregroundColor(.white)
-                                                                .cornerRadius(4)
+                                                    VStack(alignment: .leading, spacing: 8) {
+                                                        HStack {
+                                                            Text("Custom MenuBar Labels:")
+                                                                .font(.subheadline)
+                                                                .fontWeight(.medium)
+                                                            
+                                                            Spacer()
+                                                            
+                                                            // Preview of how it will look in menubar
+                                                            if let previewText = getMenuBarPreview() {
+                                                                VStack(alignment: .trailing) {
+                                                                    Text("Preview:")
+                                                                        .font(.caption2)
+                                                                        .foregroundColor(.secondary)
+                                                                    Text(previewText)
+                                                                        .font(.system(.caption, design: .monospaced))
+                                                                        .padding(.horizontal, 6)
+                                                                        .padding(.vertical, 2)
+                                                                        .background(Color.black.opacity(0.8))
+                                                                        .foregroundColor(.white)
+                                                                        .cornerRadius(4)
+                                                                }
+                                                            }
+                                                        }
+                                                        
+                                                        Text("Set short labels for each station to save menubar space (max 8 characters):")
+                                                            .font(.caption)
+                                                            .foregroundColor(.secondary)
+                                                        
+                                                        ForEach(Array(menuBarManager.availableStations.enumerated()), id: \.element.id) { index, station in
+                                                            MenuBarLabelEditor(station: station)
+                                                        }
+                                                        
+                                                        // Quick action buttons
+                                                        HStack {
+                                                            Button("Reset All Labels") {
+                                                                resetAllCustomLabels()
+                                                            }
+                                                            .buttonStyle(.bordered)
+                                                            .controlSize(.small)
+                                                            
+                                                            Button("Auto-Generate Short Labels") {
+                                                                autoGenerateShortLabels()
+                                                            }
+                                                            .buttonStyle(.bordered)
+                                                            .controlSize(.small)
+                                                            
+                                                            Spacer()
                                                         }
                                                     }
                                                 }
-                                                
-                                                Text("Set short labels for each station to save menubar space (max 8 characters):")
-                                                    .font(.caption)
-                                                    .foregroundColor(.secondary)
-                                                
-                                                ForEach(Array(menuBarManager.availableStations.enumerated()), id: \.element.id) { index, station in
-                                                    MenuBarLabelEditor(station: station)
-                                                }
-                                                
-                                                // Quick action buttons
-                                                HStack {
-                                                    Button("Reset All Labels") {
-                                                        resetAllCustomLabels()
+                                            }
+                                            
+                                            // Info
+                                            HStack {
+                                                Image(systemName: "info.circle")
+                                                    .foregroundColor(.blue)
+                                                VStack(alignment: .leading, spacing: 2) {
+                                                    Text("Click the menu bar item to see detailed weather info and quick actions")
+                                                        .font(.caption)
+                                                        .foregroundColor(.secondary)
+                                                    Text("Custom labels help keep the menubar compact while showing meaningful station identifiers")
+                                                        .font(.caption)
+                                                        .foregroundColor(.secondary)
+                                                    if menuBarManager.hideDockIcon {
+                                                        Text("App icon is hidden from dock - access via menu bar only")
+                                                            .font(.caption)
+                                                            .foregroundColor(.purple)
                                                     }
-                                                    .buttonStyle(.bordered)
-                                                    .controlSize(.small)
-                                                    
-                                                    Button("Auto-Generate Short Labels") {
-                                                        autoGenerateShortLabels()
+                                                    if menuBarManager.displayMode == .allStations {
+                                                        Text("All stations mode: Shows abbreviated data from all active stations")
+                                                            .font(.caption)
+                                                            .foregroundColor(.secondary)
+                                                    } else if menuBarManager.displayMode == .cycleThrough {
+                                                        Text("Cycle mode: Automatically rotates between stations every \(Int(menuBarManager.cycleInterval)) seconds")
+                                                            .font(.caption)
+                                                            .foregroundColor(.secondary)
                                                     }
-                                                    .buttonStyle(.bordered)
-                                                    .controlSize(.small)
-                                                    
-                                                    Spacer()
                                                 }
                                             }
                                         }
-                                    }
-                                    
-                                    // Info
-                                    HStack {
-                                        Image(systemName: "info.circle")
-                                            .foregroundColor(.blue)
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text("Click the menu bar item to see detailed weather info and quick actions")
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
-                                            Text("Custom labels help keep the menubar compact while showing meaningful station identifiers")
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
-                                            if menuBarManager.displayMode == .allStations {
-                                                Text("All stations mode: Shows abbreviated data from all active stations")
-                                                    .font(.caption)
-                                                    .foregroundColor(.secondary)
-                                            } else if menuBarManager.displayMode == .cycleThrough {
-                                                Text("Cycle mode: Automatically rotates between stations every \(Int(menuBarManager.cycleInterval)) seconds")
-                                                    .font(.caption)
-                                                    .foregroundColor(.secondary)
-                                            }
-                                        }
+                                        .padding(.leading, 16)
                                     }
                                 }
-                                .padding(.leading, 16)
+                                .padding()
+                                .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                                .cornerRadius(8)
                             }
                         }
                         .padding()
-                        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
-                        .cornerRadius(8)
                     }
                     
                     // Display Preferences
@@ -482,8 +507,6 @@ struct SettingsView: View {
                             }
                         }
                         .padding()
-                        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
-                        .cornerRadius(8)
                     }
                     
                     // API Configuration
@@ -561,8 +584,6 @@ struct SettingsView: View {
                             }
                         }
                         .padding()
-                        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
-                        .cornerRadius(8)
                     }
                     
                     // Weather Stations
@@ -913,6 +934,8 @@ struct AddWeatherStationView: View {
                     dismiss()
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
             
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 6) {
@@ -951,6 +974,7 @@ struct AddWeatherStationView: View {
                     }
                 }
             }
+            .padding()
             
             Button("Add Station") {
                 let formattedMAC = MACAddressValidator.format(macAddress)
