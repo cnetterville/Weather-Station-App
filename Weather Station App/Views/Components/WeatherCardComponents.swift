@@ -156,32 +156,9 @@ struct StationInfoCard: View {
         return formatter
     }
     
-    private func deviceTypeDescription(_ type: Int) -> String {
-        switch type {
-        case 1: return "Weather Station Gateway"
-        case 2: return "Weather Camera"
-        default: return "Device Type \(type)"
-        }
-    }
-    
     var body: some View {
         WeatherCard(title: "Station Information", systemImage: "info.circle.fill") {
             VStack(alignment: .leading, spacing: 8) {
-                // Device Type
-                if let deviceType = station.deviceType {
-                    HStack {
-                        Text("Device Type:")
-                            .fontWeight(.medium)
-                        Spacer()
-                        Text(deviceTypeDescription(deviceType))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(deviceType == 1 ? Color.blue.opacity(0.2) : Color.purple.opacity(0.2))
-                            .foregroundColor(deviceType == 1 ? .blue : .purple)
-                            .cornerRadius(6)
-                    }
-                }
-                
                 // MAC Address
                 HStack {
                     Text("MAC Address:")
