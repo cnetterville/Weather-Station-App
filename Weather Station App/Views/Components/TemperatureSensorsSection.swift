@@ -51,6 +51,14 @@ struct TemperatureSensorsSection: View {
                 )
             }
             
+            // Radar Card (show only for stations with coordinates) - Moved here after forecast
+            if station.sensorPreferences.showRadar && station.latitude != nil && station.longitude != nil {
+                RadarTileView(station: station, onTitleChange: { newTitle in
+                    station.customLabels.radar = newTitle
+                    weatherService.updateStation(station)
+                })
+            }
+            
             // Indoor Temperature Card
             if station.sensorPreferences.showIndoorTemp {
                 IndoorTemperatureCard(

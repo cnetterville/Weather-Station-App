@@ -153,14 +153,6 @@ struct OtherSensorsSection: View {
                     weatherService.updateStation(station)
                 })
             }
-            
-            // Radar Card (show only for stations with coordinates)
-            if station.sensorPreferences.showRadar && station.latitude != nil && station.longitude != nil {
-                RadarTileView(station: station, onTitleChange: { newTitle in
-                    station.customLabels.radar = newTitle
-                    weatherService.updateStation(station)
-                })
-            }
         }
     }
 }
