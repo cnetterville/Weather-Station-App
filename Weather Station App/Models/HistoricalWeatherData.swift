@@ -217,12 +217,13 @@ enum HistoricalTimeRange: String, CaseIterable {
     
     var cycleType: String {
         switch self {
-        case .lastHour, .last6Hours: return "5min"
-        case .last24Hours: return "30min"
-        case .todayFrom00: return "5min"  // NEW: 5-minute resolution for precise daily high/low timing
+        case .lastHour: return "5min" // FIXED: Use 5min for precise 1-hour data (within 90 days limit)
+        case .last6Hours: return "5min" // Use 5min for 6 hours (still under 1 day limit)
+        case .last24Hours: return "30min" // Use 30min for 24 hours (at day limit)
+        case .todayFrom00: return "5min"  // Use 5min for today from midnight
         case .last7Days: return "4hour"
-        case .last30Days, .last90Days: return "1day"  // 1day cycle only has 3 months retention
-        case .last365Days: return "1week"  // Use weekly data for 1 year (has 1 year retention)
+        case .last30Days, .last90Days: return "1day"  
+        case .last365Days: return "1week"  
         }
     }
     
