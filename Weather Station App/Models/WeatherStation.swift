@@ -80,6 +80,7 @@ struct SensorLabels: Codable, Equatable {
     var lunar: String = "Moon & Lunar"
     var camera: String = "Weather Camera"
     var radar: String = "Weather Radar"
+    var forecast: String = "4-Day Forecast"
 }
 
 struct SensorPreferences: Codable, Equatable {
@@ -103,6 +104,7 @@ struct SensorPreferences: Codable, Equatable {
     var showLunar: Bool = true
     var showCamera: Bool = true
     var showRadar: Bool = true
+    var showForecast: Bool = true
     
     // Migration support for existing installations
     init() {
@@ -130,6 +132,7 @@ struct SensorPreferences: Codable, Equatable {
         showLunar = try container.decodeIfPresent(Bool.self, forKey: .showLunar) ?? true
         showCamera = try container.decodeIfPresent(Bool.self, forKey: .showCamera) ?? true
         showRadar = try container.decodeIfPresent(Bool.self, forKey: .showRadar) ?? true
+        showForecast = try container.decodeIfPresent(Bool.self, forKey: .showForecast) ?? true
         
         // Migration logic for rainfall preferences
         if let oldRainfallPref = try container.decodeIfPresent(Bool.self, forKey: .showRainfall) {
@@ -150,6 +153,7 @@ struct SensorPreferences: Codable, Equatable {
         case showUVIndex, showSolar, showLightning
         case showTempHumidityCh1, showTempHumidityCh2, showTempHumidityCh3
         case showBatteryStatus, showSunriseSunset, showLunar, showCamera, showRadar
+        case showForecast
     }
 }
 

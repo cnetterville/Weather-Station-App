@@ -99,11 +99,11 @@ struct EditableWeatherCard<Content: View>: View {
             ScrollView {
                 content
             }
-            .frame(maxHeight: 250) // Fixed content height for uniformity
+            .frame(maxHeight: 280) // Increased from 250 to 280 for more content space
             
             Spacer(minLength: 0)
         }
-        .frame(height: 320) // Fixed card height
+        .frame(height: 350) // Increased from 320 to accommodate rain amounts
         .padding(20)
         .background {
             // Modern multi-layer background effect

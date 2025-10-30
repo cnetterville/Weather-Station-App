@@ -40,6 +40,17 @@ struct TemperatureSensorsSection: View {
                 )
             }
             
+            // 5-Day Weather Forecast Card
+            if station.sensorPreferences.showForecast {
+                ForecastCard(
+                    station: station,
+                    onTitleChange: { newTitle in
+                        station.customLabels.forecast = newTitle
+                        weatherService.updateStation(station)
+                    }
+                )
+            }
+            
             // Indoor Temperature Card
             if station.sensorPreferences.showIndoorTemp {
                 IndoorTemperatureCard(

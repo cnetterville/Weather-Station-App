@@ -1089,6 +1089,13 @@ struct EditWeatherStationView: View {
                                     SensorToggleRow("🌧️ Rainfall (Piezo)", isOn: $sensorPreferences.showRainfallPiezo)
                                     SensorToggleRow("☀️ UV Index", isOn: $sensorPreferences.showUVIndex)
                                     SensorToggleRow("⚡ Lightning", isOn: $sensorPreferences.showLightning)
+                                    SensorToggleRow("📅 4-Day Forecast", isOn: $sensorPreferences.showForecast)
+                                    SensorToggleRow("🌫️ Air Quality Ch1 (PM2.5)", isOn: $sensorPreferences.showAirQualityCh1)
+                                    SensorToggleRow("🌫️ Air Quality Ch2 (PM2.5)", isOn: $sensorPreferences.showAirQualityCh2)
+                                    SensorToggleRow("🌫️ Air Quality Ch3 (PM2.5)", isOn: $sensorPreferences.showAirQualityCh3)
+                                    SensorToggleRow("🌡️ Temperature & Humidity Ch1", isOn: $sensorPreferences.showTempHumidityCh1)
+                                    SensorToggleRow("🌡️ Temperature & Humidity Ch2", isOn: $sensorPreferences.showTempHumidityCh2)
+                                    SensorToggleRow("🌡️ Temperature & Humidity Ch3", isOn: $sensorPreferences.showTempHumidityCh3)
                                 }
                             }
                             
@@ -1130,6 +1137,7 @@ struct EditWeatherStationView: View {
                                 SensorToggleRow("🔋 Battery Status", isOn: $sensorPreferences.showBatteryStatus)
                                 SensorToggleRow("🌅 Sunrise/Sunset", isOn: $sensorPreferences.showSunriseSunset)
                                 SensorToggleRow("🌙 Moon & Lunar", isOn: $sensorPreferences.showLunar)
+                                SensorToggleRow("📅 4-Day Forecast", isOn: $sensorPreferences.showForecast)
                                 SensorToggleRow("📷 Weather Camera", isOn: $sensorPreferences.showCamera)
                                 SensorToggleRow("🌦️ Weather Radar", isOn: $sensorPreferences.showRadar)
                             }
@@ -1254,6 +1262,8 @@ struct EditWeatherStationView: View {
         sensorPreferences.showTempHumidityCh3 = value
         sensorPreferences.showBatteryStatus = value
         sensorPreferences.showSunriseSunset = value
+        sensorPreferences.showLunar = value
+        sensorPreferences.showForecast = value
         sensorPreferences.showCamera = value
         sensorPreferences.showRadar = value
     }

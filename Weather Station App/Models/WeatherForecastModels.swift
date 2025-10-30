@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SwiftUI
 
 // MARK: - Open-Meteo API Response Models
 
@@ -102,8 +103,6 @@ struct DailyWeatherForecast {
     var displayDay: String {
         if isToday {
             return "Today"
-        } else if isTomorrow {
-            return "Tomorrow"
         } else {
             return shortDayOfWeek
         }
@@ -113,23 +112,77 @@ struct DailyWeatherForecast {
         WeatherCodeInterpreter.description(for: weatherCode)
     }
     
+    var shortWeatherDescription: String {
+        WeatherCodeInterpreter.shortDescription(for: weatherCode)
+    }
+    
+    var veryShortWeatherDescription: String {
+        WeatherCodeInterpreter.veryShortDescription(for: weatherCode)
+    }
+    
     var weatherIcon: String {
         WeatherCodeInterpreter.systemIcon(for: weatherCode)
     }
     
     var formattedMaxTemp: String {
-        TemperatureConverter.formatTemperature(String(maxTemperature), originalUnit: "°C")
+        let temp = Int(maxTemperature.rounded())
+        let converted = MeasurementConverter.convertTemperature(String(temp), from: "°C")
+        let displayMode = UserDefaults.standard.unitSystemDisplayMode
+        
+        switch displayMode {
+        case .imperial:
+            return "\(Int(Double(converted.fahrenheit) ?? 0))°F"
+        case .metric:
+            return "\(temp)°C"
+        case .both:
+            return "\(Int(Double(converted.fahrenheit) ?? 0))°F/\(temp)°C"
+        }
     }
     
     var formattedMinTemp: String {
-        TemperatureConverter.formatTemperature(String(minTemperature), originalUnit: "°C")
+        let temp = Int(minTemperature.rounded())
+        let converted = MeasurementConverter.convertTemperature(String(temp), from: "°C")
+        let displayMode = UserDefaults.standard.unitSystemDisplayMode
+        
+        switch displayMode {
+        case .imperial:
+            return "\(Int(Double(converted.fahrenheit) ?? 0))°F"
+        case .metric:
+            return "\(temp)°C"
+        case .both:
+            return "\(Int(Double(converted.fahrenheit) ?? 0))°F/\(temp)°C"
+        }
     }
     
     var formattedPrecipitation: String {
-        if precipitation < 0.1 {
-            return "0mm"
-        } else {
-            return String(format: "%.1fmm", precipitation)
+        let displayMode = UserDefaults.standard.unitSystemDisplayMode
+        
+        switch displayMode {
+        case .imperial:
+            // Convert mm to inches and display in inches
+            let inches = precipitation * 0.0393701
+            if inches < 0.05 {
+                return "0.00in"
+            } else {
+                return String(format: "%.2fin", inches)
+            }
+            
+        case .metric:
+            // Display in original mm
+            if precipitation < 0.5 {
+                return "0.0mm"
+            } else {
+                return String(format: "%.1fmm", precipitation)
+            }
+            
+        case .both:
+            // Show both units
+            let inches = precipitation * 0.0393701
+            if precipitation < 0.5 && inches < 0.05 {
+                return "0.0mm/0.00in"
+            } else {
+                return String(format: "%.1fmm/%.2fin", precipitation, inches)
+            }
         }
     }
     
@@ -141,13 +194,13 @@ struct DailyWeatherForecast {
         return WindDirectionConverter.directionText(for: windDirection)
     }
     
-    var precipitationColor: Color {
+    var precipitationColor: SwiftUI.Color {
         switch precipitation {
-        case 0..<0.1: return .clear
-        case 0.1..<1: return .blue.opacity(0.3)
-        case 1..<5: return .blue.opacity(0.6)
-        case 5..<15: return .blue
-        default: return .indigo
+        case 0..<0.1: return SwiftUI.Color.clear
+        case 0.1..<1: return SwiftUI.Color.blue.opacity(0.2)
+        case 1..<5: return SwiftUI.Color.blue.opacity(0.3)
+        case 5..<15: return SwiftUI.Color.blue.opacity(0.4)
+        default: return SwiftUI.Color.blue.opacity(0.5)
         }
     }
 }
@@ -185,6 +238,68 @@ struct WeatherCodeInterpreter {
         case 95: return "Thunderstorm"
         case 96: return "Thunderstorm with slight hail"
         case 99: return "Thunderstorm with heavy hail"
+        default: return "Unknown"
+        }
+    }
+    
+    static func shortDescription(for code: Int) -> String {
+        switch code {
+        case 0: return "Clear"
+        case 1: return "M. Clear"
+        case 2: return "P. Cloudy"
+        case 3: return "Overcast"
+        case 45: return "Fog"
+        case 48: return "Rime Fog"
+        case 51: return "Lt Drizzle"
+        case 53: return "Drizzle"
+        case 55: return "Hvy Drizzle"
+        case 56: return "Frz Drizzle"
+        case 57: return "Hvy Frz Drizzle"
+        case 61: return "Lt Rain"
+        case 63: return "Rain"
+        case 65: return "Hvy Rain"
+        case 66: return "Lt Frz Rain"
+        case 67: return "Hvy Frz Rain"
+        case 71: return "Lt Snow"
+        case 73: return "Snow"
+        case 75: return "Hvy Snow"
+        case 77: return "Snow Grains"
+        case 80: return "Lt Showers"
+        case 81: return "Showers"
+        case 82: return "Hvy Showers"
+        case 85: return "Lt Snow Showers"
+        case 86: return "Hvy Snow Showers"
+        case 95: return "T-Storm"
+        case 96: return "T-Storm Hail"
+        case 99: return "Hvy T-Storm Hail"
+        default: return "Unknown"
+        }
+    }
+    
+    static func veryShortDescription(for code: Int) -> String {
+        switch code {
+        case 0: return "Clear"
+        case 1: return "Clear"
+        case 2: return "Cloudy"
+        case 3: return "Overcast"
+        case 45, 48: return "Fog"
+        case 51, 53, 55: return "Drizzle"
+        case 56, 57: return "Frz Drizzle"
+        case 61: return "Lt Rain"
+        case 63: return "Rain"
+        case 65: return "Hvy Rain"
+        case 66, 67: return "Frz Rain"
+        case 71: return "Lt Snow"
+        case 73: return "Snow"
+        case 75: return "Hvy Snow"
+        case 77: return "Snow"
+        case 80: return "Showers"
+        case 81: return "Showers"
+        case 82: return "Hvy Showers"
+        case 85: return "Snow Showers"
+        case 86: return "Hvy Snow Showers"
+        case 95: return "T-Storm"
+        case 96, 99: return "T-Storm"
         default: return "Unknown"
         }
     }
@@ -227,13 +342,5 @@ struct WindDirectionConverter {
         case 293...337: return "NW"
         default: return "—"
         }
-    }
-}
-
-// MARK: - Color Extension
-
-extension Color {
-    static var clear: Color {
-        Color(.clear)
     }
 }

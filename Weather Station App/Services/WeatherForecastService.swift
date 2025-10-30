@@ -69,7 +69,7 @@ class WeatherForecastService: ObservableObject {
             URLQueryItem(name: "longitude", value: String(longitude)),
             URLQueryItem(name: "daily", value: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant"),
             URLQueryItem(name: "timezone", value: "auto"),
-            URLQueryItem(name: "forecast_days", value: "5")
+            URLQueryItem(name: "forecast_days", value: "4")
         ]
         
         guard let url = urlComponents?.url else {

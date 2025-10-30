@@ -93,7 +93,7 @@ struct ForecastCard: View {
                             .font(.headline)
                             .foregroundColor(.primary)
                         
-                        Text("Tap to load 5-day weather forecast")
+                        Text("Tap to load 4-day weather forecast")
                             .font(.caption)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
@@ -132,7 +132,7 @@ struct ForecastContent: View {
         VStack(alignment: .leading, spacing: 12) {
             // Forecast header with last updated time
             HStack {
-                Text("5-Day Forecast")
+                Text("4-Day Forecast")
                     .font(.subheadline)
                     .fontWeight(.medium)
                     .foregroundColor(.secondary)
@@ -160,16 +160,8 @@ struct ForecastContent: View {
                 }
             }
             
-            // Location info footer
+            // Location info footer - removed lat/long, keeping just refresh button
             HStack {
-                Image(systemName: "location.fill")
-                    .font(.caption2)
-                    .foregroundColor(.blue)
-                
-                Text("Lat: \(String(format: "%.2f", forecast.location.latitude)), Lon: \(String(format: "%.2f", forecast.location.longitude))")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-                
                 Spacer()
                 
                 if forecast.isExpired {
@@ -192,13 +184,13 @@ struct ForecastDayRow: View {
     let isFirst: Bool
     
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
             // Day
             VStack(alignment: .leading, spacing: 2) {
                 Text(forecast.displayDay)
                     .font(.system(size: isFirst ? 14 : 13, weight: isFirst ? .semibold : .medium))
                     .foregroundColor(isFirst ? .primary : .secondary)
-                    .frame(width: 50, alignment: .leading)
+                    .frame(width: 45, alignment: .leading)
                 
                 if !forecast.isToday {
                     Text(forecast.monthDay)
@@ -207,48 +199,62 @@ struct ForecastDayRow: View {
                 }
             }
             
-            // Weather icon and description
-            HStack(spacing: 6) {
+            // Weather icon with rain amount below
+            VStack(spacing: 2) {
                 Image(systemName: forecast.weatherIcon)
                     .font(.system(size: 16))
                     .foregroundColor(.blue)
-                    .frame(width: 20)
+                    .frame(width: 18)
                 
-                Text(forecast.weatherDescription)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                // Rain amount below the icon
+                if forecast.precipitation > 0.1 {
+                    Text(forecast.formattedPrecipitation)
+                        .font(.caption2)
+                        .fontWeight(.medium)
+                        .foregroundColor(.blue)
+                        .padding(.horizontal, 2)
+                        .padding(.vertical, 1)
+                        .background(SwiftUI.Color.blue.opacity(0.1))
+                        .cornerRadius(3)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .fixedSize(horizontal: true, vertical: false)
+                } else {
+                    // Empty space to maintain consistent alignment
+                    Text("")
+                        .font(.caption2)
+                        .frame(height: 12)
+                }
             }
+            .frame(width: 70)
             
-            // Precipitation
-            if forecast.precipitation > 0.1 {
-                Text(forecast.formattedPrecipitation)
-                    .font(.caption2)
-                    .foregroundColor(.blue)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 2)
-                    .background(forecast.precipitationColor)
-                    .cornerRadius(4)
-            }
+            // Weather description
+            Text(forecast.shortWeatherDescription)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
             
             Spacer()
             
             // Temperature range
-            HStack(spacing: 4) {
+            HStack(spacing: 1) {
                 Text(forecast.formattedMaxTemp)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundColor(.primary)
+                    .minimumScaleFactor(0.8)
                 
                 Text("/")
                     .font(.caption)
                     .foregroundColor(.secondary)
                 
                 Text(forecast.formattedMinTemp)
-                    .font(.system(size: 13, design: .rounded))
+                    .font(.system(size: 12, design: .rounded))
                     .foregroundColor(.secondary)
+                    .minimumScaleFactor(0.8)
             }
-            .frame(width: 60, alignment: .trailing)
+            .frame(width: 65, alignment: .trailing)
+            .lineLimit(1)
         }
         .padding(.vertical, isFirst ? 4 : 2)
     }

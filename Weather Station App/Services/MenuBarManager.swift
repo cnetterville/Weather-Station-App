@@ -12,6 +12,7 @@ import Combine
 class MenuBarManager: ObservableObject {
     private var statusItem: NSStatusItem?
     private let weatherService = WeatherStationService.shared
+    private let forecastService = WeatherForecastService.shared
     private var cycleThroughTimer: Timer?
     
     @Published var isMenuBarEnabled: Bool = false {
@@ -219,6 +220,14 @@ class MenuBarManager: ObservableObject {
             object: nil
         )
         
+        // Listen for forecast data updates
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(forecastDataUpdated),
+            name: .forecastDataUpdated,
+            object: nil
+        )
+        
         // Listen for app termination to clean up
         NotificationCenter.default.addObserver(
             self,
@@ -246,6 +255,12 @@ class MenuBarManager: ObservableObject {
         }
     }
     
+    @objc private func forecastDataUpdated() {
+        DispatchQueue.main.async { [weak self] in
+            self?.updateMenuBarTitle()
+        }
+    }
+    
     @objc private func appWillTerminate() {
         print("🗑️ App will terminate - cleaning up MenuBarManager")
         
@@ -268,6 +283,23 @@ class MenuBarManager: ObservableObject {
         statusItem?.button?.target = self
         
         updateMenuBarTitle()
+        
+        // Load forecast data for better weather icons
+        loadForecastDataForMenuBar()
+    }
+    
+    private func loadForecastDataForMenuBar() {
+        Task {
+            let activeStations = weatherService.weatherStations.filter { $0.isActive && $0.latitude != nil && $0.longitude != nil }
+            if !activeStations.isEmpty {
+                await forecastService.fetchForecastsForAllStations(activeStations)
+                
+                // Update menubar after forecast data is loaded
+                await MainActor.run {
+                    self.updateMenuBarTitle()
+                }
+            }
+        }
     }
     
     private func removeStatusItem() {
@@ -448,33 +480,41 @@ class MenuBarManager: ObservableObject {
     // Helper method to get weather icon for a specific station
     private func getWeatherIconForStation(_ weatherData: WeatherStationData, station: WeatherStation) -> String {
         print("🎯 Getting weather icon for station: \(station.name)")
+        
+        // Priority 1: Use Open-Meteo forecast icon if available
+        if let forecastIcon = getForecastIconForStation(station) {
+            print("   ✅ Using forecast icon: \(forecastIcon)")
+            return forecastIcon
+        }
+        
         print("   - showRainIcon: \(showRainIcon)")
         print("   - showUVIcon: \(showUVIcon)")
         print("   - showCloudyIcon: \(showCloudyIcon)")
         print("   - showNightIcon: \(showNightIcon)")
         
-        // Priority 1: Rain (highest priority)
+        // Fallback to current weather condition icons
+        // Priority 2: Rain (highest priority)
         if showRainIcon && isRaining(weatherData) {
             let icon = getRainIconString()
             print("   ✅ Selected rain icon: \(icon)")
             return icon
         }
         
-        // Priority 2: High UV (sunny conditions)
+        // Priority 3: High UV (sunny conditions)
         if showUVIcon && hasSignificantUV(weatherData) {
             let icon = getUVIconString()
             print("   ✅ Selected UV icon: \(icon)")
             return icon
         }
         
-        // Priority 3: Cloudy daytime (overcast but still daylight)
+        // Priority 4: Cloudy daytime (overcast but still daylight)
         if showCloudyIcon && isCloudyDaytime(weatherData) {
             let icon = getCloudyIconString()
             print("   ✅ Selected cloudy icon: \(icon)")
             return icon
         }
         
-        // Priority 4: Night time (lowest priority) - now using actual sunset/sunrise
+        // Priority 5: Night time (lowest priority) - now using actual sunset/sunrise
         if showNightIcon && isNightTime(weatherData, for: station) {
             let icon = getNightIconString()
             print("   ✅ Selected night icon: \(icon)")
@@ -482,6 +522,51 @@ class MenuBarManager: ObservableObject {
         }
         
         return ""
+    }
+    
+    // New method to get forecast-based weather icon
+    private func getForecastIconForStation(_ station: WeatherStation) -> String? {
+        guard let forecast = forecastService.getForecast(for: station) else {
+            print("   ❌ No forecast data available for \(station.name)")
+            return nil
+        }
+        
+        // Find today's forecast
+        guard let todaysForecast = forecast.dailyForecasts.first(where: { $0.isToday }) else {
+            print("   ❌ No today's forecast found for \(station.name)")
+            return nil
+        }
+        
+        // Convert the SF Symbol to an emoji equivalent for menubar display
+        return convertSFSymbolToEmoji(todaysForecast.weatherIcon)
+    }
+    
+    // Helper method to convert SF Symbols to appropriate emoji for menubar
+    private func convertSFSymbolToEmoji(_ sfSymbol: String) -> String? {
+        switch sfSymbol {
+        case "sun.max.fill", "sun.max":
+            return "☀️"
+        case "cloud.sun.fill":
+            return "⛅"
+        case "cloud.fill":
+            return "☁️"
+        case "cloud.fog.fill":
+            return "🌫️"
+        case "cloud.drizzle.fill":
+            return "🌦️"
+        case "cloud.rain.fill":
+            return "🌧️"
+        case "cloud.heavyrain.fill":
+            return "🌧️"
+        case "cloud.sleet.fill":
+            return "🌨️"
+        case "cloud.snow.fill":
+            return "🌨️"
+        case "cloud.bolt.fill", "cloud.bolt.rain.fill":
+            return "⛈️"
+        default:
+            return nil
+        }
     }
     
     private func formatTemperature(_ tempF: Double) -> String {
