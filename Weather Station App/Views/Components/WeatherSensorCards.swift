@@ -14,6 +14,27 @@ struct OutdoorTemperatureCard: View {
     let getDailyTemperatureStats: () -> DailyTemperatureStats?
     let getDailyHumidityStats: () -> DailyHumidityStats?
     
+    // Get temperature emoji based on actual temperature value
+    private func getTemperatureEmoji(for tempString: String) -> String {
+        guard let temp = Double(tempString) else { return "🌡️" }
+        
+        // Convert to Fahrenheit if needed for consistent emoji logic
+        let tempInF = data.outdoor.temperature.unit.lowercased().contains("c") ? 
+            (temp * 9/5) + 32 : temp
+        
+        switch tempInF {
+        case ..<20: return "🥶"      // Freezing cold
+        case 20..<32: return "❄️"    // Very cold
+        case 32..<50: return "🧊"    // Cold
+        case 50..<65: return "😊"    // Pleasant
+        case 65..<75: return "😌"    // Comfortable
+        case 75..<85: return "☀️"    // Warm
+        case 85..<95: return "😅"    // Hot
+        case 95..<105: return "🔥"   // Very hot
+        default: return "🌋"         // Extremely hot
+        }
+    }
+    
     var body: some View {
         EditableWeatherCard(
             title: .constant(station.customLabels.outdoorTemp),
@@ -21,24 +42,22 @@ struct OutdoorTemperatureCard: View {
             onTitleChange: onTitleChange
         ) {
             VStack(alignment: .leading, spacing: 12) {
-                // Current Temperature with Glass Thermometer Gauge
-                HStack {
+                // Temperature display with emoji
+                HStack(alignment: .center) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Temperature")
                             .font(.caption)
                             .foregroundColor(.secondary)
                         Text(TemperatureConverter.formatTemperature(data.outdoor.temperature.value, originalUnit: data.outdoor.temperature.unit))
-                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                            .font(.system(size: 32, weight: .bold, design: .rounded))
                     }
                     
                     Spacer()
                     
-                    // Glass Thermometer Gauge
-                    ThermometerGauge(
-                        temperature: Double(data.outdoor.temperature.value) ?? 0,
-                        feelsLike: Double(data.outdoor.feelsLike.value) ?? 0
-                    )
-                    .frame(width: 100, height: 35)
+                    // Temperature emoji - large and centered
+                    Text(getTemperatureEmoji(for: data.outdoor.temperature.value))
+                        .font(.system(size: 40))
+                        .padding(.horizontal, 8)
                     
                     Spacer()
                     
@@ -47,7 +66,8 @@ struct OutdoorTemperatureCard: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                         Text(TemperatureConverter.formatTemperature(data.outdoor.feelsLike.value, originalUnit: data.outdoor.feelsLike.unit))
-                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                            .font(.system(size: 18, weight: .semibold, design: .rounded))
+                            .foregroundColor(.secondary)
                     }
                 }
                 
