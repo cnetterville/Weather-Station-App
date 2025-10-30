@@ -120,6 +120,14 @@ struct Weather_Station_AppApp: App {
                 }
                 .keyboardShortcut("m", modifiers: [.command])
             }
+            
+            // Ensure Quit command is available (especially important for menu bar apps)
+            CommandGroup(replacing: .appTermination) {
+                Button("Quit Weather Station App") {
+                    NSApplication.shared.terminate(nil)
+                }
+                .keyboardShortcut("q", modifiers: [.command])
+            }
         }
         .windowToolbarStyle(.unified(showsTitle: true))
     }

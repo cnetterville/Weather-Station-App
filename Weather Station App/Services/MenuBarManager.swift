@@ -297,10 +297,51 @@ class MenuBarManager: ObservableObject {
         statusItem?.button?.action = #selector(statusItemClicked)
         statusItem?.button?.target = self
         
+        // Add context menu for right-click
+        setupContextMenu()
+        
         updateMenuBarTitle()
         
         // Load forecast data for better weather icons
         loadForecastDataForMenuBar()
+    }
+    
+    private func setupContextMenu() {
+        let menu = NSMenu()
+        
+        // Open App menu item
+        let openAppItem = NSMenuItem(title: "Open Weather Station App", action: #selector(statusItemClicked), keyEquivalent: "")
+        openAppItem.target = self
+        menu.addItem(openAppItem)
+        
+        // Separator
+        menu.addItem(NSMenuItem.separator())
+        
+        // Refresh Data menu item
+        let refreshItem = NSMenuItem(title: "Refresh Data", action: #selector(refreshWeatherData), keyEquivalent: "")
+        refreshItem.target = self
+        menu.addItem(refreshItem)
+        
+        // Separator
+        menu.addItem(NSMenuItem.separator())
+        
+        // Quit menu item
+        let quitItem = NSMenuItem(title: "Quit Weather Station App", action: #selector(quitApplication), keyEquivalent: "q")
+        quitItem.target = self
+        menu.addItem(quitItem)
+        
+        statusItem?.menu = menu
+    }
+    
+    @objc private func refreshWeatherData() {
+        print("🔄 Manual refresh requested from menu bar")
+        // Post notification to refresh weather data
+        NotificationCenter.default.post(name: .weatherDataUpdated, object: nil)
+    }
+    
+    @objc private func quitApplication() {
+        print("🚪 Quit requested from menu bar context menu")
+        NSApplication.shared.terminate(nil)
     }
     
     private func loadForecastDataForMenuBar() {
