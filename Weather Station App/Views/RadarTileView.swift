@@ -235,38 +235,6 @@ struct RadarTileView: View {
                                     }
                                 )
                         }
-                        
-                        // Auto-refresh status overlay
-                        if !hasError && !isLoading {
-                            VStack {
-                                Spacer()
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        HStack(spacing: 4) {
-                                            Circle()
-                                                .fill(Color.green)
-                                                .frame(width: 5, height: 5)
-                                            Text("Auto")
-                                                .font(.caption2)
-                                                .fontWeight(.medium)
-                                        }
-                                        Text("\(timeUntilNextRefresh())")
-                                            .font(.caption2)
-                                            .fontWeight(.medium)
-                                    }
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 3)
-                                    .background(Color.black.opacity(0.7))
-                                    .cornerRadius(6)
-                                    .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
-                                    
-                                    Spacer()
-                                }
-                                .padding(.leading, 8)
-                                .padding(.bottom, 8)
-                            }
-                        }
                     }
                     
                     // Control bar
@@ -290,8 +258,21 @@ struct RadarTileView: View {
                             Spacer()
                         }
                         
-                        // Second row - Action buttons
+                        // Second row - Action buttons with auto-refresh status
                         HStack {
+                            // Auto-refresh status
+                            if !hasError && !isLoading {
+                                HStack(spacing: 4) {
+                                    Circle()
+                                        .fill(Color.green)
+                                        .frame(width: 5, height: 5)
+                                    Text("Auto \(timeUntilNextRefresh())")
+                                        .font(.caption2)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            
                             Spacer()
                             
                             Button("Refresh") {
