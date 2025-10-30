@@ -69,7 +69,7 @@ class WeatherForecastService: ObservableObject {
             URLQueryItem(name: "longitude", value: String(longitude)),
             URLQueryItem(name: "daily", value: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant"),
             URLQueryItem(name: "timezone", value: "auto"),
-            URLQueryItem(name: "forecast_days", value: "4")
+            URLQueryItem(name: "forecast_days", value: "5") // Changed from 4 to 5
         ]
         
         guard let url = urlComponents?.url else {
@@ -80,7 +80,7 @@ class WeatherForecastService: ObservableObject {
             return
         }
         
-        print("🌤️ Fetching forecast for \(station.name) at (\(latitude), \(longitude))")
+        print("🌤️ Fetching 5-day forecast for \(station.name) at (\(latitude), \(longitude))") // Updated log message
         print("📍 URL: \(url.absoluteString)")
         
         do {
@@ -112,7 +112,7 @@ class WeatherForecastService: ObservableObject {
                 isLoading = false
                 errorMessage = nil
                 
-                print("✅ Forecast updated for \(station.name): \(processedForecast.dailyForecasts.count) days")
+                print("✅ 5-day forecast updated for \(station.name): \(processedForecast.dailyForecasts.count) days") // Updated log message
             }
             
         } catch {

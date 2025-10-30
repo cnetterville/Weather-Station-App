@@ -26,8 +26,6 @@ struct RadarTileView: View {
     @State private var hasInitiallyLoaded = false
     @State private var loadAttempts = 0
     @State private var currentStationId: String = ""
-    @State private var showSatelliteOverlay = false // Start with radar only
-    @State private var useWindyRadar = true // Default to Windy instead of Ventusky
     
     // Calculate a unique delay for this station's radar based on MAC address
     private var initialLoadDelay: TimeInterval {
@@ -38,19 +36,14 @@ struct RadarTileView: View {
     private var radarHTML: String {
         guard let latitude = station.latitude,
               let longitude = station.longitude else {
-            return useWindyRadar ?
-                generateWindyRadarHTML(lat: 39.83, lon: -98.58) :
-                generateVentuskyRadarHTML(lat: 39.83, lon: -98.58)
+            return generateWindyRadarHTML(lat: 39.83, lon: -98.58)
         }
         
-        return useWindyRadar ?
-            generateWindyRadarHTML(lat: latitude, lon: longitude) :
-            generateVentuskyRadarHTML(lat: latitude, lon: longitude)
+        return generateWindyRadarHTML(lat: latitude, lon: longitude)
     }
     
     private func generateWindyRadarHTML(lat: Double, lon: Double) -> String {
-        let zoom = 8
-        let overlay = showSatelliteOverlay ? "rain,satellite" : "rain"
+        let zoom = 9
         let timestamp = Int(Date().timeIntervalSince1970)
         
         return """
@@ -72,92 +65,13 @@ struct RadarTileView: View {
                     width: 100%;
                     height: 100%;
                     border: none;
-                    border-radius: 8px;
+                    border-radius: 12px;
                 }
             </style>
         </head>
         <body>
             <iframe 
-                src="https://embed.windy.com/embed2.html?lat=\(lat)&lon=\(lon)&detailLat=\(lat)&detailLon=\(lon)&width=100%&height=100%&zoom=\(zoom)&level=surface&overlay=\(overlay)&product=ecmwf&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=mph&metricTemp=°F&radarRange=-1&timestamp=\(timestamp)"
-                frameborder="0">
-            </iframe>
-        </body>
-        </html>
-        """
-    }
-    
-    private func generateVentuskyRadarHTML(lat: Double, lon: Double) -> String {
-        return """
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <style>
-                body { 
-                    margin: 0; 
-                    padding: 0; 
-                    background-color: #f0f0f0;
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segui UI', sans-serif;
-                    height: 100vh;
-                    overflow: hidden;
-                }
-            </style>
-        </head>
-        <body>
-            <div style="display:block!important;position:relative!important;width:100%!important;margin:auto!important;padding:0!important;border:0!important">
-                <div style="display:block!important;position:relative!important;width:100%!important;height:0!important;box-sizing:content-box!important;margin:0!important;border:0!important;padding:0 0 61.794%!important;left:0!important;top:0!important;right:0!important;bottom:0!important">
-                    <iframe 
-                        src="https://embed.ventusky.com/?p=\(lat);\(lon);7&l=radar&t=\(Int(Date().timeIntervalSince1970))" 
-                        style="display:block!important;position:absolute!important;left:0!important;top:0!important;width:100%!important;height:100%!important;margin:0!important;padding:0!important;border:0!important;border-radius:8px!important;right:auto!important;bottom:auto!important" 
-                        loading="lazy">
-                    </iframe>
-                </div>
-            </div>
-            <script>
-                // Simple timeout to clear loading state
-                setTimeout(function() {
-                    console.log('Radar iframe should be loaded by now');
-                }, 5000);
-            </script>
-        </body>
-        </html>
-        """
-    }
-    
-    // Alternative method with satellite overlay option
-    private func generateWindyRadarWithSatelliteHTML(lat: Double, lon: Double, showSatellite: Bool = true) -> String {
-        let zoom = 8
-        let baseLayer = showSatellite ? "satellite" : "wind"
-        let overlay = "radar"
-        let timestamp = Int(Date().timeIntervalSince1970)
-        
-        return """
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <style>
-                body { 
-                    margin: 0; 
-                    padding: 0; 
-                    background-color: #1a1a2e;
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segui UI', sans-serif;
-                    height: 100vh;
-                    overflow: hidden;
-                }
-                iframe {
-                    width: 100%;
-                    height: 100%;
-                    border: none;
-                    border-radius: 8px;
-                }
-            </style>
-        </head>
-        <body>
-            <iframe 
-                src="https://embed.windy.com/embed2.html?lat=\(lat)&lon=\(lon)&detailLat=\(lat)&detailLon=\(lon)&width=100%&height=100%&zoom=\(zoom)&level=surface&overlay=\(overlay)&product=ecmwf&menu=&message=true&marker=dot&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=mph&metricTemp=°F&radarRange=-1&timestamp=\(timestamp)&layer=\(baseLayer)"
+                src="https://embed.windy.com/embed2.html?lat=\(lat)&lon=\(lon)&detailLat=\(lat)&detailLon=\(lon)&width=100%&height=100%&zoom=\(zoom)&level=surface&overlay=rain&product=ecmwf&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=mph&metricTemp=°F&radarRange=-1&timestamp=\(timestamp)"
                 frameborder="0">
             </iframe>
         </body>
@@ -204,27 +118,27 @@ struct RadarTileView: View {
                         .controlSize(.small)
                     }
                     .frame(maxWidth: .infinity)
-                    .frame(height: 160)
+                    .frame(height: 280)
                 } else {
                     // Radar content
                     ZStack {
-                        // WebKit view for radar - only use station ID to force recreation on station change
+                        // WebKit view for radar
                         RadarWebView(
                             htmlContent: radarHTML,
                             webView: $webView,
                             isLoading: $isLoading,
                             hasError: $hasError
                         )
-                        .frame(height: 160)
-                        .cornerRadius(8)
+                        .frame(height: 280)
+                        .cornerRadius(12)
                         .id("radar-\(station.macAddress)")
                         
                         // Loading overlay
                         if isLoading {
                             Rectangle()
                                 .fill(Color(NSColor.controlBackgroundColor))
-                                .frame(height: 160)
-                                .cornerRadius(8)
+                                .frame(height: 280)
+                                .cornerRadius(12)
                                 .overlay(
                                     VStack(spacing: 12) {
                                         ProgressView()
@@ -237,58 +151,36 @@ struct RadarTileView: View {
                         }
                     }
                     
-                    // Control bar
-                    VStack(spacing: 4) {
-                        // First row - Provider and satellite toggle
-                        HStack {
-                            // Provider toggle
-                            Picker("Radar Source", selection: $useWindyRadar) {
-                                Text("Ventusky").tag(false)
-                                Text("Windy").tag(true)
+                    // Clean control bar - just status and action buttons
+                    HStack {
+                        // Auto-refresh status
+                        if !hasError && !isLoading {
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(Color.green)
+                                    .frame(width: 5, height: 5)
+                                Text("Auto \(timeUntilNextRefresh())")
+                                    .font(.caption2)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.secondary)
                             }
-                            .pickerStyle(SegmentedPickerStyle())
-                            .controlSize(.mini)
-                            
-                            if useWindyRadar {
-                                Toggle("Satellite", isOn: $showSatelliteOverlay)
-                                    .controlSize(.mini)
-                                    .toggleStyle(.checkbox)
-                            }
-                            
-                            Spacer()
                         }
                         
-                        // Second row - Action buttons with auto-refresh status
-                        HStack {
-                            // Auto-refresh status
-                            if !hasError && !isLoading {
-                                HStack(spacing: 4) {
-                                    Circle()
-                                        .fill(Color.green)
-                                        .frame(width: 5, height: 5)
-                                    Text("Auto \(timeUntilNextRefresh())")
-                                        .font(.caption2)
-                                        .fontWeight(.medium)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                            
-                            Spacer()
-                            
-                            Button("Refresh") {
-                                refreshRadar()
-                            }
-                            .buttonStyle(.bordered)
-                            .controlSize(.mini)
-                            
-                            Button("Open Full") {
-                                openFullRadar()
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .controlSize(.mini)
+                        Spacer()
+                        
+                        Button("Refresh") {
+                            refreshRadar()
                         }
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+                        
+                        Button("Open Full") {
+                            openFullRadar()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.mini)
                     }
-                    .padding(.top, 4)
+                    .padding(.top, 6)
                 }
             }
         }
@@ -347,14 +239,6 @@ struct RadarTileView: View {
             stopLoadingTimeout()
             NotificationCenter.default.removeObserver(self, name: .radarSettingsChanged, object: nil)
         }
-        .onChange(of: useWindyRadar) { _, _ in
-            refreshRadar()
-        }
-        .onChange(of: showSatelliteOverlay) { _, _ in
-            if useWindyRadar {
-                refreshRadar()
-            }
-        }
     }
     
     private func loadRadar() {
@@ -388,7 +272,7 @@ struct RadarTileView: View {
         
         // Force reload by recreating the WebView
         let newHTML = radarHTML
-        webView?.loadHTMLString(newHTML, baseURL: URL(string: "https://embed.ventusky.com"))
+        webView?.loadHTMLString(newHTML, baseURL: URL(string: "https://embed.windy.com"))
         
         stopAutoRefreshTimer()
         startAutoRefreshTimer()
@@ -471,10 +355,8 @@ struct RadarTileView: View {
     
     private func openFullRadar() {
         guard let latitude = station.latitude, let longitude = station.longitude else {
-            // Open default location if no coordinates - default to Windy
-            let defaultURL = useWindyRadar ? 
-                "https://www.windy.com/?radar,39.83,-98.58,5" :
-                "https://www.ventusky.com/?p=39.83;-98.58;4&l=radar"
+            // Open default location if no coordinates
+            let defaultURL = "https://www.windy.com/?radar,39.83,-98.58,6"
             
             if let url = URL(string: defaultURL) {
                 NSWorkspace.shared.open(url)
@@ -482,13 +364,7 @@ struct RadarTileView: View {
             return
         }
         
-        let fullURL: String
-        if useWindyRadar {
-            let layers = showSatelliteOverlay ? "radar,satellite" : "radar"
-            fullURL = "https://www.windy.com/?\(layers),\(latitude),\(longitude),8"
-        } else {
-            fullURL = "https://www.ventusky.com/?p=\(latitude);\(longitude);8&l=radar"
-        }
+        let fullURL = "https://www.windy.com/?radar,\(latitude),\(longitude),9"
         
         if let url = URL(string: fullURL) {
             NSWorkspace.shared.open(url)
@@ -514,7 +390,7 @@ struct RadarWebView: NSViewRepresentable {
             self.webView = webView
         }
         
-        webView.loadHTMLString(htmlContent, baseURL: URL(string: "https://embed.ventusky.com"))
+        webView.loadHTMLString(htmlContent, baseURL: URL(string: "https://embed.windy.com"))
         
         return webView
     }

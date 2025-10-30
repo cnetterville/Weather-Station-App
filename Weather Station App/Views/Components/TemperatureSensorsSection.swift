@@ -40,7 +40,7 @@ struct TemperatureSensorsSection: View {
                 )
             }
             
-            // 4-Day Weather Forecast Card
+            // 5-Day Weather Forecast Card
             if station.sensorPreferences.showForecast {
                 ForecastCard(
                     station: station,

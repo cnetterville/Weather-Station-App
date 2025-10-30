@@ -93,7 +93,7 @@ struct ForecastCard: View {
                             .font(.headline)
                             .foregroundColor(.primary)
                         
-                        Text("Tap to load 4-day weather forecast")
+                        Text("Tap to load 5-day weather forecast")
                             .font(.caption)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
@@ -132,7 +132,7 @@ struct ForecastContent: View {
         VStack(alignment: .leading, spacing: 12) {
             // Forecast header with last updated time
             HStack {
-                Text("4-Day Forecast")
+                Text("5-Day Forecast")
                     .font(.subheadline)
                     .fontWeight(.medium)
                     .foregroundColor(.secondary)

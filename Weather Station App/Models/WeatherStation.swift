@@ -80,7 +80,7 @@ struct SensorLabels: Codable, Equatable {
     var lunar: String = "Moon & Lunar"
     var camera: String = "Weather Camera"
     var radar: String = "Weather Radar"
-    var forecast: String = "4-Day Forecast"
+    var forecast: String = "5-Day Forecast" // Updated from "4-Day Forecast" to "5-Day Forecast"
 }
 
 struct SensorPreferences: Codable, Equatable {
