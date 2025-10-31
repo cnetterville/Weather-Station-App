@@ -137,11 +137,14 @@ class WeatherForecastService: ObservableObject {
         
         var dailyForecasts: [DailyWeatherForecast] = []
         
+        // Get the timezone for this forecast location
+        let forecastTimeZone = TimeZone(identifier: response.timezone) ?? TimeZone.current
+        
         // Process each day
         for i in 0..<response.daily.time.count {
             let dateFormatter = DateFormatter()
             dateFormatter.dateFormat = "yyyy-MM-dd"
-            dateFormatter.timeZone = TimeZone(identifier: response.timezone) ?? TimeZone.current
+            dateFormatter.timeZone = forecastTimeZone
             
             if let date = dateFormatter.date(from: response.daily.time[i]) {
                 let forecast = DailyWeatherForecast(
@@ -151,7 +154,8 @@ class WeatherForecastService: ObservableObject {
                     minTemperature: response.daily.temperature2mMin[i],
                     precipitation: response.daily.precipitationSum[i],
                     maxWindSpeed: response.daily.windSpeed10mMax[i],
-                    windDirection: response.daily.windDirection10mDominant[i]
+                    windDirection: response.daily.windDirection10mDominant[i],
+                    timezone: forecastTimeZone // Pass timezone to DailyWeatherForecast
                 )
                 dailyForecasts.append(forecast)
             }

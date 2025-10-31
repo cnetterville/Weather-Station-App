@@ -72,32 +72,62 @@ struct DailyWeatherForecast {
     let precipitation: Double
     let maxWindSpeed: Double
     let windDirection: Int
+    let timezone: TimeZone // Add timezone property
     
     // Computed properties for UI
     var dayOfWeek: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEEE"
+        formatter.timeZone = timezone // Use forecast location's timezone
         return formatter.string(from: date)
     }
     
     var shortDayOfWeek: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEE"
+        formatter.timeZone = timezone // Use forecast location's timezone
         return formatter.string(from: date)
     }
     
     var monthDay: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMM d"
+        formatter.timeZone = timezone // Use forecast location's timezone
         return formatter.string(from: date)
     }
     
     var isToday: Bool {
-        Calendar.current.isDateInToday(date)
+        let calendar = Calendar.current
+        let today = Date()
+        
+        // Get the current date in the forecast location's timezone
+        let forecastCalendar = Calendar(identifier: calendar.identifier)
+        guard let forecastTimeZone = TimeZone(identifier: timezone.identifier) else {
+            // Fallback to original behavior if timezone is invalid
+            return calendar.isDateInToday(date)
+        }
+        
+        var forecastCalendarCopy = forecastCalendar
+        forecastCalendarCopy.timeZone = forecastTimeZone
+        
+        return forecastCalendarCopy.isDate(date, inSameDayAs: today)
     }
     
     var isTomorrow: Bool {
-        Calendar.current.isDateInTomorrow(date)
+        let calendar = Calendar.current
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: Date()) ?? Date()
+        
+        // Get tomorrow in the forecast location's timezone
+        let forecastCalendar = Calendar(identifier: calendar.identifier)
+        guard let forecastTimeZone = TimeZone(identifier: timezone.identifier) else {
+            // Fallback to original behavior if timezone is invalid
+            return calendar.isDateInTomorrow(date)
+        }
+        
+        var forecastCalendarCopy = forecastCalendar
+        forecastCalendarCopy.timeZone = forecastTimeZone
+        
+        return forecastCalendarCopy.isDate(date, inSameDayAs: tomorrow)
     }
     
     var displayDay: String {
