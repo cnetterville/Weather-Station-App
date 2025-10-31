@@ -14,14 +14,17 @@ class MenuBarManager: ObservableObject {
     private let weatherService = WeatherStationService.shared
     private let forecastService = WeatherForecastService.shared
     private var cycleThroughTimer: Timer?
+    private var backgroundRefreshTimer: Timer?
     
     @Published var isMenuBarEnabled: Bool = false {
         didSet {
             DispatchQueue.main.async {
                 if self.isMenuBarEnabled {
                     self.setupStatusItem()
+                    self.startBackgroundRefresh()
                 } else {
                     self.removeStatusItem()
+                    self.stopBackgroundRefresh()
                 }
                 UserDefaults.standard.set(self.isMenuBarEnabled, forKey: "MenuBarEnabled")
             }
@@ -135,6 +138,26 @@ class MenuBarManager: ObservableObject {
             }
         }
     }
+    
+    @Published var backgroundRefreshEnabled: Bool = true {
+        didSet {
+            UserDefaults.standard.set(backgroundRefreshEnabled, forKey: "MenuBarBackgroundRefreshEnabled")
+            if backgroundRefreshEnabled && isMenuBarEnabled {
+                startBackgroundRefresh()
+            } else {
+                stopBackgroundRefresh()
+            }
+        }
+    }
+    
+    @Published var backgroundRefreshInterval: TimeInterval = 600 { // 10 minutes default (longer than main app)
+        didSet {
+            UserDefaults.standard.set(backgroundRefreshInterval, forKey: "MenuBarBackgroundRefreshInterval")
+            if backgroundRefreshEnabled && isMenuBarEnabled {
+                startBackgroundRefresh()
+            }
+        }
+    }
 
     // For cycling through stations
     private var currentCycleIndex = 0
@@ -150,6 +173,7 @@ class MenuBarManager: ObservableObject {
             self.setupObservers()
             if self.isMenuBarEnabled {
                 self.setupStatusItem()
+                self.startBackgroundRefresh()
             }
             
             // Force an initial update after a brief delay to ensure data is loaded
@@ -172,6 +196,7 @@ class MenuBarManager: ObservableObject {
         
         // Stop and clean up timers
         stopCyclingTimer()
+        stopBackgroundRefresh()
         
         // Remove status item
         if let statusItem = statusItem {
@@ -193,6 +218,9 @@ class MenuBarManager: ObservableObject {
         showUVIcon = UserDefaults.standard.object(forKey: "MenuBarShowUVIcon") as? Bool ?? true
         showNightIcon = UserDefaults.standard.bool(forKey: "MenuBarShowNightIcon")
         showCloudyIcon = UserDefaults.standard.object(forKey: "MenuBarShowCloudyIcon") as? Bool ?? true
+        
+        backgroundRefreshEnabled = UserDefaults.standard.object(forKey: "MenuBarBackgroundRefreshEnabled") as? Bool ?? true
+        backgroundRefreshInterval = UserDefaults.standard.object(forKey: "MenuBarBackgroundRefreshInterval") as? TimeInterval ?? 600 // 10 minutes default
         
         // Apply dock visibility setting on load
         DispatchQueue.main.async {
@@ -281,6 +309,7 @@ class MenuBarManager: ObservableObject {
         
         // Stop timers immediately
         stopCyclingTimer()
+        stopBackgroundRefresh()
         
         // Remove status item
         removeStatusItem()
@@ -335,8 +364,10 @@ class MenuBarManager: ObservableObject {
     
     @objc private func refreshWeatherData() {
         print("🔄 Manual refresh requested from menu bar")
-        // Post notification to refresh weather data
-        NotificationCenter.default.post(name: .weatherDataUpdated, object: nil)
+        // Force immediate refresh
+        Task {
+            await weatherService.fetchAllWeatherData(forceRefresh: true)
+        }
     }
     
     @objc private func quitApplication() {
@@ -879,6 +910,65 @@ class MenuBarManager: ObservableObject {
         updateMenuBarTitle()
         
         print("🔄 Cycled to station: \(nextStation.name)")
+    }
+    
+    // MARK: - Background Refresh Management
+    
+    private func startBackgroundRefresh() {
+        stopBackgroundRefresh() // Stop any existing timer
+        
+        guard backgroundRefreshEnabled && isMenuBarEnabled && !availableStations.isEmpty else {
+            print("🔄 Background refresh not started - disabled or no stations")
+            return
+        }
+        
+        backgroundRefreshTimer = Timer.scheduledTimer(withTimeInterval: backgroundRefreshInterval, repeats: true) { [weak self] timer in
+            guard let self = self else {
+                print("❌ MenuBarManager deallocated, stopping background refresh timer")
+                timer.invalidate()
+                return
+            }
+            
+            print("🔄 MenuBar background refresh timer fired at \(Date())")
+            
+            // Check if any data is stale before fetching
+            let hasStaleData = self.weatherService.weatherStations.contains { station in
+                !self.weatherService.isDataFresh(for: station) && station.isActive
+            }
+            
+            if hasStaleData {
+                Task { @MainActor in
+                    print("🔄 Starting background refresh for stale menu bar data")
+                    await self.weatherService.fetchAllWeatherData(forceRefresh: false) // Smart refresh
+                    print("🔄 Background refresh completed at \(Date())")
+                }
+            } else {
+                print("🔄 All menu bar data is fresh, skipping background refresh")
+            }
+        }
+        
+        let minutes = Int(backgroundRefreshInterval / 60)
+        print("🔄 MenuBar background refresh started: every \(minutes) minute\(minutes == 1 ? "" : "s")")
+        
+        // Run an initial refresh after a short delay if data is stale
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            let hasStaleData = self.weatherService.weatherStations.contains { station in
+                !self.weatherService.isDataFresh(for: station) && station.isActive
+            }
+            
+            if hasStaleData {
+                print("🔄 Running initial background refresh for stale data")
+                Task {
+                    await self.weatherService.fetchAllWeatherData(forceRefresh: false)
+                }
+            }
+        }
+    }
+    
+    private func stopBackgroundRefresh() {
+        backgroundRefreshTimer?.invalidate()
+        backgroundRefreshTimer = nil
+        print("🛑 MenuBar background refresh stopped")
     }
     
     // MARK: - Dock Visibility

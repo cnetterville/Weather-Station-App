@@ -147,6 +147,37 @@ struct SettingsView: View {
                                                 .pickerStyle(.menu)
                                             }
                                             
+                                            // Background Refresh Settings
+                                            VStack(alignment: .leading, spacing: 8) {
+                                                Text("Background Updates:")
+                                                    .font(.headline)
+                                                
+                                                Toggle("Keep data fresh when main app is closed", isOn: $menuBarManager.backgroundRefreshEnabled)
+                                                    .toggleStyle(.checkbox)
+                                                
+                                                if menuBarManager.backgroundRefreshEnabled {
+                                                    VStack(alignment: .leading, spacing: 8) {
+                                                        Text("Background refresh interval:")
+                                                            .font(.subheadline)
+                                                        
+                                                        HStack(spacing: 8) {
+                                                            BackgroundRefreshIntervalButton(label: "5 min", interval: 300.0, binding: $menuBarManager.backgroundRefreshInterval)
+                                                            BackgroundRefreshIntervalButton(label: "10 min", interval: 600.0, binding: $menuBarManager.backgroundRefreshInterval)
+                                                            BackgroundRefreshIntervalButton(label: "15 min", interval: 900.0, binding: $menuBarManager.backgroundRefreshInterval)
+                                                            BackgroundRefreshIntervalButton(label: "30 min", interval: 1800.0, binding: $menuBarManager.backgroundRefreshInterval)
+                                                        }
+                                                        
+                                                        HStack {
+                                                            Image(systemName: "info.circle")
+                                                                .foregroundColor(.blue)
+                                                            Text("Keeps menu bar temperatures updated even when main app window is closed")
+                                                                .font(.caption)
+                                                                .foregroundColor(.secondary)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            
                                             // Station Selection (only for single station mode)
                                             if menuBarManager.displayMode == .singleStation {
                                                 VStack(alignment: .leading, spacing: 8) {
@@ -1739,6 +1770,22 @@ struct RadarIntervalButton: View {
         .controlSize(.small)
         .background(binding.wrappedValue == interval ? Color.purple : Color.clear)
         .foregroundColor(binding.wrappedValue == interval ? .white : .primary)
+        .cornerRadius(6)
+    }
+}
+
+struct BackgroundRefreshIntervalButton: View {
+    let label: String
+    let interval: TimeInterval
+    @Binding var binding: TimeInterval
+    
+    var body: some View {
+        Button(label) {
+            binding = interval
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .background(binding == interval ? Color.accentColor.opacity(0.2) : Color.clear)
         .cornerRadius(6)
     }
 }
