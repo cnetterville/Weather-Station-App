@@ -231,15 +231,6 @@ struct SettingsView: View {
                                                 Toggle("Show rain icon when raining", isOn: $menuBarManager.showRainIcon)
                                                     .toggleStyle(.checkbox)
                                                 
-                                                Toggle("Show sun icon for high solar (600+ W/m²)", isOn: $menuBarManager.showUVIcon)
-                                                    .toggleStyle(.checkbox)
-                                                
-                                                Toggle("Show cloud icon for moderate solar", isOn: $menuBarManager.showCloudyIcon)
-                                                    .toggleStyle(.checkbox)
-                                                
-                                                Toggle("Show moon icon between sunset and sunrise", isOn: $menuBarManager.showNightIcon)
-                                                    .toggleStyle(.checkbox)
-                                                
                                                 // Custom menubar labels section
                                                 if !menuBarManager.availableStations.isEmpty {
                                                     Divider()
@@ -282,12 +273,6 @@ struct SettingsView: View {
                                                         HStack {
                                                             Button("Reset All Labels") {
                                                                 resetAllCustomLabels()
-                                                            }
-                                                            .buttonStyle(.bordered)
-                                                            .controlSize(.small)
-                                                            
-                                                            Button("Auto-Generate Short Labels") {
-                                                                autoGenerateShortLabels()
                                                             }
                                                             .buttonStyle(.bordered)
                                                             .controlSize(.small)
@@ -369,11 +354,11 @@ struct SettingsView: View {
                                                 
                                                 Spacer()
                                             }
-                                            .padding(.vertical, 4)
+                                            .buttonStyle(.plain)
+                                            .background(Color.blue.opacity(unitSystemDisplayMode == mode ? 0.1 : 0))
+                                            .cornerRadius(6)
                                         }
-                                        .buttonStyle(.plain)
-                                        .background(unitSystemDisplayMode == mode ? Color.blue.opacity(0.1) : Color.clear)
-                                        .cornerRadius(6)
+                                        .padding(.vertical, 4)
                                     }
                                 }
                                 
@@ -824,10 +809,7 @@ struct SettingsView: View {
         
         // Show sample icons based on settings and priority (rain > UV > cloudy > night)
         let sampleIcons = [
-            menuBarManager.showRainIcon ? "💧" : nil,
-            menuBarManager.showUVIcon ? "☀️" : nil,
-            menuBarManager.showCloudyIcon ? "☁️" : nil,
-            menuBarManager.showNightIcon ? "🌙" : nil
+            menuBarManager.showRainIcon ? "💧" : nil
         ].compactMap { $0 }
         
         let weatherIcon = sampleIcons.first ?? ""
@@ -882,35 +864,7 @@ struct SettingsView: View {
             NotificationCenter.default.post(name: .weatherDataUpdated, object: nil)
         }
     }
-    
-    private func autoGenerateShortLabels() {
-        for (index, station) in menuBarManager.availableStations.enumerated() {
-            if let stationIndex = weatherService.weatherStations.firstIndex(where: { $0.id == station.id }) {
-                var updatedStation = weatherService.weatherStations[stationIndex]
-                
-                // Generate a short label based on the station name
-                let words = station.name.split(separator: " ")
-                let shortLabel: String
-                
-                if words.count > 1 {
-                    // Use first letter of each word (up to 4 letters) + number if needed
-                    let initials = words.prefix(3).map { String($0.first ?? "?") }.joined()
-                    shortLabel = initials + (index > 0 ? "\(index + 1)" : "")
-                } else {
-                    // Use first 6 characters of single word
-                    shortLabel = String(station.name.prefix(6))
-                }
-                
-                updatedStation.menuBarLabel = String(shortLabel.prefix(8)) // Ensure max 8 chars
-                weatherService.updateWeatherStation(updatedStation)
-            }
-        }
-        
-        // Trigger menubar update
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            NotificationCenter.default.post(name: .weatherDataUpdated, object: nil)
-        }
-    }
+
 }
 
 struct AddWeatherStationView: View {
@@ -1664,6 +1618,13 @@ struct StationActionButtons: View {
     @State private var isUpdatingInfo = false
     @State private var updateMessage = ""
     @State private var updateSuccess = false
+    
+    private var dateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter
+    }
     
     var body: some View {
         VStack(spacing: 4) {

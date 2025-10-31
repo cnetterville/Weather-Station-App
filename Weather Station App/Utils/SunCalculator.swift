@@ -175,12 +175,21 @@ class SunCalculator {
     
     /// Perform the actual sun times calculation (moved from original calculateSunTimes)
     private static func performSunTimesCalculation(for date: Date, latitude: Double, longitude: Double, timeZone: TimeZone) -> SunTimes? {
-        // Use GMT calendar for calculations
-        var calendar = Calendar.current
-        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        // First, determine what "today" is in the station's local timezone
+        var localCalendar = Calendar.current
+        localCalendar.timeZone = timeZone
+        let localDate = localCalendar.startOfDay(for: date)
         
-        // Get day of year (1-365/366)
-        let dayOfYear = calendar.ordinality(of: .day, in: .year, for: date) ?? 1
+        // Convert the local date to UTC for astronomical calculations
+        // We want to calculate sunrise/sunset for the local date, not the UTC date
+        var utcCalendar = Calendar.current
+        utcCalendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        
+        // Get the UTC date that corresponds to the same calendar day as the local date
+        let utcEquivalent = localCalendar.dateInterval(of: .day, for: localDate)?.start ?? localDate
+        
+        // Get day of year using the local calendar (not UTC calendar)
+        let dayOfYear = localCalendar.ordinality(of: .day, in: .year, for: localDate) ?? 1
         
         // Convert input longitude to positive east convention
         let lng = longitude
@@ -204,46 +213,51 @@ class SunCalculator {
         
         // Check for polar day or night
         if cosH < -1.0 {
-            let noon = calendar.startOfDay(for: date).addingTimeInterval(12 * 3600)
-            return SunTimes(sunrise: noon.addingTimeInterval(-12 * 3600), 
-                          sunset: noon.addingTimeInterval(12 * 3600), 
+            // Polar day - sun never sets
+            return SunTimes(sunrise: localDate.addingTimeInterval(-12 * 3600), 
+                          sunset: localDate.addingTimeInterval(36 * 3600), 
                           dayLength: 24 * 3600,
                           timeZone: timeZone)
         } else if cosH > 1.0 {
-            let midnight = calendar.startOfDay(for: date)
-            return SunTimes(sunrise: midnight, sunset: midnight, dayLength: 0, timeZone: timeZone)
+            // Polar night - sun never rises
+            return SunTimes(sunrise: localDate, sunset: localDate, dayLength: 0, timeZone: timeZone)
         }
         
         let hourAngle = acos(cosH) * 180.0 / .pi  // Convert back to degrees
         
-        // Calculate sunrise and sunset in minutes from midnight UTC
-        let sunriseUTC = 720.0 - 4.0 * (lng + hourAngle) - eqtime
-        let sunsetUTC = 720.0 - 4.0 * (lng - hourAngle) - eqtime
+        // Calculate sunrise and sunset in minutes from midnight LOCAL TIME
+        // Adjust for timezone offset to get the correct local times
+        let timezoneOffsetHours = Double(timeZone.secondsFromGMT(for: date)) / 3600.0
         
-        // Create UTC dates
-        let utcStartOfDay = calendar.startOfDay(for: date)
-        let sunriseUTCDate = utcStartOfDay.addingTimeInterval(sunriseUTC * 60.0)
-        let sunsetUTCDate = utcStartOfDay.addingTimeInterval(sunsetUTC * 60.0)
+        let sunriseLocal = 720.0 - 4.0 * (lng + hourAngle) - eqtime + (timezoneOffsetHours * 60.0)
+        let sunsetLocal = 720.0 - 4.0 * (lng - hourAngle) - eqtime + (timezoneOffsetHours * 60.0)
         
-        // Convert to target timezone by creating equivalent local times
-        // For proper timezone conversion, we need to find the local time that corresponds to the same moment
-        var localCalendar = Calendar.current
-        localCalendar.timeZone = timeZone
-        
-        // Convert UTC times to local timezone
-        let localSunrise = sunriseUTCDate
-        let localSunset = sunsetUTCDate
+        // Create local dates for sunrise and sunset
+        let sunrise = localDate.addingTimeInterval(sunriseLocal * 60.0)
+        let sunset = localDate.addingTimeInterval(sunsetLocal * 60.0)
         
         // Calculate day length
-        let dayLength = localSunset.timeIntervalSince(localSunrise)
+        let dayLength = sunset.timeIntervalSince(sunrise)
         
-        return SunTimes(sunrise: localSunrise, sunset: localSunset, dayLength: max(0, dayLength), timeZone: timeZone)
+        return SunTimes(sunrise: sunrise, sunset: sunset, dayLength: max(0, dayLength), timeZone: timeZone)
+    }
+    
+    /// Convert a UTC time to local time in the target timezone  
+    private static func convertUTCToLocalTime(_ utcDate: Date, targetTimeZone: TimeZone) -> Date {
+        // Date represents absolute time, no conversion needed
+        // The timezone will be used by DateFormatter in SunTimes
+        return utcDate
     }
     
     /// Convert a UTC time to equivalent time in target timezone
     private static func convertUTCToTimezone(_ utcDate: Date, targetTimeZone: TimeZone) -> Date {
-        let utcOffsetSeconds = targetTimeZone.secondsFromGMT(for: utcDate)
-        return utcDate.addingTimeInterval(TimeInterval(utcOffsetSeconds))
+        // The utcDate represents an absolute moment in UTC
+        // We need to return the same absolute moment, but the SunTimes struct
+        // will handle the timezone formatting using the provided timeZone property
+        // 
+        // No conversion needed here since Date represents absolute time
+        // The timezone will be used by DateFormatter in the SunTimes formatting methods
+        return utcDate
     }
     
     /// Adjust sun time if it falls outside the expected day range

@@ -184,77 +184,90 @@ struct ForecastDayRow: View {
     let isFirst: Bool
     
     var body: some View {
-        HStack(spacing: 8) {
-            // Day
-            VStack(alignment: .leading, spacing: 2) {
+        VStack(spacing: 2) {
+            // Top row: Day, Icon, Description, Temperature
+            HStack(spacing: 8) {
+                // Day
                 Text(forecast.displayDay)
                     .font(.system(size: isFirst ? 14 : 13, weight: isFirst ? .semibold : .medium))
                     .foregroundColor(isFirst ? .primary : .secondary)
                     .frame(width: 45, alignment: .leading)
                 
-                if !forecast.isToday {
-                    Text(forecast.monthDay)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
-            }
-            
-            // Weather icon with rain amount below
-            VStack(spacing: 2) {
+                // Weather icon
                 Image(systemName: forecast.weatherIcon)
                     .font(.system(size: 16))
                     .foregroundColor(.blue)
                     .frame(width: 18)
                 
-                // Rain amount below the icon
-                if forecast.precipitation > 0.1 {
-                    Text(forecast.formattedPrecipitation)
-                        .font(.caption2)
-                        .fontWeight(.medium)
-                        .foregroundColor(.blue)
-                        .padding(.horizontal, 2)
-                        .padding(.vertical, 1)
-                        .background(SwiftUI.Color.blue.opacity(0.1))
-                        .cornerRadius(3)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
-                        .fixedSize(horizontal: true, vertical: false)
-                } else {
-                    // Empty space to maintain consistent alignment
-                    Text("")
-                        .font(.caption2)
-                        .frame(height: 12)
-                }
-            }
-            .frame(width: 70)
-            
-            // Weather description
-            Text(forecast.shortWeatherDescription)
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .lineLimit(1)
-                .truncationMode(.tail)
-            
-            Spacer()
-            
-            // Temperature range
-            HStack(spacing: 1) {
-                Text(forecast.formattedMaxTemp)
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundColor(.primary)
-                    .minimumScaleFactor(0.8)
-                
-                Text("/")
+                // Weather description
+                Text(forecast.weatherDescription)
                     .font(.caption)
                     .foregroundColor(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                 
-                Text(forecast.formattedMinTemp)
-                    .font(.system(size: 12, design: .rounded))
-                    .foregroundColor(.secondary)
-                    .minimumScaleFactor(0.8)
+                Spacer()
+                
+                // Temperature range
+                HStack(spacing: 1) {
+                    Text(forecast.formattedMaxTemp)
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundColor(.primary)
+                        .minimumScaleFactor(0.8)
+                    
+                    Text("/")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    Text(forecast.formattedMinTemp)
+                        .font(.system(size: 12, design: .rounded))
+                        .foregroundColor(.secondary)
+                        .minimumScaleFactor(0.8)
+                }
+                .frame(width: 65, alignment: .trailing)
             }
-            .frame(width: 65, alignment: .trailing)
-            .lineLimit(1)
+            
+            // Bottom row: Date, Precipitation, Wind
+            HStack(spacing: 8) {
+                // Date
+                if !forecast.isToday {
+                    Text(forecast.monthDay)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .frame(width: 45, alignment: .leading)
+                } else {
+                    Spacer()
+                        .frame(width: 45)
+                }
+                
+                // Precipitation
+                if forecast.precipitation > 0.1 {
+                    HStack(spacing: 2) {
+                        Image(systemName: "drop.fill")
+                            .font(.system(size: 8))
+                            .foregroundColor(.blue)
+                        Text(forecast.formattedPrecipitation)
+                            .font(.system(size: 9))
+                            .foregroundColor(.blue)
+                    }
+                } else {
+                    Spacer()
+                }
+                
+                Spacer()
+                
+                // Wind info
+                HStack(spacing: 2) {
+                    Image(systemName: "wind")
+                        .font(.system(size: 8))
+                        .foregroundColor(.secondary)
+                    
+                    Text("\(Int(forecast.maxWindSpeed))km/h \(forecast.windDirectionText)")
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary)
+                }
+                .frame(width: 65, alignment: .trailing)
+            }
         }
         .padding(.vertical, isFirst ? 4 : 2)
     }
