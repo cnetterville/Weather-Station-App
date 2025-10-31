@@ -42,7 +42,7 @@ struct CameraTileView: View {
                         image
                             .resizable()
                             .aspectRatio(contentMode: .fit)
-                            .frame(height: 180)
+                            .frame(height: 240)
                             .clipped()
                             .cornerRadius(8)
                             .onTapGesture {
@@ -51,7 +51,7 @@ struct CameraTileView: View {
                     } placeholder: {
                         Rectangle()
                             .fill(Color.gray.opacity(0.3))
-                            .frame(height: 180)
+                            .frame(height: 240)
                             .cornerRadius(8)
                             .overlay(
                                 VStack {
