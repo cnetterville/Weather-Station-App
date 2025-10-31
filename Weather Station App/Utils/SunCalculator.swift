@@ -186,7 +186,7 @@ class SunCalculator {
         utcCalendar.timeZone = TimeZone(secondsFromGMT: 0)!
         
         // Get the UTC date that corresponds to the same calendar day as the local date
-        let utcEquivalent = localCalendar.dateInterval(of: .day, for: localDate)?.start ?? localDate
+        _ = localCalendar.dateInterval(of: .day, for: localDate)?.start ?? localDate
         
         // Get day of year using the local calendar (not UTC calendar)
         let dayOfYear = localCalendar.ordinality(of: .day, in: .year, for: localDate) ?? 1
