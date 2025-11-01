@@ -198,8 +198,8 @@ struct StationInfoCard: View {
                         Spacer()
                         VStack(alignment: .trailing) {
                             Text(formattedTime)
-                            Text("(\(currentDataAge))")
-                                .font(.caption)
+                            Text(currentDataAge)
+                                .font(.system(.caption, design: .monospaced))
                                 .foregroundColor(weatherService.isDataFresh(for: station) ? .green : .orange)
                         }
                     }
