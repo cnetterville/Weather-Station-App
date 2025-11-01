@@ -143,6 +143,9 @@ struct EditableWeatherCard<Content: View>: View {
 struct StationInfoCard: View {
     let station: WeatherStation
     @StateObject private var weatherService = WeatherStationService.shared
+    @State private var timer: Timer?
+    @State private var currentDataAge: String = ""
+    @State private var lastKnownUpdate: Date?
     
     private var creationDateFormatter: DateFormatter {
         let formatter = DateFormatter()
@@ -195,7 +198,7 @@ struct StationInfoCard: View {
                         Spacer()
                         VStack(alignment: .trailing) {
                             Text(formattedTime)
-                            Text("(\(weatherService.getDataAge(for: station)))")
+                            Text("(\(currentDataAge))")
                                 .font(.caption)
                                 .foregroundColor(weatherService.isDataFresh(for: station) ? .green : .orange)
                         }
@@ -233,6 +236,76 @@ struct StationInfoCard: View {
                 }
             }
             .font(.subheadline)
+        }
+        .onAppear {
+            setupDataAgeTracking()
+        }
+        .onDisappear {
+            stopTimer()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .weatherDataUpdated)) { _ in
+            // Reset timer when data is updated
+            if hasDataBeenUpdated() {
+                setupDataAgeTracking()
+            }
+        }
+        .onChange(of: station.lastUpdated) { oldValue, newValue in
+            // Reset timer when station data changes
+            if newValue != oldValue {
+                setupDataAgeTracking()
+            }
+        }
+    }
+    
+    private func setupDataAgeTracking() {
+        stopTimer() // Stop existing timer
+        updateDataAge() // Update immediately
+        startTimer() // Start new timer
+        lastKnownUpdate = station.lastUpdated
+    }
+    
+    private func startTimer() {
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+            updateDataAge()
+        }
+    }
+    
+    private func stopTimer() {
+        timer?.invalidate()
+        timer = nil
+    }
+    
+    private func updateDataAge() {
+        if let lastUpdated = station.lastUpdated {
+            currentDataAge = formatDataAgeWithSeconds(from: lastUpdated)
+        } else {
+            currentDataAge = "Never"
+        }
+    }
+    
+    private func hasDataBeenUpdated() -> Bool {
+        return station.lastUpdated != lastKnownUpdate
+    }
+    
+    private func formatDataAgeWithSeconds(from recordedTime: Date, relativeTo currentTime: Date = Date()) -> String {
+        let age = currentTime.timeIntervalSince(recordedTime)
+        
+        if age < 0 {
+            return "0s ago" // Handle future timestamps
+        } else if age < 60 {
+            return "\(Int(age))s ago"
+        } else if age < 3600 {
+            let minutes = Int(age / 60)
+            let seconds = Int(age.truncatingRemainder(dividingBy: 60))
+            return "\(minutes)m \(seconds)s ago"
+        } else if age < 86400 {
+            let hours = Int(age / 3600)
+            let minutes = Int((age.truncatingRemainder(dividingBy: 3600)) / 60)
+            return "\(hours)h \(minutes)m ago"
+        } else {
+            let days = Int(age / 86400)
+            let hours = Int((age.truncatingRemainder(dividingBy: 86400)) / 3600)
+            return "\(days)d \(hours)h ago"
         }
     }
 }
