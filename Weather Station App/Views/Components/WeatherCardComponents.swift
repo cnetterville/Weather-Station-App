@@ -173,7 +173,7 @@ struct StationInfoCard: View {
                         Text("Model:")
                             .fontWeight(.medium)
                         Spacer()
-                        Text(stationType)
+                        Text(stationType.replacingOccurrences(of: "_", with: " "))
                             .font(.system(.body, design: .monospaced))
                     }
                 }
