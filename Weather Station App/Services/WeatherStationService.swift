@@ -1,5 +1,7 @@
 import Foundation
 import Combine
+import AppKit
+import Darwin.Mach
 
 class WeatherStationService: ObservableObject {
     static let shared = WeatherStationService()
@@ -31,6 +33,18 @@ class WeatherStationService: ObservableObject {
     @Published var isDiscoveringStations = false
     @Published var errorMessage: String?
     @Published var lastRefreshTime: Date = Date()
+    @Published var isMemoryConstrained: Bool = false
+    @Published var memoryPressureLevel: Int = 0 // 0=normal, 1=warning, 2=urgent, 3=critical
+    
+    // Timer management - properly retain references to prevent leaks
+    private var memoryWarningCancellable: AnyCancellable?
+    private var maintenanceTimer: AnyCancellable?
+    private var memoryMonitorTimer: AnyCancellable?
+    
+    // Memory optimization settings
+    private var maxHistoricalDataAge: TimeInterval = 24 * 60 * 60 // 24 hours
+    private var maxWeatherDataEntries: Int = 50 // Limit concurrent station data
+    private var shouldReduceUIUpdates: Bool = false
     
     // Caching and rate limiting
     private var dataFreshnessDuration: TimeInterval = 120 // 2 minutes freshness
@@ -47,21 +61,41 @@ class WeatherStationService: ObservableObject {
     private init() {
         loadCredentials()
         loadWeatherStations()
+        
+        // PHASE 1: Initialize memory management
+        setupMemoryManagement()
+    }
+    
+    deinit {
+        // PHASE 1: Ensure all timers and observers are properly cancelled
+        cleanup()
     }
     
     // MARK: - Optimized Data Fetching
     
     func fetchAllWeatherData(forceRefresh: Bool = false) async {
+        // PHASE 1: Respect memory constraints
+        guard memoryPressureLevel < 3 || forceRefresh else {
+            print(" Skipping data fetch due to critical memory pressure")
+            return
+        }
+        
         await MainActor.run {
-            isLoading = true
-            errorMessage = nil
+            // PHASE 1: Only update loading state if UI updates are allowed
+            if shouldPerformUIUpdate() {
+                isLoading = true
+                errorMessage = nil
+            }
         }
         
         let activeStations = weatherStations.filter { $0.isActive }
         
-        // Dynamically adjust concurrent requests based on number of stations
-        let optimalConcurrency = min(maxConcurrentRequests, max(1, activeStations.count))
-        print(" Fetching data for \(activeStations.count) active stations (concurrent: \(optimalConcurrency))")
+        // PHASE 1: Adjust concurrency based on memory pressure
+        let adjustedConcurrency = memoryPressureLevel > 1 ? 
+            min(maxConcurrentRequests, 2) : maxConcurrentRequests
+        let optimalConcurrency = min(adjustedConcurrency, max(1, activeStations.count))
+        
+        print(" Fetching data for \(activeStations.count) active stations (concurrent: \(optimalConcurrency), memory level: \(memoryPressureLevel))")
         
         // Filter stations that actually need fresh data
         let stationsToFetch: [WeatherStation]
@@ -75,7 +109,9 @@ class WeatherStationService: ObservableObject {
         
         if stationsToFetch.isEmpty {
             await MainActor.run {
-                isLoading = false
+                if shouldPerformUIUpdate() {
+                    isLoading = false
+                }
                 print(" All station data is still fresh, no API calls needed")
             }
             return
@@ -97,22 +133,29 @@ class WeatherStationService: ObservableObject {
                     // Fetch current data
                     await self.fetchWeatherDataOptimized(for: station)
                     
-                    // Also fetch today's historical data for high/low calculations (if not already cached)
-                    if await !self.hasTodaysHistoricalData(for: station) {
-                        await self.fetchTodaysHistoricalData(for: station)
+                    // PHASE 1: Skip historical data fetch under memory pressure
+                    if self.memoryPressureLevel < 2 {
+                        // Also fetch today's historical data for high/low calculations (if not already cached)
+                        if await !self.hasTodaysHistoricalData(for: station) {
+                            await self.fetchTodaysHistoricalData(for: station)
+                        }
                     }
 
                     
-                    // Smaller delay for fewer stations
-                    let delay = stationsToFetch.count <= 2 ? 100_000_000 : 250_000_000 // 0.1s vs 0.25s
+                    // PHASE 1: Increased delay under memory pressure
+                    let baseDelay = stationsToFetch.count <= 2 ? 100_000_000 : 250_000_000 // 0.1s vs 0.25s
+                    let memoryDelayMultiplier = self.memoryPressureLevel > 1 ? 2 : 1
+                    let delay = baseDelay * memoryDelayMultiplier
                     try? await Task.sleep(nanoseconds: UInt64(delay))
                 }
             }
         }
         
         await MainActor.run {
-            isLoading = false
-            lastRefreshTime = Date()
+            if shouldPerformUIUpdate() {
+                isLoading = false
+                lastRefreshTime = Date()
+            }
             print(" Concurrent fetch completed for \(stationsToFetch.count) stations")
         }
     }
@@ -638,27 +681,27 @@ class WeatherStationService: ObservableObject {
             startDate = now.addingTimeInterval(-3600) // Exactly 1 hour ago
             
             let actualDuration = endDate.timeIntervalSince(startDate) / 3600
-            print("🕐 1-Hour range (5min resolution): \(startDate) to \(endDate)")
-            print("🕐 Duration: \(String(format: "%.3f", actualDuration)) hours (well under 24hr limit)")
-            print("🕐 Expected data points: ~12 (every 5 minutes for 1 hour)")
+            print(" 1-Hour range (5min resolution): \(startDate) to \(endDate)")
+            print(" Duration: \(String(format: "%.3f", actualDuration)) hours (well under 24hr limit)")
+            print(" Expected data points: ~12 (every 5 minutes for 1 hour)")
         case .last6Hours:
             // Last 6 hours from current time  
             endDate = now
             startDate = now.addingTimeInterval(-6 * 3600) // Exactly 6 hours ago
-            print("🕐 6-Hour range: \(startDate) to \(endDate) (duration: \(endDate.timeIntervalSince(startDate)/3600) hours)")
+            print(" 6-Hour range: \(startDate) to \(endDate) (duration: \(endDate.timeIntervalSince(startDate)/3600) hours)")
             
         case .last24Hours:
             // Last 24 hours from current time
             endDate = now
             startDate = now.addingTimeInterval(-24 * 3600) // Exactly 24 hours ago
-            print("🕐 24-Hour range: \(startDate) to \(endDate) (duration: \(endDate.timeIntervalSince(startDate)/3600) hours)")
+            print(" 24-Hour range: \(startDate) to \(endDate) (duration: \(endDate.timeIntervalSince(startDate)/3600) hours)")
             
         case .todayFrom00:
             // NEW: From midnight (00:00:00) of current day to now
             // This gives us the actual daily high/low for today's calendar day
             startDate = calendar.startOfDay(for: now)
             endDate = now
-            print("🌡️ Today from 00:00 range: \(startDate) to \(endDate)")
+            print(" Today from 00:00 range: \(startDate) to \(endDate)")
             
         case .last7Days:
             // Last 7 full calendar days
@@ -1745,6 +1788,359 @@ class WeatherStationService: ObservableObject {
         let pending = pendingRequests.count
         let shared = sharedRequestQueue.sync { sharedRequestResults.count }
         return (pendingCount: pending, sharedCount: shared, maxConcurrency: maxConcurrentRequests)
+    }
+    
+    // MARK: - Memory Management Implementation
+    
+    private func setupMemoryManagement() {
+        // Monitor memory warnings
+        setupMemoryPressureMonitoring()
+        
+        // Start maintenance timer for cleanup
+        startMaintenanceTimer()
+        
+        print(" Memory management initialized")
+    }
+    
+    private func setupMemoryPressureMonitoring() {
+        // Cancel any existing observer
+        memoryWarningCancellable?.cancel()
+        
+        // For macOS, listen for NSApplication memory warnings and system notifications
+        memoryWarningCancellable = NotificationCenter.default
+            .publisher(for: NSApplication.didBecomeActiveNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.checkMemoryPressure()
+            }
+        
+        // Start periodic memory monitoring
+        memoryMonitorTimer?.cancel()
+        memoryMonitorTimer = Timer.publish(every: 30.0, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                self?.monitorMemoryUsage()
+            }
+    }
+    
+    private func handleMemoryWarning() {
+        print(" Memory warning received - implementing aggressive cleanup")
+        
+        isMemoryConstrained = true
+        memoryPressureLevel = 3 // Critical
+        shouldReduceUIUpdates = true
+        
+        // Aggressive memory cleanup
+        performAggressiveMemoryCleanup()
+        
+        // Reduce refresh frequency
+        dataFreshnessDuration = max(dataFreshnessDuration * 2, 300) // At least 5 minutes
+        
+        // Reduce concurrent requests
+        maxConcurrentRequests = 1
+        
+        print(" Memory warning handled - reduced operations to minimum")
+    }
+    
+    private func checkMemoryPressure() {
+        // Check for memory pressure indicators on macOS
+        let processInfo = ProcessInfo.processInfo
+        
+        // Check for low memory conditions
+        if processInfo.isLowPowerModeEnabled || processInfo.thermalState != .nominal {
+            handleMemoryWarning()
+        }
+    }
+    
+    private func monitorMemoryUsage() {
+        var memoryInfo = mach_task_basic_info()
+        var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size)/4
+        
+        let kerr: kern_return_t = withUnsafeMutablePointer(to: &memoryInfo) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: 1) {
+                task_info(mach_task_self_,
+                         task_flavor_t(MACH_TASK_BASIC_INFO),
+                         $0,
+                         &count)
+            }
+        }
+        
+        if kerr == KERN_SUCCESS {
+            let memoryUsageMB = Double(memoryInfo.resident_size) / 1024.0 / 1024.0
+            
+            // Update memory pressure level based on usage (more generous thresholds for macOS)
+            let previousLevel = memoryPressureLevel
+            
+            if memoryUsageMB > 400 {
+                memoryPressureLevel = 3 // Critical
+            } else if memoryUsageMB > 300 {
+                memoryPressureLevel = 2 // Urgent
+            } else if memoryUsageMB > 200 {
+                memoryPressureLevel = 1 // Warning
+            } else {
+                memoryPressureLevel = 0 // Normal
+            }
+            
+            // Only update UI if memory pressure changed significantly
+            if abs(previousLevel - memoryPressureLevel) > 0 {
+                isMemoryConstrained = memoryPressureLevel > 1
+                shouldReduceUIUpdates = memoryPressureLevel > 2
+                
+                if memoryPressureLevel > previousLevel && memoryPressureLevel > 1 {
+                    print(" Memory pressure increased to level \(memoryPressureLevel) (\(String(format: "%.1f", memoryUsageMB)) MB)")
+                    performMemoryOptimizations()
+                }
+            }
+        }
+    }
+    
+    private func performMemoryOptimizations() {
+        switch memoryPressureLevel {
+        case 1: // Warning
+            performLightMemoryCleanup()
+        case 2: // Urgent
+            performModerateMemoryCleanup()
+        case 3: // Critical
+            performAggressiveMemoryCleanup()
+        default:
+            break
+        }
+    }
+    
+    private func performLightMemoryCleanup() {
+        print(" Performing light memory cleanup")
+        
+        // Clean old chart data (keep only last 7 days)
+        cleanOldChartData(maxAge: 7 * 24 * 60 * 60)
+        
+        // Clear caches older than 1 hour
+        clearOldCachedData(maxAge: 60 * 60)
+    }
+    
+    private func performModerateMemoryCleanup() {
+        print(" Performing moderate memory cleanup")
+        
+        performLightMemoryCleanup()
+        
+        // Clean chart data more aggressively (keep only last 3 days)
+        cleanOldChartData(maxAge: 3 * 24 * 60 * 60)
+        
+        // Clear inactive station data
+        cleanInactiveStationData()
+        
+        // Reduce UI update frequency
+        shouldReduceUIUpdates = true
+    }
+    
+    private func performAggressiveMemoryCleanup() {
+        print(" Performing aggressive memory cleanup")
+        
+        performModerateMemoryCleanup()
+        
+        // Keep only today's chart data
+        cleanOldChartData(maxAge: 24 * 60 * 60)
+        
+        // Clear all non-essential cached data
+        clearOldCachedData(maxAge: 0)
+        
+        // Clear shared request results
+        sharedRequestQueue.async(flags: .barrier) { [weak self] in
+            self?.sharedRequestResults.removeAll()
+        }
+        
+        // Force garbage collection
+        autoreleasepool {
+            // This will help ensure ARC cleans up any remaining references
+        }
+        
+        // Reduce concurrent operations to absolute minimum
+        maxConcurrentRequests = 1
+        dataFreshnessDuration = max(dataFreshnessDuration, 600) // 10 minutes minimum
+    }
+    
+    private func cleanOldChartData(maxAge: TimeInterval) {
+        let cutoffDate = Date().addingTimeInterval(-maxAge)
+        var removedCount = 0
+        
+        for (stationId, historicalData) in chartHistoricalData {
+            var shouldRemove = false
+            
+            // Check if any data is older than cutoff
+            if let outdoor = historicalData.outdoor?.temperature {
+                for (timestampString, _) in outdoor.list {
+                    if let timestamp = Double(timestampString) {
+                        let dataDate = Date(timeIntervalSince1970: timestamp)
+                        if dataDate < cutoffDate {
+                            shouldRemove = true
+                            break
+                        }
+                    }
+                }
+            }
+            
+            if shouldRemove {
+                chartHistoricalData.removeValue(forKey: stationId)
+                removedCount += 1
+            }
+        }
+        
+        if removedCount > 0 {
+            print(" Cleaned \(removedCount) old chart data entries")
+        }
+    }
+    
+    private func clearOldCachedData(maxAge: TimeInterval) {
+        let cutoffDate = Date().addingTimeInterval(-maxAge)
+        
+        // Clean old request times
+        let oldCount = lastRequestTimes.count
+        lastRequestTimes = lastRequestTimes.filter { _, date in
+            date > cutoffDate
+        }
+        
+        if lastRequestTimes.count < oldCount {
+            print(" Cleaned \(oldCount - lastRequestTimes.count) old request time entries")
+        }
+    }
+    
+    private func cleanInactiveStationData() {
+        let activeStationIds = Set(weatherStations.filter { $0.isActive }.map { $0.macAddress })
+        
+        let oldWeatherDataCount = weatherData.count
+        weatherData = weatherData.filter { stationId, _ in
+            activeStationIds.contains(stationId)
+        }
+        
+        let oldHistoricalDataCount = historicalData.count
+        historicalData = historicalData.filter { stationId, _ in
+            activeStationIds.contains(stationId)
+        }
+        
+        let oldChartDataCount = chartHistoricalData.count
+        chartHistoricalData = chartHistoricalData.filter { stationId, _ in
+            activeStationIds.contains(stationId)
+        }
+        
+        let removedWeather = oldWeatherDataCount - weatherData.count
+        let removedHistorical = oldHistoricalDataCount - historicalData.count
+        let removedChart = oldChartDataCount - chartHistoricalData.count
+        
+        if removedWeather > 0 || removedHistorical > 0 || removedChart > 0 {
+            print(" Cleaned inactive station data: \(removedWeather) weather, \(removedHistorical) historical, \(removedChart) chart")
+        }
+    }
+    
+    private func startMaintenanceTimer() {
+        // Cancel any existing timer
+        maintenanceTimer?.cancel()
+        
+        // Run maintenance every 5 minutes, but reduce frequency under memory pressure
+        let interval: TimeInterval = memoryPressureLevel > 1 ? 300 : 180 // 5 min vs 3 min
+        
+        maintenanceTimer = Timer.publish(every: interval, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                self?.performRoutineMaintenance()
+            }
+    }
+    
+    private func performRoutineMaintenance() {
+        // Only perform maintenance if not under severe memory pressure
+        guard memoryPressureLevel < 3 else { return }
+        
+        // Light cleanup during routine maintenance
+        if memoryPressureLevel > 0 {
+            performLightMemoryCleanup()
+        }
+        
+        // Clean up completed tasks
+        requestQueue.async { [weak self] in
+            self?.pendingRequestTasks = self?.pendingRequestTasks.filter { _, task in
+                !task.isCancelled
+            } ?? [:]
+        }
+        
+        // Adjust settings based on memory pressure
+        adjustSettingsForMemoryPressure()
+    }
+    
+    private func adjustSettingsForMemoryPressure() {
+        switch memoryPressureLevel {
+        case 0: // Normal - restore optimal settings
+            maxConcurrentRequests = min(6, maxConcurrentRequests + 1)
+            dataFreshnessDuration = max(120, dataFreshnessDuration - 30) // Gradually reduce to 2 minutes
+            shouldReduceUIUpdates = false
+            
+        case 1: // Warning - slight reduction
+            maxConcurrentRequests = min(4, maxConcurrentRequests)
+            dataFreshnessDuration = max(180, dataFreshnessDuration) // 3 minutes minimum
+            
+        case 2: // Urgent - significant reduction
+            maxConcurrentRequests = min(2, maxConcurrentRequests)
+            dataFreshnessDuration = max(300, dataFreshnessDuration) // 5 minutes minimum
+            shouldReduceUIUpdates = true
+            
+        case 3: // Critical - minimum operations
+            maxConcurrentRequests = 1
+            dataFreshnessDuration = max(600, dataFreshnessDuration) // 10 minutes minimum
+            shouldReduceUIUpdates = true
+            
+        default:
+            break
+        }
+    }
+    
+    private func cleanup() {
+        print(" Cleaning up WeatherStationService")
+        
+        // Cancel all timers and observers
+        memoryWarningCancellable?.cancel()
+        maintenanceTimer?.cancel()
+        memoryMonitorTimer?.cancel()
+        
+        // Cancel all pending tasks
+        requestQueue.async { [weak self] in
+            for (_, task) in self?.pendingRequestTasks ?? [:] {
+                task.cancel()
+            }
+            self?.pendingRequestTasks.removeAll()
+        }
+        
+        sharedRequestQueue.async(flags: .barrier) { [weak self] in
+            self?.sharedRequestResults.removeAll()
+        }
+        
+        // Clear large data structures
+        weatherData.removeAll()
+        historicalData.removeAll()
+        chartHistoricalData.removeAll()
+        lastRequestTimes.removeAll()
+        pendingRequests.removeAll()
+    }
+    
+    // MARK: - Memory-Optimized UI Update Methods
+    
+    func shouldPerformUIUpdate() -> Bool {
+        // Reduce UI updates under memory pressure
+        return !shouldReduceUIUpdates || memoryPressureLevel < 2
+    }
+    
+    func getMemoryStatusInfo() -> String {
+        let levelNames = ["Normal", "Warning", "Urgent", "Critical"]
+        let levelName = levelNames[min(memoryPressureLevel, levelNames.count - 1)]
+        
+        let constrainedStatus = isMemoryConstrained ? "Constrained" : "Optimal"
+        let updateStatus = shouldReduceUIUpdates ? "Reduced" : "Normal"
+        
+        return """
+        Memory Status: \(levelName) (\(constrainedStatus))
+        UI Updates: \(updateStatus)
+        Max Concurrent Requests: \(maxConcurrentRequests)
+        Data Freshness: \(Int(dataFreshnessDuration))s
+        Weather Data Entries: \(weatherData.count)
+        Historical Data Entries: \(historicalData.count)
+        Chart Data Entries: \(chartHistoricalData.count)
+        """
     }
 }
 
