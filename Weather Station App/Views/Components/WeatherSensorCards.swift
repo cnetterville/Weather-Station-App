@@ -14,6 +14,36 @@ struct OutdoorTemperatureCard: View {
     let getDailyTemperatureStats: () -> DailyTemperatureStats?
     let getDailyHumidityStats: () -> DailyHumidityStats?
     
+    // Get today's forecast SF symbol
+    private func getTodaysForecastIcon() -> String {
+        guard let forecast = WeatherForecastService.shared.getForecast(for: station) else {
+            return "sun.max.fill" // Default fallback
+        }
+        
+        // Find today's forecast
+        if let todaysForecast = forecast.dailyForecasts.first(where: { $0.isToday }) {
+            return todaysForecast.weatherIcon
+        }
+        
+        // Fallback to first available forecast
+        return forecast.dailyForecasts.first?.weatherIcon ?? "sun.max.fill"
+    }
+    
+    // Get today's forecast description
+    private func getTodaysForecastDescription() -> String {
+        guard let forecast = WeatherForecastService.shared.getForecast(for: station) else {
+            return "Clear sky" // Default fallback
+        }
+        
+        // Find today's forecast
+        if let todaysForecast = forecast.dailyForecasts.first(where: { $0.isToday }) {
+            return todaysForecast.weatherDescription
+        }
+        
+        // Fallback to first available forecast
+        return forecast.dailyForecasts.first?.weatherDescription ?? "Clear sky"
+    }
+    
     // Get temperature emoji based on actual temperature value
     private func getTemperatureEmoji(for tempString: String) -> String {
         guard let temp = Double(tempString) else { return "🌡️" }
@@ -42,7 +72,7 @@ struct OutdoorTemperatureCard: View {
             onTitleChange: onTitleChange
         ) {
             VStack(alignment: .leading, spacing: 12) {
-                // Temperature display with emoji
+                // Temperature display with forecast
                 HStack(alignment: .center) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Temperature")
@@ -54,10 +84,19 @@ struct OutdoorTemperatureCard: View {
                     
                     Spacer()
                     
-                    // Temperature emoji - large and centered
-                    Text(getTemperatureEmoji(for: data.outdoor.temperature.value))
-                        .font(.system(size: 40))
-                        .padding(.horizontal, 8)
+                    // Today's Forecast - centered
+                    VStack(alignment: .center, spacing: 4) {
+                        Text("Today's Forecast")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Image(systemName: getTodaysForecastIcon())
+                            .font(.system(size: 32))
+                            .foregroundColor(.blue)
+                        Text(getTodaysForecastDescription())
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
                     
                     Spacer()
                     
