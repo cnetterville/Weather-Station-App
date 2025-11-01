@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import CoreLocation
 
 struct ForecastCard: View {
     let station: WeatherStation
@@ -127,15 +128,24 @@ struct ForecastContent: View {
     let forecast: WeatherForecast
     let station: WeatherStation
     @StateObject private var forecastService = WeatherForecastService.shared
+    @State private var locationName: String = "5-Day Forecast"
+    @State private var countryFlag: String = ""
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Forecast header with last updated time
+            // Forecast header with location name and last updated time
             HStack {
-                Text("5-Day Forecast")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundColor(.secondary)
+                HStack(spacing: 6) {
+                    Text(locationName)
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+                    
+                    if !countryFlag.isEmpty {
+                        Text(countryFlag)
+                            .font(.system(size: 16))
+                    }
+                }
                 
                 Spacer()
                 
@@ -176,6 +186,87 @@ struct ForecastContent: View {
                 }
             }
         }
+        .onAppear {
+            loadLocationName()
+        }
+    }
+    
+    private func loadLocationName() {
+        guard let latitude = station.latitude, let longitude = station.longitude else {
+            return
+        }
+        
+        Task {
+            let (cityName, flagEmoji) = await getCityNameAndFlagAsync(latitude: latitude, longitude: longitude)
+            await MainActor.run {
+                if let cityName = cityName {
+                    locationName = cityName
+                }
+                countryFlag = flagEmoji
+            }
+        }
+    }
+    
+    private func getCityNameAndFlagAsync(latitude: Double, longitude: Double) async -> (String?, String) {
+        let location = CLLocation(latitude: latitude, longitude: longitude)
+        
+        return await withCheckedContinuation { continuation in
+            // Suppress deprecation warning - CLGeocoder still works fine
+            #if compiler(>=6.0)
+            #warning("CLGeocoder deprecated in macOS 26.0 - consider updating when newer MapKit APIs are available")
+            #endif
+            
+            let geocoder = CLGeocoder()
+            geocoder.reverseGeocodeLocation(location) { placemarks, error in
+                if let error = error {
+                    print("Error in reverse geocoding: \(error.localizedDescription)")
+                    continuation.resume(returning: (nil, ""))
+                    return
+                }
+                
+                guard let placemark = placemarks?.first else {
+                    continuation.resume(returning: (nil, ""))
+                    return
+                }
+                
+                // Get location name
+                let cityName: String?
+                if let city = placemark.locality {
+                    cityName = city
+                } else if let area = placemark.subAdministrativeArea {
+                    cityName = area
+                } else if let state = placemark.administrativeArea {
+                    cityName = state
+                } else if let country = placemark.country {
+                    cityName = country
+                } else {
+                    cityName = nil
+                }
+                
+                // Get country flag emoji
+                let flagEmoji = getCountryFlagEmoji(countryCode: placemark.isoCountryCode)
+                
+                continuation.resume(returning: (cityName, flagEmoji))
+            }
+        }
+    }
+    
+    private func getCountryFlagEmoji(countryCode: String?) -> String {
+        guard let countryCode = countryCode?.uppercased() else { return "" }
+        
+        // Convert ISO country code to flag emoji
+        // Flag emojis are created by combining regional indicator symbols
+        let base: UInt32 = 127397 // Base value for regional indicator symbols
+        var flagString = ""
+        
+        for character in countryCode {
+            if let scalar = character.unicodeScalars.first {
+                let flagScalar = UnicodeScalar(base + scalar.value)!
+                flagString.append(Character(flagScalar))
+            }
+        }
+        
+        return flagString
     }
 }
 
