@@ -311,61 +311,154 @@ struct StationListItem: View {
     private let timer = Timer.publish(every: 30, on: .main, in: .common).autoconnect() // Reduced from 5s to 30s
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Circle()
-                    .fill(station.isActive ? (weatherService.isDataFresh(for: station) ? Color.green : Color.orange) : Color.red)
-                    .frame(width: 8, height: 8)
+                // Status indicator - replaced small circle with descriptive badge
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(station.isActive ? (weatherService.isDataFresh(for: station) ? Color.green : Color.orange) : Color.red)
+                        .frame(width: 6, height: 6)
+                    
+                    Text(getStatusText())
+                        .font(.caption2)
+                        .fontWeight(.medium)
+                        .foregroundColor(getStatusColor())
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(getStatusColor().opacity(0.15))
+                        .cornerRadius(8)
+                }
                 
                 Text(station.name)
                     .font(.headline)
                 
                 Spacer()
                 
-                // Data age indicator - now refreshes every 30 seconds instead of 5
+                // Weather preview section
+                if let weatherData = weatherService.weatherData[station.macAddress] {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        // Current temperature using proper formatting
+                        if let tempValue = Double(weatherData.outdoor.temperature.value), tempValue > -999 {
+                            Text(formatTemperature(tempValue, unit: weatherData.outdoor.temperature.unit))
+                                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                .foregroundColor(.primary)
+                        }
+                        
+                        // Weather condition icon (same as forecast cards)
+                        Image(systemName: getWeatherIcon(for: weatherData, station: station))
+                            .font(.system(size: 14))
+                            .foregroundColor(getWeatherIconColor(for: weatherData))
+                    }
+                } else {
+                    // Data age indicator when no weather data
+                    Text(weatherService.getDataAge(for: station))
+                        .font(.caption2)
+                        .foregroundColor(weatherService.isDataFresh(for: station) ? .green : .orange)
+                        .id(currentTime) // Force refresh when currentTime changes
+                }
+            }
+            
+            HStack {
+                // Additional info row - only model now
+                VStack(alignment: .leading, spacing: 2) {
+                    // Station type
+                    if let stationType = station.stationType {
+                        Text("Model: \(stationType.replacingOccurrences(of: "_", with: " "))")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
+                Spacer()
+                
+                // Data age indicator only (removed device type badge)
                 Text(weatherService.getDataAge(for: station))
                     .font(.caption2)
                     .foregroundColor(weatherService.isDataFresh(for: station) ? .green : .orange)
                     .id(currentTime) // Force refresh when currentTime changes
-                
-                // Device type badge
-                if let deviceType = station.deviceType {
-                    Text(deviceTypeDescription(deviceType))
-                        .font(.caption2)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.blue.opacity(0.2))
-                        .foregroundColor(.blue)
-                        .cornerRadius(4)
-                }
-            }
-            
-            Text(station.macAddress)
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .font(.system(.caption, design: .monospaced))
-            
-            // Station type
-            if let stationType = station.stationType {
-                Text("Model: \(stationType)")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            }
-            
-            // Creation date
-            if let creationDate = station.creationDate {
-                Text("Created: \(creationDate, formatter: dateFormatter)")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 4)
         .onReceive(timer) { time in
             withAnimation(.none) { // Disable animation for timer updates
                 currentTime = time // This will trigger UI refresh every 30 seconds
             }
         }
         .animation(.none, value: currentTime) // Disable animations for time updates
+    }
+    
+    private func getStatusText() -> String {
+        if !station.isActive {
+            return "Offline"
+        } else if weatherService.isDataFresh(for: station) {
+            return "Online"
+        } else {
+            return "Stale Data"
+        }
+    }
+    
+    private func getStatusColor() -> Color {
+        if !station.isActive {
+            return .red
+        } else if weatherService.isDataFresh(for: station) {
+            return .green
+        } else {
+            return .orange
+        }
+    }
+    
+    private func formatTemperature(_ temp: Double, unit: String) -> String {
+        // Use the same temperature formatting as the rest of the app
+        return MeasurementConverter.formatTemperature(String(temp), originalUnit: unit)
+    }
+    
+    private func getWeatherIcon(for data: WeatherStationData, station: WeatherStation) -> String {
+        // Use the same logic as OutdoorTemperatureCard - get today's forecast icon
+        guard let forecast = WeatherForecastService.shared.getForecast(for: station) else {
+            // Fallback to simple temperature-based icon if no forecast available
+            let temp = Double(data.outdoor.temperature.value) ?? -999
+            let humidity = Double(data.outdoor.humidity.value) ?? 0
+            
+            // Check for precipitation data if available
+            if let rainfallData = data.rainfall, let rainValue = Double(rainfallData.rainRate.value), rainValue > 0.1 {
+                return "cloud.rain.fill"
+            }
+            
+            // Check piezo rainfall
+            if let piezoRain = Double(data.rainfallPiezo.rainRate.value), piezoRain > 0.1 {
+                return "cloud.rain.fill"
+            }
+            
+            // Weather based on temperature and humidity as fallback
+            if temp > -999 {
+                if temp >= 25 {
+                    return humidity > 80 ? "cloud.sun.fill" : "sun.max.fill"
+                } else if temp >= 15 {
+                    return humidity > 70 ? "cloud.sun.fill" : "sun.max.circle.fill"
+                } else if temp >= 5 {
+                    return humidity > 80 ? "cloud.fill" : "cloud.sun.fill"
+                } else if temp >= 0 {
+                    return "cloud.fill"
+                } else {
+                    return "snow"
+                }
+            }
+            
+            return "sun.max.fill" // Default fallback
+        }
+        
+        // Find today's forecast
+        if let todaysForecast = forecast.dailyForecasts.first(where: { $0.isToday }) {
+            return todaysForecast.weatherIcon
+        }
+        
+        // Fallback to first available forecast
+        return forecast.dailyForecasts.first?.weatherIcon ?? "sun.max.fill"
+    }
+    
+    private func getWeatherIconColor(for data: WeatherStationData) -> Color {
+        // Always use blue for weather forecast icons to match the forecast cards
+        return .blue
     }
     
     private func deviceTypeDescription(_ type: Int) -> String {
