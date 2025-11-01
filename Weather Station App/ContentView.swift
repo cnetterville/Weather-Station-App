@@ -96,6 +96,7 @@ struct ContentView: View {
                     Toggle("Auto-refresh", isOn: $autoRefreshEnabled)
                         .toggleStyle(.switch)
                         .controlSize(.mini)
+                        .font(.caption2)
                         .disabled(weatherService.weatherStations.isEmpty)
                         .onChange(of: autoRefreshEnabled) { _, newValue in
                             saveAutoRefreshSettings()
@@ -109,6 +110,7 @@ struct ContentView: View {
                 .padding()
                 .background(Color(NSColor.controlBackgroundColor))
             }
+            .frame(minWidth: 280, idealWidth: calculateIdealSidebarWidth(), maxWidth: 400)
         } detail: {
             Group {
                 if weatherService.weatherStations.isEmpty {
@@ -226,6 +228,30 @@ struct ContentView: View {
         } message: {
             Text(weatherService.errorMessage ?? "")
         }
+    }
+    
+    private func calculateIdealSidebarWidth() -> CGFloat {
+        let stationCount = weatherService.weatherStations.count
+        let baseWidth: CGFloat = 280
+        let maxWidth: CGFloat = 400
+        
+        // If no stations, use minimum width
+        guard stationCount > 0 else { return baseWidth }
+        
+        // Calculate content-based width
+        let longestStationName = weatherService.weatherStations
+            .map { $0.name.count }
+            .max() ?? 0
+        
+        // Estimate width needed based on content
+        let contentBasedWidth = baseWidth + min(CGFloat(longestStationName - 15) * 8, 120)
+        
+        // Factor in number of stations for better proportions
+        let stationCountFactor = min(CGFloat(stationCount) * 5, 40)
+        
+        let idealWidth = contentBasedWidth + stationCountFactor
+        
+        return min(idealWidth, maxWidth)
     }
     
     private func startAutoRefresh() {
