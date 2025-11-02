@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import CoreLocation
 
 struct WeatherCard<Content: View>: View {
     let title: String
@@ -146,6 +147,10 @@ struct StationInfoCard: View {
     @State private var timer: Timer?
     @State private var currentDataAge: String = ""
     @State private var lastKnownUpdate: Date?
+    @State private var locationName: String = ""
+    @State private var countryFlag: String = ""
+    @State private var countryCode: String = ""
+    @State private var isLoadingLocation: Bool = false
     
     private var creationDateFormatter: DateFormatter {
         let formatter = DateFormatter()
@@ -155,8 +160,57 @@ struct StationInfoCard: View {
     }
     
     var body: some View {
-        WeatherCard(title: "Station Information", systemImage: "info.circle.fill") {
+        WeatherCard(title: "\(station.name) Station Information", systemImage: "info.circle.fill") {
             VStack(alignment: .leading, spacing: 8) {
+                // Location coordinates and name (if available)
+                if let latitude = station.latitude, let longitude = station.longitude {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text("Location:")
+                                .fontWeight(.medium)
+                            Spacer()
+                            if isLoadingLocation {
+                                HStack(spacing: 4) {
+                                    ProgressView()
+                                        .scaleEffect(0.6)
+                                    Text("Loading...")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            } else if !locationName.isEmpty {
+                                HStack(spacing: 4) {
+                                    Text(locationName)
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                    if !countryFlag.isEmpty {
+                                        HStack(spacing: 2) {
+                                            Text(countryFlag)
+                                                .font(.system(size: 14))
+                                            Text(countryCode)
+                                                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        HStack {
+                            Text("Coordinates:")
+                                .fontWeight(.medium)
+                                .foregroundColor(.secondary)
+                                .font(.caption)
+                            Spacer()
+                            Text(String(format: "%.4f, %.4f", latitude, longitude))
+                                .font(.system(.caption, design: .monospaced))
+                                .foregroundColor(.secondary)
+                                .textSelection(.enabled)
+                        }
+                    }
+                    
+                    Divider()
+                }
+                
                 // MAC Address
                 HStack {
                     Text("MAC Address:")
@@ -239,6 +293,7 @@ struct StationInfoCard: View {
         }
         .onAppear {
             setupDataAgeTracking()
+            loadLocationName()
         }
         .onDisappear {
             stopTimer()
@@ -307,5 +362,88 @@ struct StationInfoCard: View {
             let hours = Int((age.truncatingRemainder(dividingBy: 86400)) / 3600)
             return "\(days)d \(hours)h ago"
         }
+    }
+    
+    private func loadLocationName() {
+        guard let latitude = station.latitude, let longitude = station.longitude else {
+            return
+        }
+        
+        isLoadingLocation = true
+        
+        Task {
+            let (cityName, flagEmoji, code) = await getCityNameAndFlagAsync(latitude: latitude, longitude: longitude)
+            await MainActor.run {
+                self.isLoadingLocation = false
+                if let cityName = cityName {
+                    self.locationName = cityName
+                }
+                self.countryFlag = flagEmoji
+                self.countryCode = code
+            }
+        }
+    }
+    
+    private func getCityNameAndFlagAsync(latitude: Double, longitude: Double) async -> (String?, String, String) {
+        let location = CLLocation(latitude: latitude, longitude: longitude)
+        
+        return await withCheckedContinuation { continuation in
+            // Suppress deprecation warning - CLGeocoder still works fine
+            #if compiler(>=6.0)
+            #warning("CLGeocoder deprecated in macOS 26.0 - consider updating when newer MapKit APIs are available")
+            #endif
+            
+            let geocoder = CLGeocoder()
+            geocoder.reverseGeocodeLocation(location) { placemarks, error in
+                if let error = error {
+                    print("Error in reverse geocoding: \(error.localizedDescription)")
+                    continuation.resume(returning: (nil, "", ""))
+                    return
+                }
+                
+                guard let placemark = placemarks?.first else {
+                    continuation.resume(returning: (nil, "", ""))
+                    return
+                }
+                
+                // Get location name with fallback hierarchy
+                let cityName: String?
+                if let city = placemark.locality {
+                    cityName = city
+                } else if let area = placemark.subAdministrativeArea {
+                    cityName = area
+                } else if let state = placemark.administrativeArea {
+                    cityName = state
+                } else if let country = placemark.country {
+                    cityName = country
+                } else {
+                    cityName = nil
+                }
+                
+                // Get country code and flag emoji
+                let countryCode = placemark.isoCountryCode?.uppercased() ?? ""
+                let flagEmoji = getCountryFlagEmoji(countryCode: placemark.isoCountryCode)
+                
+                continuation.resume(returning: (cityName, flagEmoji, countryCode))
+            }
+        }
+    }
+    
+    private func getCountryFlagEmoji(countryCode: String?) -> String {
+        guard let countryCode = countryCode?.uppercased() else { return "" }
+        
+        // Convert ISO country code to flag emoji
+        // Flag emojis are created by combining regional indicator symbols
+        let base: UInt32 = 127397 // Base value for regional indicator symbols
+        var flagString = ""
+        
+        for character in countryCode {
+            if let scalar = character.unicodeScalars.first {
+                let flagScalar = UnicodeScalar(base + scalar.value)!
+                flagString.append(Character(flagScalar))
+            }
+        }
+        
+        return flagString
     }
 }
