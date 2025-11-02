@@ -144,7 +144,7 @@ class MenuBarManager: ObservableObject {
             UserDefaults.standard.set(backgroundRefreshEnabled, forKey: "MenuBarBackgroundRefreshEnabled")
             if backgroundRefreshEnabled && isMenuBarEnabled {
                 startBackgroundRefresh()
-            } else {
+            } else if !backgroundRefreshEnabled {
                 stopBackgroundRefresh()
             }
         }
@@ -278,6 +278,21 @@ class MenuBarManager: ObservableObject {
             name: NSApplication.willTerminateNotification,
             object: nil
         )
+        
+        // Listen for main app visibility changes from AppStateManager
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(mainAppBecameVisible),
+            name: .mainAppVisible,
+            object: nil
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(mainAppBecameHidden),
+            name: .mainAppHidden,
+            object: nil
+        )
     }
     
     @objc private func weatherDataUpdated() {
@@ -316,6 +331,18 @@ class MenuBarManager: ObservableObject {
         
         // Remove all observers
         NotificationCenter.default.removeObserver(self)
+    }
+    
+    @objc private func mainAppBecameVisible() {
+        print("🔄 MenuBar received mainAppVisible notification - stopping background refresh")
+        stopBackgroundRefresh()
+    }
+    
+    @objc private func mainAppBecameHidden() {
+        print("🔄 MenuBar received mainAppHidden notification - starting background refresh if enabled")
+        if backgroundRefreshEnabled && isMenuBarEnabled {
+            startBackgroundRefresh()
+        }
     }
     
     private func setupStatusItem() {
@@ -918,7 +945,7 @@ class MenuBarManager: ObservableObject {
         stopBackgroundRefresh() // Stop any existing timer
         
         guard backgroundRefreshEnabled && isMenuBarEnabled && !availableStations.isEmpty else {
-            print("🔄 Background refresh not started - disabled or no stations")
+            print("🔄 MenuBar refresh not started - disabled or no stations")
             return
         }
         
@@ -940,7 +967,7 @@ class MenuBarManager: ObservableObject {
                 Task { @MainActor in
                     print("🔄 Starting background refresh for stale menu bar data")
                     await self.weatherService.fetchAllWeatherData(forceRefresh: false) // Smart refresh
-                    print("🔄 Background refresh completed at \(Date())")
+                    print("🔄 MenuBar background refresh completed at \(Date())")
                 }
             } else {
                 print("🔄 All menu bar data is fresh, skipping background refresh")
@@ -957,7 +984,7 @@ class MenuBarManager: ObservableObject {
             }
             
             if hasStaleData {
-                print("🔄 Running initial background refresh for stale data")
+                print("🔄 Running initial menubar background refresh for stale data")
                 Task {
                     await self.weatherService.fetchAllWeatherData(forceRefresh: false)
                 }

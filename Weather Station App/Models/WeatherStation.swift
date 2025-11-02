@@ -39,18 +39,21 @@ struct WeatherStation: Identifiable, Codable, Equatable {
         return TimeZone.current
     }
     
+    // Computed property to get the default menubar label (truncated name)
+    var defaultMenuBarLabel: String {
+        if name.count > 8 {
+            return String(name.prefix(6)) + "…"
+        }
+        return name
+    }
+    
     // Computed property to get the display label for menubar (custom label or truncated name)
     var displayLabelForMenuBar: String {
         if let customLabel = menuBarLabel, !customLabel.isEmpty {
             return customLabel
         }
         
-        // Fallback to truncated name if no custom label
-        if name.count > 8 {
-            return String(name.prefix(6)) + "…"
-        }
-        
-        return name
+        return defaultMenuBarLabel
     }
     
     // Equatable conformance

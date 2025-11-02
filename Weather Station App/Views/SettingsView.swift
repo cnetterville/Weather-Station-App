@@ -10,6 +10,7 @@ import SwiftUI
 struct SettingsView: View {
     @StateObject private var weatherService = WeatherStationService.shared
     @StateObject private var menuBarManager = MenuBarManager.shared
+    @StateObject private var appStateManager = AppStateManager.shared
     @Environment(\.dismiss) private var dismiss
     
     @State private var applicationKey: String = ""
@@ -23,27 +24,13 @@ struct SettingsView: View {
     @State private var editingStation: WeatherStation?
     @State private var unitSystemDisplayMode: UnitSystemDisplayMode = .both
     
-    // Auto-refresh settings - use local state if no binding provided
-    @State private var localAutoRefreshEnabled = true
-    @State private var localRefreshInterval: TimeInterval = 300
     @State private var radarRefreshInterval: TimeInterval = 600
     
-    // Optional bindings for when called from ContentView
     var autoRefreshEnabled: Binding<Bool>?
     var refreshInterval: Binding<TimeInterval>?
     var onSettingsChanged: (() -> Void)?
     
-    // Computed properties to use either binding or local state
-    private var autoRefreshBinding: Binding<Bool> {
-        autoRefreshEnabled ?? $localAutoRefreshEnabled
-    }
-    
-    private var refreshIntervalBinding: Binding<TimeInterval> {
-        refreshInterval ?? $localRefreshInterval
-    }
-    
-    // Refresh interval options (in seconds)
-    private let refreshIntervals: [(String, TimeInterval)] = [
+    private let mainAppRefreshIntervals: [(String, TimeInterval)] = [
         ("1 minute", 60),
         ("2 minutes", 120),
         ("5 minutes", 300),
@@ -53,7 +40,6 @@ struct SettingsView: View {
         ("1 hour", 3600)
     ]
     
-    // Radar refresh interval options (in seconds)
     private let radarRefreshIntervals: [(String, TimeInterval)] = [
         ("5 minutes", 300),
         ("10 minutes", 600),
@@ -63,14 +49,12 @@ struct SettingsView: View {
         ("1 hour", 3600)
     ]
     
-    // Default initializer
     init() {
         self.autoRefreshEnabled = nil
         self.refreshInterval = nil
         self.onSettingsChanged = nil
     }
     
-    // Initializer with bindings
     init(autoRefreshEnabled: Binding<Bool>, refreshInterval: Binding<TimeInterval>, onSettingsChanged: @escaping () -> Void) {
         self.autoRefreshEnabled = autoRefreshEnabled
         self.refreshInterval = refreshInterval
@@ -79,7 +63,6 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
             HStack {
                 Text("Weather Station Settings")
                     .font(.title)
@@ -99,7 +82,6 @@ struct SettingsView: View {
             
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    // MenuBar Settings
                     VStack(alignment: .leading, spacing: 16) {
                         Text("Menu Bar")
                             .font(.title2)
@@ -128,7 +110,6 @@ struct SettingsView: View {
                                     
                                     if menuBarManager.isMenuBarEnabled {
                                         VStack(alignment: .leading, spacing: 12) {
-                                            // Display Mode Selection
                                             VStack(alignment: .leading, spacing: 8) {
                                                 Text("Display Mode:")
                                                     .font(.headline)
@@ -147,7 +128,6 @@ struct SettingsView: View {
                                                 .pickerStyle(.menu)
                                             }
                                             
-                                            // Background Refresh Settings
                                             VStack(alignment: .leading, spacing: 8) {
                                                 Text("Background Updates:")
                                                     .font(.headline)
@@ -155,9 +135,18 @@ struct SettingsView: View {
                                                 Toggle("Keep data fresh when main app is closed", isOn: $menuBarManager.backgroundRefreshEnabled)
                                                     .toggleStyle(.checkbox)
                                                 
+                                                let (isMainRefreshing, isMenuBarRefreshing, refreshMode) = appStateManager.getRefreshStatus()
+                                                HStack {
+                                                    Image(systemName: "info.circle")
+                                                        .foregroundColor(.blue)
+                                                    Text("Current mode: \(refreshMode)")
+                                                        .font(.caption)
+                                                        .foregroundColor(.secondary)
+                                                }
+                                                
                                                 if menuBarManager.backgroundRefreshEnabled {
                                                     VStack(alignment: .leading, spacing: 8) {
-                                                        Text("Background refresh interval:")
+                                                        Text("Background refresh interval (when main app is closed):")
                                                             .font(.subheadline)
                                                         
                                                         HStack(spacing: 8) {
@@ -170,15 +159,19 @@ struct SettingsView: View {
                                                         HStack {
                                                             Image(systemName: "info.circle")
                                                                 .foregroundColor(.blue)
-                                                            Text("Keeps menu bar temperatures updated even when main app window is closed")
-                                                                .font(.caption)
-                                                                .foregroundColor(.secondary)
+                                                            VStack(alignment: .leading, spacing: 2) {
+                                                                Text("Keeps menu bar temperatures updated when main app window is closed")
+                                                                    .font(.caption)
+                                                                    .foregroundColor(.secondary)
+                                                                Text("When main app is open, it will refresh continuously instead")
+                                                                    .font(.caption)
+                                                                    .foregroundColor(.secondary)
+                                                            }
                                                         }
                                                     }
                                                 }
                                             }
                                             
-                                            // Station Selection (only for single station mode)
                                             if menuBarManager.displayMode == .singleStation {
                                                 VStack(alignment: .leading, spacing: 8) {
                                                     Text("Weather Station:")
@@ -203,7 +196,6 @@ struct SettingsView: View {
                                                 }
                                             }
                                             
-                                            // Cycling Options (only for cycle mode)
                                             if menuBarManager.displayMode == .cycleThrough {
                                                 VStack(alignment: .leading, spacing: 8) {
                                                     Text("Cycling Options:")
@@ -233,7 +225,6 @@ struct SettingsView: View {
                                                 }
                                             }
                                             
-                                            // Temperature Display Mode
                                             VStack(alignment: .leading, spacing: 8) {
                                                 Text("Temperature Display:")
                                                     .font(.headline)
@@ -247,14 +238,13 @@ struct SettingsView: View {
                                                 .pickerStyle(.menu)
                                             }
                                             
-                                            // Display Options
                                             VStack(alignment: .leading, spacing: 8) {
                                                 Text("Display Options:")
                                                     .font(.headline)
                                                 
                                                 Toggle("Show station names", isOn: $menuBarManager.showStationName)
                                                     .toggleStyle(.checkbox)
-                                                    .disabled(menuBarManager.displayMode == .allStations) // Always shows names in all stations mode
+                                                    .disabled(menuBarManager.displayMode == .allStations)
                                                 
                                                 Toggle("Show decimal places", isOn: $menuBarManager.showDecimals)
                                                     .toggleStyle(.checkbox)
@@ -262,7 +252,6 @@ struct SettingsView: View {
                                                 Toggle("Show rain icon when raining", isOn: $menuBarManager.showRainIcon)
                                                     .toggleStyle(.checkbox)
                                                 
-                                                // Custom menubar labels section
                                                 if !menuBarManager.availableStations.isEmpty {
                                                     Divider()
                                                         .padding(.vertical, 4)
@@ -275,7 +264,6 @@ struct SettingsView: View {
                                                             
                                                             Spacer()
                                                             
-                                                            // Preview of how it will look in menubar
                                                             if let previewText = getMenuBarPreview() {
                                                                 VStack(alignment: .trailing) {
                                                                     Text("Preview:")
@@ -300,7 +288,6 @@ struct SettingsView: View {
                                                             MenuBarLabelEditor(station: station)
                                                         }
                                                         
-                                                        // Quick action buttons
                                                         HStack {
                                                             Button("Reset All Labels") {
                                                                 resetAllCustomLabels()
@@ -314,7 +301,6 @@ struct SettingsView: View {
                                                 }
                                             }
                                             
-                                            // Info
                                             HStack {
                                                 Image(systemName: "info.circle")
                                                     .foregroundColor(.blue)
@@ -322,7 +308,7 @@ struct SettingsView: View {
                                                     Text("Click the menu bar item to see detailed weather info and quick actions")
                                                         .font(.caption)
                                                         .foregroundColor(.secondary)
-                                                    Text("Custom labels help keep the menubar compact while showing meaningful station identifiers")
+                                                    Text("When main app is open, it refreshes continuously. When closed, menu bar refreshes at set interval.")
                                                         .font(.caption)
                                                         .foregroundColor(.secondary)
                                                     if menuBarManager.hideDockIcon {
@@ -353,7 +339,6 @@ struct SettingsView: View {
                         .padding()
                     }
                     
-                    // Display Preferences
                     VStack(alignment: .leading, spacing: 16) {
                         Text("Display Preferences")
                             .font(.title2)
@@ -407,77 +392,55 @@ struct SettingsView: View {
                         .cornerRadius(8)
                     }
                     
-                    // Auto-Refresh Settings
                     VStack(alignment: .leading, spacing: 16) {
                         Text("Auto-Refresh Settings")
                             .font(.title2)
                             .fontWeight(.semibold)
                         
                         VStack(alignment: .leading, spacing: 12) {
-                            // Weather Data Refresh
                             VStack(alignment: .leading, spacing: 12) {
                                 Text("Weather Data")
                                     .font(.headline)
                                     .foregroundColor(.blue)
                                 
-                                Toggle("Enable Auto-Refresh", isOn: autoRefreshBinding)
+                                Toggle("Always refresh when main app is open", isOn: $appStateManager.mainAppRefreshEnabled)
                                     .toggleStyle(.checkbox)
-                                    .onChange(of: autoRefreshBinding.wrappedValue) { _, _ in
-                                        saveAutoRefreshSettings()
-                                        onSettingsChanged?()
-                                    }
+                                    .help("Keeps weather data fresh whenever the main app window is visible, regardless of whether the app is idle or active")
                                 
-                                if autoRefreshBinding.wrappedValue {
+                                if appStateManager.mainAppRefreshEnabled {
                                     VStack(alignment: .leading, spacing: 8) {
-                                        Text("Refresh Interval:")
+                                        Text("Main App Refresh Interval (when window is visible):")
                                             .font(.subheadline)
                                             .fontWeight(.medium)
                                         
-                                        // Use a more compact layout for the picker
-                                        VStack(alignment: .leading, spacing: 8) {
-                                            // First row
-                                            HStack(spacing: 8) {
-                                                IntervalButton(label: "1 min", interval: 60.0, binding: refreshIntervalBinding, onChanged: {
-                                                    saveAutoRefreshSettings()
-                                                    onSettingsChanged?()
-                                                })
-                                                IntervalButton(label: "2 min", interval: 120.0, binding: refreshIntervalBinding, onChanged: {
-                                                    saveAutoRefreshSettings()
-                                                    onSettingsChanged?()
-                                                })
-                                                IntervalButton(label: "5 min", interval: 300.0, binding: refreshIntervalBinding, onChanged: {
-                                                    saveAutoRefreshSettings()
-                                                    onSettingsChanged?()
-                                                })
-                                            }
-                                            
-                                            // Second row
-                                            HStack(spacing: 8) {
-                                                IntervalButton(label: "10 min", interval: 600.0, binding: refreshIntervalBinding, onChanged: {
-                                                    saveAutoRefreshSettings()
-                                                    onSettingsChanged?()
-                                                })
-                                                IntervalButton(label: "15 min", interval: 900.0, binding: refreshIntervalBinding, onChanged: {
-                                                    saveAutoRefreshSettings()
-                                                    onSettingsChanged?()
-                                                })
-                                                IntervalButton(label: "30 min", interval: 1800.0, binding: refreshIntervalBinding, onChanged: {
-                                                    saveAutoRefreshSettings()
-                                                    onSettingsChanged?()
-                                                })
-                                                IntervalButton(label: "1 hour", interval: 3600.0, binding: refreshIntervalBinding, onChanged: {
-                                                    saveAutoRefreshSettings()
-                                                    onSettingsChanged?()
-                                                })
-                                            }
+                                        HStack(spacing: 8) {
+                                            MainAppRefreshIntervalButton(label: "1 min", interval: 60.0)
+                                            MainAppRefreshIntervalButton(label: "2 min", interval: 120.0)
+                                            MainAppRefreshIntervalButton(label: "5 min", interval: 300.0)
+                                            MainAppRefreshIntervalButton(label: "10 min", interval: 600.0)
                                         }
                                         
                                         HStack {
                                             Image(systemName: "info.circle")
                                                 .foregroundColor(.blue)
-                                            Text("Weather data will automatically refresh at the selected interval")
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text("Weather data refreshes continuously while main app window is open")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                                Text("Ignores app idle state - always stays fresh for immediate viewing")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                            }
+                                        }
+                                        
+                                        let (isMainRefreshing, isMenuBarRefreshing, refreshMode) = appStateManager.getRefreshStatus()
+                                        HStack {
+                                            Circle()
+                                                .fill(isMainRefreshing ? Color.green : (isMenuBarRefreshing ? Color.orange : Color.gray))
+                                                .frame(width: 8, height: 8)
+                                            Text("Status: \(refreshMode)")
                                                 .font(.caption)
-                                                .foregroundColor(.secondary)
+                                                .foregroundColor(isMainRefreshing ? .green : (isMenuBarRefreshing ? .orange : .gray))
                                         }
                                     }
                                 }
@@ -485,7 +448,6 @@ struct SettingsView: View {
                             
                             Divider()
                             
-                            // Radar Refresh Settings
                             VStack(alignment: .leading, spacing: 12) {
                                 Text("Weather Radar")
                                     .font(.headline)
@@ -497,14 +459,12 @@ struct SettingsView: View {
                                         .fontWeight(.medium)
                                    
                                     VStack(alignment: .leading, spacing: 8) {
-                                        // First row
                                         HStack(spacing: 8) {
                                             RadarIntervalButton(label: "5 min", interval: 300.0, binding: $radarRefreshInterval, onChanged: saveRadarRefreshSettings)
                                             RadarIntervalButton(label: "10 min", interval: 600.0, binding: $radarRefreshInterval, onChanged: saveRadarRefreshSettings)
                                             RadarIntervalButton(label: "15 min", interval: 900.0, binding: $radarRefreshInterval, onChanged: saveRadarRefreshSettings)
                                         }
                                         
-                                        // Second row
                                         HStack(spacing: 8) {
                                             RadarIntervalButton(label: "20 min", interval: 1200.0, binding: $radarRefreshInterval, onChanged: saveRadarRefreshSettings)
                                             RadarIntervalButton(label: "30 min", interval: 1800.0, binding: $radarRefreshInterval, onChanged: saveRadarRefreshSettings)
@@ -525,7 +485,6 @@ struct SettingsView: View {
                         .padding()
                     }
                     
-                    // API Configuration
                     VStack(alignment: .leading, spacing: 16) {
                         Text("API Configuration")
                             .font(.title2)
@@ -602,7 +561,6 @@ struct SettingsView: View {
                         .padding()
                     }
                     
-                    // Weather Stations
                     VStack(alignment: .leading, spacing: 16) {
                         HStack {
                             Text("Weather Stations")
@@ -611,7 +569,6 @@ struct SettingsView: View {
                             
                             Spacer()
                             
-                            // First row of buttons
                             HStack(spacing: 8) {
                                 Button("Discover Stations") {
                                     discoverStations()
@@ -626,7 +583,6 @@ struct SettingsView: View {
                             }
                         }
                         
-                        // Second row of management buttons
                         HStack {
                             Spacer()
                             
@@ -656,7 +612,6 @@ struct SettingsView: View {
                             .disabled(applicationKey.isEmpty || apiKey.isEmpty || weatherService.discoveredStations.isEmpty)
                         }
                         
-                        // Station Discovery Results
                         if weatherService.isDiscoveringStations {
                             HStack {
                                 ProgressView()
@@ -736,13 +691,11 @@ struct SettingsView: View {
         testMessage = ""
         
         Task {
-            // First save the credentials
             weatherService.updateCredentials(
                 applicationKey: applicationKey,
                 apiKey: apiKey
             )
             
-            // Then test the connection
             let result = await weatherService.testAPIConnection()
             
             await MainActor.run {
@@ -758,13 +711,11 @@ struct SettingsView: View {
         testMessage = ""
         
         Task {
-            // First save the credentials
             weatherService.updateCredentials(
                 applicationKey: applicationKey,
                 apiKey: apiKey
             )
             
-            // Test this specific station
             await weatherService.fetchWeatherData(for: station)
             
             await MainActor.run {
@@ -791,7 +742,6 @@ struct SettingsView: View {
     }
     
     private func discoverStations() {
-        // Save credentials first
         weatherService.updateCredentials(
             applicationKey: applicationKey,
             apiKey: apiKey
@@ -805,7 +755,6 @@ struct SettingsView: View {
                 testMessage = result.message
                 
                 if !result.success {
-                    // If discovery failed, show the error
                     print("❌ Station discovery failed: \(result.message)")
                 }
             }
@@ -818,17 +767,11 @@ struct SettingsView: View {
                 let result = await weatherService.fetchStationInfo(for: station)
                 print("Updated \(station.name): \(result.message)")
                 
-                // Small delay between requests
-                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+                try? await Task.sleep(nanoseconds: 500_000_000)
             }
         }
     }
 
-    private func saveAutoRefreshSettings() {
-        UserDefaults.standard.set(autoRefreshBinding.wrappedValue, forKey: "AutoRefreshEnabled")
-        UserDefaults.standard.set(refreshIntervalBinding.wrappedValue, forKey: "RefreshInterval")
-    }
-    
     private func saveRadarRefreshSettings() {
         UserDefaults.standard.radarRefreshInterval = radarRefreshInterval
         NotificationCenter.default.post(name: .radarSettingsChanged, object: radarRefreshInterval)
@@ -838,7 +781,6 @@ struct SettingsView: View {
         let activeStations = menuBarManager.availableStations
         let sampleTemp = menuBarManager.showDecimals ? "72.3°F" : "72°F"
         
-        // Show sample icons based on settings and priority (rain > UV > cloudy > night)
         let sampleIcons = [
             menuBarManager.showRainIcon ? "💧" : nil
         ].compactMap { $0 }
@@ -859,9 +801,7 @@ struct SettingsView: View {
                 let samples = activeStations.prefix(3).enumerated().map { index, station in
                     let label = station.displayLabelForMenuBar
                     let shortLabel = label.count > 4 ? String(label.prefix(4)) + ":" : label + ":"
-                    // Show different icons for different stations in preview
-                    let iconIndex = index < sampleIcons.count ? index : 0
-                    let stationIcon = sampleIcons.count > iconIndex ? sampleIcons[iconIndex] : ""
+                    let stationIcon = sampleIcons.count > index ? sampleIcons[index] : ""
                     return "\(shortLabel)\(stationIcon)\(sampleTemp)"
                 }
                 let preview = samples.joined(separator: " | ")
@@ -890,12 +830,10 @@ struct SettingsView: View {
             }
         }
         
-        // Trigger menubar update
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             NotificationCenter.default.post(name: .weatherDataUpdated, object: nil)
         }
     }
-
 }
 
 struct AddWeatherStationView: View {
@@ -969,7 +907,6 @@ struct AddWeatherStationView: View {
                 )
                 weatherService.addWeatherStation(newStation)
                 
-                // Automatically fetch station info (timezone, location, etc.) after adding
                 Task {
                     let _ = await weatherService.fetchStationInfo(for: newStation)
                 }
@@ -994,7 +931,7 @@ struct AddWeatherStationView: View {
             macError = "Invalid MAC address format"
         } else {
             macError = ""
-            macAddress = formatted // Auto-format as user types
+            macAddress = formatted
         }
     }
 }
@@ -1015,7 +952,6 @@ struct EditWeatherStationView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Header
             HStack {
                 Text("Edit Weather Station")
                     .font(.title)
@@ -1030,10 +966,8 @@ struct EditWeatherStationView: View {
             .padding()
             
             Divider()
-            
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    // Basic Information
                     VStack(alignment: .leading, spacing: 16) {
                         Text("Station Information")
                             .font(.title2)
@@ -1073,7 +1007,6 @@ struct EditWeatherStationView: View {
                         .cornerRadius(8)
                     }
                     
-                    // Sensor Display Preferences
                     VStack(alignment: .leading, spacing: 16) {
                         Text("Display Preferences")
                             .font(.title2)
@@ -1084,7 +1017,6 @@ struct EditWeatherStationView: View {
                             .foregroundColor(.secondary)
                         
                         VStack(alignment: .leading, spacing: 16) {
-                            // Main Sensors
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Primary Sensors")
                                     .font(.headline)
@@ -1110,7 +1042,6 @@ struct EditWeatherStationView: View {
                             
                             Divider()
                             
-                            // Air Quality
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Air Quality Sensors")
                                     .font(.headline)
@@ -1124,7 +1055,6 @@ struct EditWeatherStationView: View {
                             
                             Divider()
                             
-                            // Additional Temperature Sensors
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Additional Temperature Sensors")
                                     .font(.headline)
@@ -1138,7 +1068,6 @@ struct EditWeatherStationView: View {
                             
                             Divider()
                             
-                            // System Information
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("System Information")
                                     .font(.headline)
@@ -1151,7 +1080,6 @@ struct EditWeatherStationView: View {
                                 SensorToggleRow("🌦️ Weather Radar", isOn: $sensorPreferences.showRadar)
                             }
                             
-                            // Quick Actions
                             HStack(spacing: 12) {
                                 Button("Show All") {
                                     setAllSensors(to: true)
@@ -1177,7 +1105,6 @@ struct EditWeatherStationView: View {
                 .padding()
             }
             
-            // Bottom Actions
             Divider()
             HStack(spacing: 12) {
                 Button("Test Connection") {
@@ -1449,7 +1376,6 @@ struct DiscoveredStationRow: View {
             Spacer()
             
             VStack(spacing: 4) {
-                // Check if already added as a station
                 if weatherService.weatherStations.contains(where: { $0.macAddress == device.mac }) {
                     Text("Added as Station")
                         .font(.caption2)
@@ -1459,14 +1385,12 @@ struct DiscoveredStationRow: View {
                         .background(Color.gray.opacity(0.2))
                         .cornerRadius(4)
                 } else if device.type == 1 {
-                    // Weather station - can be added
                     Button("Add as Station") {
                         weatherService.addDiscoveredStation(device)
                     }
                     .buttonStyle(.bordered)
                     .font(.caption)
                 } else if device.type == 2 {
-                    // Camera - show different options
                     Text("Camera Device")
                         .font(.caption2)
                         .foregroundColor(.purple)
@@ -1475,7 +1399,6 @@ struct DiscoveredStationRow: View {
                         .background(Color.purple.opacity(0.1))
                         .cornerRadius(4)
                 } else {
-                    // Unknown device type
                     Button("Add Device") {
                         weatherService.addDiscoveredStation(device)
                     }
@@ -1574,7 +1497,6 @@ struct ExistingStationRow: View {
                             .foregroundColor(.secondary)
                     }
                     
-                    // Show location and timezone info
                     if let latitude = station.latitude, let longitude = station.longitude {
                         Text("Location: \(String(format: "%.4f", latitude)), \(String(format: "%.4f", longitude))")
                             .font(.caption2)
@@ -1623,7 +1545,6 @@ struct ExistingStationRow: View {
                 .foregroundColor(.red)
             }
             
-            // Show API URL for this station
             if !applicationKey.isEmpty && !apiKey.isEmpty {
                 StationAPIURL(station: station, applicationKey: applicationKey, apiKey: apiKey)
             }
@@ -1690,6 +1611,7 @@ struct StationActionButtons: View {
                     .font(.caption2)
                     .foregroundColor(updateSuccess ? .green : .red)
                     .multilineTextAlignment(.center)
+                    .frame(width: 80)
             }
         }
     }
@@ -1704,9 +1626,12 @@ struct StationActionButtons: View {
             await MainActor.run {
                 isUpdatingInfo = false
                 updateSuccess = result.success
-                updateMessage = result.message
+                updateMessage = result.success ? "Updated!" : "Failed"
                 
-                // Clear message after a delay
+                if !result.success {
+                    print("Failed to update station info: \(result.message)")
+                }
+                
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
                     updateMessage = ""
                 }
@@ -1721,36 +1646,39 @@ struct StationAPIURL: View {
     let apiKey: String
     
     var body: some View {
-        let apiURL = "https://cdnapi.ecowitt.net/api/v3/device/real_time?application_key=\(applicationKey)&api_key=\(apiKey)&mac=\(station.macAddress)&call_back=all"
-        
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 4) {
             Text("API URL:")
                 .font(.caption2)
                 .foregroundColor(.secondary)
+            
+            let apiURL = "https://cdnapi.ecowitt.net/api/v3/device/real_time?application_key=\(applicationKey)&api_key=\(apiKey)&mac=\(station.macAddress)&call_back=all"
+            
             Text(apiURL)
                 .font(.system(.caption2, design: .monospaced))
                 .foregroundColor(.blue)
-                .textSelection(.enabled)
+                .lineLimit(2)
+                .truncationMode(.middle)
         }
-        .padding(.top, 4)
     }
 }
 
 struct IntervalButton: View {
     let label: String
     let interval: TimeInterval
-    let binding: Binding<TimeInterval>
+    @Binding var binding: TimeInterval
     let onChanged: () -> Void
     
     var body: some View {
-        Button(label) {
-            binding.wrappedValue = interval
+        Button(action: {
+            binding = interval
             onChanged()
+        }) {
+            Text(label)
         }
         .buttonStyle(.bordered)
         .controlSize(.small)
-        .background(binding.wrappedValue == interval ? Color.accentColor : Color.clear)
-        .foregroundColor(binding.wrappedValue == interval ? .white : .primary)
+        .foregroundColor(binding == interval ? .white : .primary)
+        .background(binding == interval ? Color.blue : Color.clear)
         .cornerRadius(6)
     }
 }
@@ -1758,18 +1686,20 @@ struct IntervalButton: View {
 struct RadarIntervalButton: View {
     let label: String
     let interval: TimeInterval
-    let binding: Binding<TimeInterval>
+    @Binding var binding: TimeInterval
     let onChanged: () -> Void
     
     var body: some View {
-        Button(label) {
-            binding.wrappedValue = interval
+        Button(action: {
+            binding = interval
             onChanged()
+        }) {
+            Text(label)
         }
         .buttonStyle(.bordered)
         .controlSize(.small)
-        .background(binding.wrappedValue == interval ? Color.purple : Color.clear)
-        .foregroundColor(binding.wrappedValue == interval ? .white : .primary)
+        .foregroundColor(binding == interval ? .white : .primary)
+        .background(binding == interval ? Color.purple : Color.clear)
         .cornerRadius(6)
     }
 }
@@ -1780,12 +1710,15 @@ struct BackgroundRefreshIntervalButton: View {
     @Binding var binding: TimeInterval
     
     var body: some View {
-        Button(label) {
+        Button(action: {
             binding = interval
+        }) {
+            Text(label)
         }
         .buttonStyle(.bordered)
         .controlSize(.small)
-        .background(binding == interval ? Color.accentColor.opacity(0.2) : Color.clear)
+        .foregroundColor(binding == interval ? .white : .primary)
+        .background(binding == interval ? Color.blue : Color.clear)
         .cornerRadius(6)
     }
 }
@@ -1797,59 +1730,95 @@ struct MenuBarLabelEditor: View {
     
     var body: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(station.name)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                Text(station.macAddress)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-                    .font(.system(.caption2, design: .monospaced))
-            }
+            Text("\(station.name):")
+                .font(.subheadline)
+                .frame(minWidth: 120, alignment: .leading)
             
-            Spacer()
-            
-            VStack(alignment: .trailing, spacing: 2) {
-                TextField("Short Label", text: $customLabel)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 120)
-                    .font(.system(.body, design: .default))
-                    .onChange(of: customLabel) { _, newValue in
-                        // Limit to 8 characters for menubar display
-                        if newValue.count > 8 {
-                            customLabel = String(newValue.prefix(8))
-                        }
-                        updateStationLabel(newValue)
+            TextField("Custom label", text: $customLabel, prompt: Text(station.defaultMenuBarLabel))
+                .textFieldStyle(.roundedBorder)
+                .font(.system(.body, design: .monospaced))
+                .frame(width: 100)
+                .onChange(of: customLabel) { _, newValue in
+                    // Limit to 8 characters and update station
+                    let limited = String(newValue.prefix(8))
+                    if newValue != limited {
+                        customLabel = limited
                     }
-                
-                Text("\(customLabel.count)/8 chars")
-                    .font(.caption2)
-                    .foregroundColor(customLabel.count > 6 ? .orange : .secondary)
-            }
+                    
+                    updateStationLabel(limited.isEmpty ? nil : limited)
+                }
+            
+            Text("→")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            
+            Text(station.displayLabelForMenuBar)
+                .font(.system(.caption, design: .monospaced))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.blue.opacity(0.1))
+                .cornerRadius(4)
+            
+            Text("(\(station.displayLabelForMenuBar.count) chars)")
+                .font(.caption2)
+                .foregroundColor(.secondary)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(Color.gray.opacity(0.1))
-        .cornerRadius(6)
         .onAppear {
             customLabel = station.menuBarLabel ?? ""
         }
     }
     
-    private func updateStationLabel(_ newLabel: String) {
+    private func updateStationLabel(_ label: String?) {
         if let index = weatherService.weatherStations.firstIndex(where: { $0.id == station.id }) {
             var updatedStation = weatherService.weatherStations[index]
-            updatedStation.menuBarLabel = newLabel.isEmpty ? nil : newLabel
+            updatedStation.menuBarLabel = label
             weatherService.updateWeatherStation(updatedStation)
-            
-            // Trigger menubar update
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                NotificationCenter.default.post(name: .weatherDataUpdated, object: nil)
-            }
+        }
+        
+        // Trigger menubar update
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            NotificationCenter.default.post(name: .weatherDataUpdated, object: nil)
         }
     }
 }
 
-#Preview {
-    SettingsView()
+struct MainAppRefreshIntervalButton: View {
+    let label: String
+    let interval: TimeInterval
+    @StateObject private var appStateManager = AppStateManager.shared
+    
+    var body: some View {
+        Button(action: {
+            appStateManager.setMainAppRefreshInterval(interval)
+        }) {
+            Text(label)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .foregroundColor(.white)
+        .background(getCurrentInterval() == interval ? Color.blue : Color.clear)
+        .cornerRadius(6)
+    }
+    
+    private func getCurrentInterval() -> TimeInterval {
+        return UserDefaults.standard.object(forKey: "MainAppRefreshInterval") as? TimeInterval ?? 300
+    }
+}
+
+struct AddWeatherStationView_Previews: PreviewProvider {
+    static var previews: some View {
+        AddWeatherStationView()
+    }
+}
+
+struct DiscoveredStationsSection_Previews: PreviewProvider {
+    static var previews: some View {
+        DiscoveredStationsSection()
+    }
+}
+
+struct ExistingStationsSection_Previews: PreviewProvider {
+    static var previews: some View {
+        ExistingStationsSection(applicationKey: "", apiKey: "", testIndividualStation: { _ in }, copyAPIURL: { _ in })
+    }
 }

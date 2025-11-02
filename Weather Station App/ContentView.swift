@@ -10,13 +10,11 @@ import Combine
 
 struct ContentView: View {
     @StateObject private var weatherService = WeatherStationService.shared
+    @StateObject private var appStateManager = AppStateManager.shared
     // Use the shared instance directly instead of creating a new StateObject
     private var menuBarManager = MenuBarManager.shared
     @State private var selectedTab = 0
     @State private var showingSettings = false
-    @State private var autoRefreshTimer: Timer?
-    @State private var autoRefreshEnabled = true
-    @State private var refreshInterval: TimeInterval = 300 // 5 minutes default
     
     var body: some View {
         NavigationSplitView {
@@ -29,13 +27,13 @@ struct ContentView: View {
                     
                     Spacer()
                     
-                    // Auto refresh indicator
-                    if autoRefreshEnabled && !weatherService.weatherStations.isEmpty {
+                    // Updated refresh indicator showing current refresh mode
+                    if appStateManager.mainAppRefreshEnabled && !weatherService.weatherStations.isEmpty {
                         HStack(spacing: 4) {
                             Image(systemName: "arrow.clockwise")
                                 .font(.caption)
                                 .foregroundColor(.blue)
-                            Text("Auto")
+                            Text(getRefreshStatusText())
                                 .font(.caption)
                                 .foregroundColor(.blue)
                         }
@@ -71,7 +69,7 @@ struct ContentView: View {
                         }
                     }
                 )) { station in
-                    StationListItem(station: station, refreshInterval: refreshInterval)
+                    StationListItem(station: station, refreshInterval: 300) // Use a fixed display value
                         .tag(station.id)
                 }
                 .listStyle(.sidebar)
@@ -84,28 +82,19 @@ struct ContentView: View {
                     }
                     
                     Button("Refresh Now") {
-                        Task {
-                            await weatherService.fetchAllWeatherData(forceRefresh: true) // Force refresh when manual
-                        }
+                        appStateManager.forceRefresh()
                     }
                     .disabled(weatherService.isLoading || weatherService.weatherStations.isEmpty)
                     
                     Spacer()
                     
-                    // Auto-refresh toggle
-                    Toggle("Auto-refresh", isOn: $autoRefreshEnabled)
+                    // Updated auto-refresh toggle for main app
+                    Toggle("Always refresh when open", isOn: $appStateManager.mainAppRefreshEnabled)
                         .toggleStyle(.switch)
                         .controlSize(.mini)
                         .font(.caption2)
                         .disabled(weatherService.weatherStations.isEmpty)
-                        .onChange(of: autoRefreshEnabled) { _, newValue in
-                            saveAutoRefreshSettings()
-                            if newValue {
-                                startAutoRefresh()
-                            } else {
-                                stopAutoRefresh()
-                            }
-                        }
+                        .help("Keep refreshing weather data while the main app window is visible, regardless of whether the app is idle or active")
                 }
                 .padding()
                 .background(Color(NSColor.controlBackgroundColor))
@@ -146,7 +135,7 @@ struct ContentView: View {
             .animation(.none, value: selectedTab) // Disable animations on tab changes
         }
         .onAppear {
-            print("📱 ContentView appeared - setting up notification listeners")
+            print("📱 ContentView appeared - AppStateManager will handle refresh coordination")
         }
         .onReceive(NotificationCenter.default.publisher(for: .navigateToStation)) { notification in
             // Handle navigation to specific station from menu bar
@@ -176,23 +165,17 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView(
-                autoRefreshEnabled: $autoRefreshEnabled,
-                refreshInterval: $refreshInterval
+                autoRefreshEnabled: $appStateManager.mainAppRefreshEnabled,
+                refreshInterval: .constant(300) // Show a fixed value, actual interval managed by AppStateManager
             ) {
-                // Callback when settings change
-                saveAutoRefreshSettings()
-                if autoRefreshEnabled {
-                    startAutoRefresh()
-                }
+                // Settings changed callback - AppStateManager handles the refresh logic now
+                print("🔄 Settings changed - AppStateManager will update refresh behavior")
             }
         }
         .task {
-            loadAutoRefreshSettings()
+            // Initial data load - AppStateManager will handle ongoing refresh
             if !weatherService.weatherStations.isEmpty {
-                await weatherService.fetchAllWeatherData(forceRefresh: false) // Smart initial load
-                if autoRefreshEnabled {
-                    startAutoRefresh()
-                }
+                await weatherService.fetchAllWeatherData(forceRefresh: false)
             }
         }
         .onChange(of: weatherService.weatherStations) { _, newStations in
@@ -202,31 +185,22 @@ struct ContentView: View {
                     selectedTab = max(0, newStations.count - 1)
                 }
                 
-                // Start/stop auto-refresh based on whether we have stations
                 if newStations.isEmpty {
                     selectedTab = 0 // Reset to 0 when no stations
-                    stopAutoRefresh()
-                } else if autoRefreshEnabled && autoRefreshTimer == nil {
-                    startAutoRefresh()
                 }
             }
         }
-        .onChange(of: refreshInterval) { _, _ in
-            // Restart timer with new interval
-            if autoRefreshEnabled {
-                startAutoRefresh()
-            }
-        }
-        .onDisappear {
-            print("📱 ContentView disappeared - stopping auto-refresh")
-            stopAutoRefresh()
-        }
-        .alert("Error", isPresented: .constant(weatherService.errorMessage != nil)) {
-            Button("OK") {
-                weatherService.errorMessage = nil
-            }
-        } message: {
-            Text(weatherService.errorMessage ?? "")
+    }
+    
+    private func getRefreshStatusText() -> String {
+        let (isMainRefreshing, isMenuBarRefreshing, mode) = appStateManager.getRefreshStatus()
+        
+        if appStateManager.isMainAppVisible {
+            return "Always Active"
+        } else if isMenuBarRefreshing {
+            return "MenuBar Mode"
+        } else {
+            return "Inactive"
         }
     }
     
@@ -252,78 +226,6 @@ struct ContentView: View {
         let idealWidth = contentBasedWidth + stationCountFactor
         
         return min(idealWidth, maxWidth)
-    }
-    
-    private func startAutoRefresh() {
-        stopAutoRefresh() // Stop any existing timer
-        
-        guard autoRefreshEnabled && !weatherService.weatherStations.isEmpty else { return }
-        
-        autoRefreshTimer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak weatherService] timer in
-            print("🔄 Auto-refresh timer fired at \(Date())")
-            
-            guard let weatherService = weatherService else {
-                print("❌ WeatherService deallocated, stopping timer")
-                timer.invalidate()
-                return
-            }
-            
-            if !weatherService.isLoading {
-                Task { @MainActor in
-                    print("🔄 Starting smart auto-refresh for \(weatherService.weatherStations.count) stations")
-                    
-                    // Use smart refresh that only fetches stale data
-                    let hasStaleData = weatherService.weatherStations.contains { station in
-                        !weatherService.isDataFresh(for: station) && station.isActive
-                    }
-                    
-                    if hasStaleData {
-                        await weatherService.fetchAllWeatherData(forceRefresh: false)
-                        print("🔄 Smart auto-refresh completed at \(Date())")
-                    } else {
-                        print("🔄 All data is fresh, skipping refresh")
-                    }
-                }
-            } else {
-                print("⚠️ Skipping auto-refresh - previous refresh still in progress")
-            }
-        }
-        
-        let minutes = Int(refreshInterval / 60)
-        let seconds = Int(refreshInterval.truncatingRemainder(dividingBy: 60))
-        if minutes > 0 {
-            print("🔄 Smart auto-refresh started: every \(minutes) minute\(minutes == 1 ? "" : "s") at \(Date())")
-        } else {
-            print("🔄 Smart auto-refresh started: every \(seconds) second\(seconds == 1 ? "" : "s") at \(Date())")
-        }
-        
-        // Add timer validation - capture autoRefreshTimer and autoRefreshEnabled by value
-        let currentTimer = autoRefreshTimer
-        _ = autoRefreshEnabled
-        DispatchQueue.main.asyncAfter(deadline: .now() + refreshInterval + 30) {
-            if let timer = currentTimer, timer.isValid {
-                print("✅ Auto-refresh timer is still valid after first cycle")
-            } else {
-                print("❌ Auto-refresh timer became invalid - checking if restart needed")
-                // Note: We can't restart from here since we can't capture self weakly in a struct
-            }
-        }
-    }
-    
-    private func stopAutoRefresh() {
-        autoRefreshTimer?.invalidate()
-        autoRefreshTimer = nil
-        print("🛑 Auto-refresh stopped")
-    }
-    
-    private func loadAutoRefreshSettings() {
-        autoRefreshEnabled = UserDefaults.standard.object(forKey: "AutoRefreshEnabled") as? Bool ?? true
-        refreshInterval = UserDefaults.standard.object(forKey: "RefreshInterval") as? TimeInterval ?? 300
-    }
-    
-    private func saveAutoRefreshSettings() {
-        UserDefaults.standard.set(autoRefreshEnabled, forKey: "AutoRefreshEnabled")
-        UserDefaults.standard.set(refreshInterval, forKey: "RefreshInterval")
     }
 }
 

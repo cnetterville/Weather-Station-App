@@ -1081,6 +1081,7 @@ class WeatherStationService: ObservableObject {
                     if deviceListResponse.code == 0 {
                         discoveredStations = deviceListResponse.data.list
                         print(" Successfully discovered \(discoveredStations.count) weather stations")
+
                         
                         // Log discovered stations
                         for device in discoveredStations {
@@ -2141,35 +2142,6 @@ class WeatherStationService: ObservableObject {
         Historical Data Entries: \(historicalData.count)
         Chart Data Entries: \(chartHistoricalData.count)
         """
-    }
-}
-
-// MARK: - Utility Classes
-
-actor AsyncSemaphore {
-    private var value: Int
-    private var waiters: [CheckedContinuation<Void, Never>] = []
-    
-    init(value: Int) {
-        self.value = value
-    }
-    
-    func wait() async {
-        value -= 1
-        if value >= 0 {
-            return
-        }
-        await withCheckedContinuation { continuation in
-            waiters.append(continuation)
-        }
-    }
-    
-    func signal() {
-        value += 1
-        if !waiters.isEmpty {
-            let waiter = waiters.removeFirst()
-            waiter.resume()
-        }
     }
 }
 
