@@ -15,17 +15,16 @@ struct RadarTileView: View {
     @State private var webView: WKWebView?
     @State private var isLoading = true
     @State private var hasError = false
-    @State private var autoRefreshTimer: Timer?
-    @State private var countdownTimer: Timer?
     @State private var loadingTimeoutTimer: Timer?
     @State private var lastRefreshTime = Date()
-    @State private var nextRefreshTime = Date()
-    @State private var radarRefreshInterval: TimeInterval = 600
-    @State private var countdownTrigger = 0
     @State private var initialLoadDelayTask: Task<Void, Never>?
     @State private var hasInitiallyLoaded = false
     @State private var loadAttempts = 0
     @State private var currentStationId: String = ""
+    
+    // Use the persistent radar refresh manager
+    @StateObject private var radarRefreshManager = RadarRefreshManager.shared
+    @State private var refreshTrigger = 0 // For forcing UI updates
     
     // Calculate a unique delay for this station's radar based on MAC address
     private var initialLoadDelay: TimeInterval {
@@ -153,7 +152,7 @@ struct RadarTileView: View {
                     
                     // Clean control bar - just status and action buttons
                     HStack {
-                        // Auto-refresh status
+                        // Auto-refresh status from persistent manager
                         if !hasError && !isLoading {
                             HStack(spacing: 4) {
                                 Circle()
@@ -185,8 +184,6 @@ struct RadarTileView: View {
             }
         }
         .onAppear {
-            radarRefreshInterval = UserDefaults.standard.radarRefreshInterval
-            
             // Check if station has changed
             let stationChanged = currentStationId != station.macAddress
             if stationChanged {
@@ -206,27 +203,28 @@ struct RadarTileView: View {
                         await MainActor.run {
                             loadRadar()
                             hasInitiallyLoaded = true
-                            startAutoRefreshTimer()
-                            startCountdownTimer()
+                            
+                            // Start persistent radar refresh tracking
+                            radarRefreshManager.startTracking(stationId: station.macAddress)
                         }
                     } catch {
                         return
                     }
                 }
+            } else {
+                // If already loaded, ensure tracking is started
+                radarRefreshManager.startTracking(stationId: station.macAddress)
             }
             
-            // Listen for settings changes
+            // Listen for refresh triggers from the persistent manager
             NotificationCenter.default.addObserver(
-                forName: .radarSettingsChanged,
+                forName: .radarRefreshTriggered,
                 object: nil,
                 queue: .main
             ) { notification in
-                if let newInterval = notification.object as? TimeInterval {
-                    radarRefreshInterval = newInterval
-                    nextRefreshTime = lastRefreshTime.addingTimeInterval(radarRefreshInterval)
-                    
-                    stopAutoRefreshTimer()
-                    startAutoRefreshTimer()
+                if let triggeredStationId = notification.object as? String,
+                   triggeredStationId == station.macAddress {
+                    refreshRadar()
                 }
             }
         }
@@ -234,10 +232,16 @@ struct RadarTileView: View {
             initialLoadDelayTask?.cancel()
             initialLoadDelayTask = nil
             
-            stopAutoRefreshTimer()
-            stopCountdownTimer()
             stopLoadingTimeout()
-            NotificationCenter.default.removeObserver(self, name: .radarSettingsChanged, object: nil)
+            
+            // Stop radar tracking when view disappears
+            radarRefreshManager.stopTracking(stationId: station.macAddress)
+            
+            NotificationCenter.default.removeObserver(self, name: .radarRefreshTriggered, object: nil)
+        }
+        // Force UI updates when refresh state changes
+        .onChange(of: radarRefreshManager.getRefreshState(for: station.macAddress)?.timeRemaining) { _ in
+            refreshTrigger += 1
         }
     }
     
@@ -254,7 +258,6 @@ struct RadarTileView: View {
         
         hasError = false
         lastRefreshTime = Date()
-        nextRefreshTime = Date().addingTimeInterval(radarRefreshInterval)
         loadAttempts += 1
         
         // Start a simple timeout
@@ -262,6 +265,7 @@ struct RadarTileView: View {
     }
     
     private func refreshRadar() {
+        print("🔄 Manual radar refresh for \(station.name)")
         isLoading = true
         hasError = false
         lastRefreshTime = Date()
@@ -273,8 +277,9 @@ struct RadarTileView: View {
         let newHTML = radarHTML
         webView?.loadHTMLString(newHTML, baseURL: URL(string: "https://embed.windy.com"))
         
-        stopAutoRefreshTimer()
-        startAutoRefreshTimer()
+        // Don't restart timers - the persistent manager handles that
+        // Just trigger the manager to reset its timer
+        radarRefreshManager.triggerRefresh(for: station.macAddress)
     }
     
     private func startLoadingTimeout() {
@@ -283,9 +288,8 @@ struct RadarTileView: View {
         loadingTimeoutTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: false) { _ in
             DispatchQueue.main.async {
                 if isLoading {
-                    print("Radar loading timeout - clearing loading state and resetting countdown")
+                    print("Radar loading timeout - clearing loading state")
                     isLoading = false
-                    nextRefreshTime = Date().addingTimeInterval(radarRefreshInterval)
                 }
             }
         }
@@ -296,65 +300,12 @@ struct RadarTileView: View {
         loadingTimeoutTimer = nil
     }
     
-    private func startAutoRefreshTimer() {
-        stopAutoRefreshTimer() // Ensure no duplicate timers
-        
-        autoRefreshTimer = Timer.scheduledTimer(withTimeInterval: radarRefreshInterval, repeats: true) { _ in
-            DispatchQueue.main.async {
-                if !hasError {
-                    // FIXED: Update next refresh time BEFORE calling refresh to avoid UI stuck state
-                    nextRefreshTime = Date().addingTimeInterval(radarRefreshInterval)
-                    refreshRadar()
-                }
-            }
-        }
-    }
-    
-    private func stopAutoRefreshTimer() {
-        autoRefreshTimer?.invalidate()
-        autoRefreshTimer = nil
-    }
-    
-    private func startCountdownTimer() {
-        stopCountdownTimer() // Ensure no duplicate timers
-        
-        countdownTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-            DispatchQueue.main.async {
-                // Trigger UI update by changing state
-                countdownTrigger += 1
-            }
-        }
-    }
-    
-    private func stopCountdownTimer() {
-        countdownTimer?.invalidate()
-        countdownTimer = nil
-    }
-    
     private func timeUntilNextRefresh() -> String {
-        let _ = countdownTrigger // Reference the trigger to force UI updates
-        let timeRemaining = nextRefreshTime.timeIntervalSince(Date())
+        // Force UI update trigger
+        let _ = refreshTrigger
         
-        // FIXED: Improved logic to prevent getting stuck on "refreshing..."
-        if timeRemaining <= 0 {
-            // Only show "refreshing..." if we're actually loading
-            if isLoading {
-                return "refreshing..."
-            } else {
-                // Reset to next refresh cycle if we're not loading
-                nextRefreshTime = Date().addingTimeInterval(radarRefreshInterval)
-                return "\(Int(radarRefreshInterval))s"
-            }
-        }
-        
-        let minutes = Int(timeRemaining) / 60
-        let seconds = Int(timeRemaining) % 60
-        
-        if minutes > 0 {
-            return "\(minutes)m \(seconds)s"
-        } else {
-            return "\(seconds)s"
-        }
+        // Get time remaining from persistent manager
+        return radarRefreshManager.getTimeRemainingString(for: station.macAddress)
     }
     
     private func formatTime(_ date: Date) -> String {

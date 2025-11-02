@@ -49,14 +49,4 @@ extension UserDefaults {
             set(newValue.rawValue, forKey: "UnitSystemDisplayMode")
         }
     }
-    
-    var radarRefreshInterval: TimeInterval {
-        get {
-            let interval = double(forKey: "RadarRefreshInterval")
-            return interval > 0 ? interval : 600.0 // Default to 10 minutes
-        }
-        set {
-            set(newValue, forKey: "RadarRefreshInterval")
-        }
-    }
 }
