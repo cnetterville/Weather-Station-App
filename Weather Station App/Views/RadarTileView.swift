@@ -66,12 +66,43 @@ struct RadarTileView: View {
                     border: none;
                     border-radius: 12px;
                 }
+                .loading-indicator {
+                    position: absolute;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    color: #888;
+                    font-size: 14px;
+                }
             </style>
+            <script>
+                let loadingComplete = false;
+                
+                function onIframeLoad() {
+                    loadingComplete = true;
+                    // Signal to WebView that iframe has loaded
+                    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.radarLoaded) {
+                        window.webkit.messageHandlers.radarLoaded.postMessage('loaded');
+                    }
+                    console.log('Radar iframe loaded');
+                }
+                
+                // Set a timeout to clear loading state even if iframe doesn't signal
+                setTimeout(function() {
+                    if (!loadingComplete) {
+                        console.log('Radar loading timeout - forcing completion');
+                        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.radarLoaded) {
+                            window.webkit.messageHandlers.radarLoaded.postMessage('timeout');
+                        }
+                    }
+                }, 8000); // 8 second timeout
+            </script>
         </head>
         <body>
             <iframe 
                 src="https://embed.windy.com/embed2.html?lat=\(lat)&lon=\(lon)&detailLat=\(lat)&detailLon=\(lon)&width=100%&height=100%&zoom=\(zoom)&level=surface&overlay=rain&product=ecmwf&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=mph&metricTemp=°F&radarRange=-1&timestamp=\(timestamp)"
-                frameborder="0">
+                frameborder="0"
+                onload="onIframeLoad()">
             </iframe>
         </body>
         </html>
@@ -285,11 +316,13 @@ struct RadarTileView: View {
     private func startLoadingTimeout() {
         stopLoadingTimeout()
         
-        loadingTimeoutTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: false) { _ in
+        // Reduce timeout to 8 seconds to match the JavaScript timeout
+        loadingTimeoutTimer = Timer.scheduledTimer(withTimeInterval: 8.0, repeats: false) { _ in
             DispatchQueue.main.async {
-                if isLoading {
-                    print("Radar loading timeout - clearing loading state")
-                    isLoading = false
+                if self.isLoading {
+                    print("⚠️ Radar loading timeout after 8s - forcing clear")
+                    self.isLoading = false
+                    // Don't set error state on timeout - just clear loading
                 }
             }
         }
@@ -343,6 +376,9 @@ struct RadarWebView: NSViewRepresentable {
         let configuration = WKWebViewConfiguration()
         configuration.mediaTypesRequiringUserActionForPlayback = []
         
+        // Add message handler for radar loaded notification
+        configuration.userContentController.add(context.coordinator, name: "radarLoaded")
+        
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
         webView.allowsMagnification = false
@@ -364,7 +400,7 @@ struct RadarWebView: NSViewRepresentable {
         Coordinator(self)
     }
     
-    class Coordinator: NSObject, WKNavigationDelegate {
+    class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         let parent: RadarWebView
         
         init(_ parent: RadarWebView) {
@@ -379,12 +415,8 @@ struct RadarWebView: NSViewRepresentable {
         }
         
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            // Give iframe time to load, then clear loading state
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-                self.parent.isLoading = false
-                self.parent.hasError = false
-            }
-            print("Radar WebView didFinish navigation - iframe should load in 3 seconds")
+            print("Radar WebView didFinish navigation - waiting for iframe load signal...")
+            // Don't clear loading state here - wait for iframe load message or timeout
         }
         
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
@@ -401,6 +433,17 @@ struct RadarWebView: NSViewRepresentable {
                 self.parent.hasError = true
             }
             print("Radar WebView failed provisional navigation: \(error.localizedDescription)")
+        }
+        
+        // Handle messages from JavaScript
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            if message.name == "radarLoaded" {
+                DispatchQueue.main.async {
+                    self.parent.isLoading = false
+                    self.parent.hasError = false
+                    print("✅ Radar iframe load confirmed by JavaScript")
+                }
+            }
         }
     }
 }

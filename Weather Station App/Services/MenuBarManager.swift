@@ -958,12 +958,40 @@ class MenuBarManager: ObservableObject {
             
             print("🔄 MenuBar background refresh timer fired at \(Date())")
             
-            // Check if any data is stale before fetching
-            let hasStaleData = self.weatherService.weatherStations.contains { station in
-                !self.weatherService.isDataFresh(for: station) && station.isActive
+            // Check if any data is stale before fetching - be more aggressive about refreshing
+            let staleStations = self.weatherService.weatherStations.filter { station in
+                guard station.isActive else { return false }
+                
+                // Consider data stale if:
+                // 1. We have no data at all for this station
+                // 2. The data is older than our freshness duration (2 minutes)
+                // 3. The last update was more than 5 minutes ago (safety margin)
+                
+                if self.weatherService.weatherData[station.macAddress] == nil {
+                    print("   🔄 Station \(station.name) has no data - needs refresh")
+                    return true
+                }
+                
+                guard let lastUpdated = station.lastUpdated else {
+                    print("   🔄 Station \(station.name) has no lastUpdated timestamp - needs refresh")
+                    return true
+                }
+                
+                let dataAge = Date().timeIntervalSince(lastUpdated)
+                let isStale = dataAge > 300 // 5 minutes - more aggressive than the 2 minute default
+                
+                if isStale {
+                    print("   🔄 Station \(station.name) data is stale (age: \(Int(dataAge))s) - needs refresh")
+                } else {
+                    print("   ✅ Station \(station.name) data is fresh (age: \(Int(dataAge))s)")
+                }
+                
+                return isStale
             }
             
-            if hasStaleData {
+            if !staleStations.isEmpty {
+                print("🔄 Found \(staleStations.count) stations with stale data")
+                
                 Task { @MainActor in
                     print("🔄 Starting background refresh for stale menu bar data")
                     await self.weatherService.fetchAllWeatherData(forceRefresh: false) // Smart refresh
@@ -979,15 +1007,27 @@ class MenuBarManager: ObservableObject {
         
         // Run an initial refresh after a short delay if data is stale
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            let hasStaleData = self.weatherService.weatherStations.contains { station in
-                !self.weatherService.isDataFresh(for: station) && station.isActive
+            let staleStations = self.weatherService.weatherStations.filter { station in
+                guard station.isActive else { return false }
+                
+                if self.weatherService.weatherData[station.macAddress] == nil {
+                    return true
+                }
+                
+                guard let lastUpdated = station.lastUpdated else {
+                    return true
+                }
+                
+                return Date().timeIntervalSince(lastUpdated) > 300 // 5 minutes
             }
             
-            if hasStaleData {
-                print("🔄 Running initial menubar background refresh for stale data")
+            if !staleStations.isEmpty {
+                print("🔄 Running initial menubar background refresh for \(staleStations.count) stations with stale data")
                 Task {
                     await self.weatherService.fetchAllWeatherData(forceRefresh: false)
                 }
+            } else {
+                print("🔄 All menubar data is fresh on startup")
             }
         }
     }
