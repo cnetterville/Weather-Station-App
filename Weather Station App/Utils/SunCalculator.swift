@@ -175,23 +175,17 @@ class SunCalculator {
     
     /// Perform the actual sun times calculation (moved from original calculateSunTimes)
     private static func performSunTimesCalculation(for date: Date, latitude: Double, longitude: Double, timeZone: TimeZone) -> SunTimes? {
-        // First, determine what "today" is in the station's local timezone
+        // Set up calendar with the target timezone
         var localCalendar = Calendar.current
         localCalendar.timeZone = timeZone
+        
+        // Get the start of day in the target timezone
         let localDate = localCalendar.startOfDay(for: date)
-        
-        // Convert the local date to UTC for astronomical calculations
-        // We want to calculate sunrise/sunset for the local date, not the UTC date
-        var utcCalendar = Calendar.current
-        utcCalendar.timeZone = TimeZone(secondsFromGMT: 0)!
-        
-        // Get the UTC date that corresponds to the same calendar day as the local date
-        _ = localCalendar.dateInterval(of: .day, for: localDate)?.start ?? localDate
         
         // Get day of year using the local calendar (not UTC calendar)
         let dayOfYear = localCalendar.ordinality(of: .day, in: .year, for: localDate) ?? 1
         
-        // Convert input longitude to positive east convention
+        // Convert input longitude to NOAA convention (negative for west)
         let lng = longitude
         let lat = latitude
         
@@ -225,28 +219,54 @@ class SunCalculator {
         
         let hourAngle = acos(cosH) * 180.0 / .pi  // Convert back to degrees
         
+        // Calculate solar noon in minutes from midnight UTC
+        let solarNoonUTC = 720.0 - 4.0 * lng - eqtime
+        
         // Calculate sunrise and sunset in minutes from midnight UTC
-        // This gives us the UTC times without timezone correction
-        let sunriseUTC = 720.0 - 4.0 * (lng + hourAngle) - eqtime
-        let sunsetUTC = 720.0 - 4.0 * (lng - hourAngle) - eqtime
+        let sunriseUTC = solarNoonUTC - 4.0 * hourAngle
+        let sunsetUTC = solarNoonUTC + 4.0 * hourAngle
         
-        // Create provisional sunrise and sunset times in UTC
-        let provisionalSunrise = localDate.addingTimeInterval(sunriseUTC * 60.0)
-        let provisionalSunset = localDate.addingTimeInterval(sunsetUTC * 60.0)
+        // Convert UTC times to local times by applying timezone offset
+        let timezoneOffsetMinutes = Double(timeZone.secondsFromGMT(for: date)) / 60.0
+        let sunriseLocal = sunriseUTC + timezoneOffsetMinutes
+        let sunsetLocal = sunsetUTC + timezoneOffsetMinutes
         
-        // Now get the correct timezone offsets for the actual sunrise and sunset times
-        // This is crucial for DST transitions - we need the offset that will be in effect
-        // at the time of sunrise/sunset, not the offset at midnight
-        let sunriseOffset = Double(timeZone.secondsFromGMT(for: provisionalSunrise)) / 3600.0
-        let sunsetOffset = Double(timeZone.secondsFromGMT(for: provisionalSunset)) / 3600.0
+        // Create dates using DateComponents 
+        let localDateComponents = localCalendar.dateComponents([.year, .month, .day], from: localDate)
         
-        // Recalculate with the correct timezone offsets
-        let sunriseLocalMinutes = sunriseUTC + (sunriseOffset * 60.0)
-        let sunsetLocalMinutes = sunsetUTC + (sunsetOffset * 60.0)
+        // Create sunrise time
+        var sunriseComponents = localDateComponents
+        let sunriseHours = sunriseLocal / 60.0
+        sunriseComponents.hour = Int(sunriseHours)
+        sunriseComponents.minute = Int((sunriseHours.truncatingRemainder(dividingBy: 1)) * 60)
         
-        // Create final sunrise and sunset dates
-        let sunrise = localDate.addingTimeInterval(sunriseLocalMinutes * 60.0)
-        let sunset = localDate.addingTimeInterval(sunsetLocalMinutes * 60.0)
+        // Create sunset time  
+        var sunsetComponents = localDateComponents
+        let sunsetHours = sunsetLocal / 60.0
+        sunsetComponents.hour = Int(sunsetHours)
+        sunsetComponents.minute = Int((sunsetHours.truncatingRemainder(dividingBy: 1)) * 60)
+        
+        // Handle cases where time goes into next day or previous day
+        if sunriseHours < 0 {
+            sunriseComponents.hour = Int(sunriseHours) + 24
+            sunriseComponents.day = (sunriseComponents.day ?? 0) - 1
+        } else if sunriseHours >= 24 {
+            sunriseComponents.hour = Int(sunriseHours) - 24
+            sunriseComponents.day = (sunriseComponents.day ?? 0) + 1
+        }
+        
+        if sunsetHours < 0 {
+            sunsetComponents.hour = Int(sunsetHours) + 24
+            sunsetComponents.day = (sunsetComponents.day ?? 0) - 1
+        } else if sunsetHours >= 24 {
+            sunsetComponents.hour = Int(sunsetHours) - 24
+            sunsetComponents.day = (sunsetComponents.day ?? 0) + 1
+        }
+        
+        guard let sunrise = localCalendar.date(from: sunriseComponents),
+              let sunset = localCalendar.date(from: sunsetComponents) else {
+            return nil
+        }
         
         // Calculate day length
         let dayLength = sunset.timeIntervalSince(sunrise)

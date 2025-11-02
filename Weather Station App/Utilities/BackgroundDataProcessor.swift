@@ -254,12 +254,3 @@ extension ProcessingPriority {
         }
     }
 }
-
-extension Task where Success == Never, Failure == Never {
-    static func detached(
-        priority: TaskPriority? = nil,
-        operation: @escaping @Sendable () async -> Success
-    ) -> Task<Success, Failure> where Success: Sendable {
-        return Task.detached(priority: priority, operation: operation)
-    }
-}

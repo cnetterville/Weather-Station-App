@@ -134,7 +134,7 @@ class WeatherStationService: ObservableObject {
                     await self.fetchWeatherDataOptimized(for: station)
                     
                     // PHASE 1: Skip historical data fetch under memory pressure
-                    if self.memoryPressureLevel < 2 {
+                    if await self.memoryPressureLevel < 2 {
                         // Also fetch today's historical data for high/low calculations (if not already cached)
                         if await !self.hasTodaysHistoricalData(for: station) {
                             await self.fetchTodaysHistoricalData(for: station)
@@ -144,7 +144,7 @@ class WeatherStationService: ObservableObject {
                     
                     // PHASE 1: Increased delay under memory pressure
                     let baseDelay = stationsToFetch.count <= 2 ? 100_000_000 : 250_000_000 // 0.1s vs 0.25s
-                    let memoryDelayMultiplier = self.memoryPressureLevel > 1 ? 2 : 1
+                    let memoryDelayMultiplier = await self.memoryPressureLevel > 1 ? 2 : 1
                     let delay = baseDelay * memoryDelayMultiplier
                     try? await Task.sleep(nanoseconds: UInt64(delay))
                 }
