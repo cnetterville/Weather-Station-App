@@ -296,7 +296,7 @@ struct RadarTileView: View {
             }
         }
         // Force UI updates when refresh state changes
-        .onChange(of: radarRefreshManager.getRefreshState(for: station.macAddress)?.timeRemaining) { _ in
+        .onChange(of: radarRefreshManager.getRefreshState(for: station.macAddress)?.timeRemaining) { 
             refreshTrigger += 1
         }
     }

@@ -135,7 +135,7 @@ struct SettingsView: View {
                                                 Toggle("Keep data fresh when main app is closed", isOn: $menuBarManager.backgroundRefreshEnabled)
                                                     .toggleStyle(.checkbox)
                                                 
-                                                let (isMainRefreshing, isMenuBarRefreshing, refreshMode) = appStateManager.getRefreshStatus()
+                                                let (_, _, refreshMode) = appStateManager.getRefreshStatus()
                                                 HStack {
                                                     Image(systemName: "info.circle")
                                                         .foregroundColor(.blue)
@@ -433,14 +433,14 @@ struct SettingsView: View {
                                             }
                                         }
                                         
-                                        let (isMainRefreshing, isMenuBarRefreshing, refreshMode) = appStateManager.getRefreshStatus()
+                                        let (isMainRefreshing, _, _) = appStateManager.getRefreshStatus()
                                         HStack {
                                             Circle()
-                                                .fill(isMainRefreshing ? Color.green : (isMenuBarRefreshing ? Color.orange : Color.gray))
+                                                .fill(isMainRefreshing ? Color.green : Color.gray)
                                                 .frame(width: 8, height: 8)
-                                            Text("Status: \(refreshMode)")
+                                            Text("Status: Main app refresh \(isMainRefreshing ? "active" : "inactive")")
                                                 .font(.caption)
-                                                .foregroundColor(isMainRefreshing ? .green : (isMenuBarRefreshing ? .orange : .gray))
+                                                .foregroundColor(isMainRefreshing ? .green : .gray)
                                         }
                                     }
                                 }

@@ -193,7 +193,7 @@ struct ContentView: View {
     }
     
     private func getRefreshStatusText() -> String {
-        let (isMainRefreshing, isMenuBarRefreshing, mode) = appStateManager.getRefreshStatus()
+        let (_, isMenuBarRefreshing, _) = appStateManager.getRefreshStatus()
         
         if appStateManager.isMainAppVisible {
             return "Always Active"
