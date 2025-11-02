@@ -225,16 +225,28 @@ class SunCalculator {
         
         let hourAngle = acos(cosH) * 180.0 / .pi  // Convert back to degrees
         
-        // Calculate sunrise and sunset in minutes from midnight LOCAL TIME
-        // Adjust for timezone offset to get the correct local times
-        let timezoneOffsetHours = Double(timeZone.secondsFromGMT(for: date)) / 3600.0
+        // Calculate sunrise and sunset in minutes from midnight UTC
+        // This gives us the UTC times without timezone correction
+        let sunriseUTC = 720.0 - 4.0 * (lng + hourAngle) - eqtime
+        let sunsetUTC = 720.0 - 4.0 * (lng - hourAngle) - eqtime
         
-        let sunriseLocal = 720.0 - 4.0 * (lng + hourAngle) - eqtime + (timezoneOffsetHours * 60.0)
-        let sunsetLocal = 720.0 - 4.0 * (lng - hourAngle) - eqtime + (timezoneOffsetHours * 60.0)
+        // Create provisional sunrise and sunset times in UTC
+        let provisionalSunrise = localDate.addingTimeInterval(sunriseUTC * 60.0)
+        let provisionalSunset = localDate.addingTimeInterval(sunsetUTC * 60.0)
         
-        // Create local dates for sunrise and sunset
-        let sunrise = localDate.addingTimeInterval(sunriseLocal * 60.0)
-        let sunset = localDate.addingTimeInterval(sunsetLocal * 60.0)
+        // Now get the correct timezone offsets for the actual sunrise and sunset times
+        // This is crucial for DST transitions - we need the offset that will be in effect
+        // at the time of sunrise/sunset, not the offset at midnight
+        let sunriseOffset = Double(timeZone.secondsFromGMT(for: provisionalSunrise)) / 3600.0
+        let sunsetOffset = Double(timeZone.secondsFromGMT(for: provisionalSunset)) / 3600.0
+        
+        // Recalculate with the correct timezone offsets
+        let sunriseLocalMinutes = sunriseUTC + (sunriseOffset * 60.0)
+        let sunsetLocalMinutes = sunsetUTC + (sunsetOffset * 60.0)
+        
+        // Create final sunrise and sunset dates
+        let sunrise = localDate.addingTimeInterval(sunriseLocalMinutes * 60.0)
+        let sunset = localDate.addingTimeInterval(sunsetLocalMinutes * 60.0)
         
         // Calculate day length
         let dayLength = sunset.timeIntervalSince(sunrise)
