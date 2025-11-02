@@ -353,7 +353,7 @@ struct ForecastDayRow: View {
                         .font(.system(size: 8))
                         .foregroundColor(.secondary)
                     
-                    Text("\(Int(forecast.maxWindSpeed))km/h \(forecast.windDirectionText)")
+                    Text("\(forecast.formattedWindSpeed) \(forecast.windDirectionText)")
                         .font(.system(size: 9))
                         .foregroundColor(.secondary)
                 }

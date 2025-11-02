@@ -217,7 +217,17 @@ struct DailyWeatherForecast {
     }
     
     var formattedWindSpeed: String {
-        return String(format: "%.0f km/h", maxWindSpeed)
+        let displayMode = UserDefaults.standard.unitSystemDisplayMode
+        let converted = MeasurementConverter.convertWindSpeed(String(format: "%.0f", maxWindSpeed), from: "km/h")
+        
+        switch displayMode {
+        case .imperial:
+            return "\(Int(Double(converted.mph) ?? 0))mph"
+        case .metric:
+            return "\(Int(maxWindSpeed))km/h"
+        case .both:
+            return "\(Int(Double(converted.mph) ?? 0))mph/\(Int(maxWindSpeed))km/h"
+        }
     }
     
     var windDirectionText: String {
