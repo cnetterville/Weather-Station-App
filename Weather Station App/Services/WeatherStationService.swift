@@ -515,7 +515,7 @@ class WeatherStationService: ObservableObject {
                 rainfallPiezo: existingData.rainfallPiezo,
                 wind: existingData.wind,
                 pressure: existingData.pressure,
-                lightning: savedLightningData, // Use the 30-day lightning data
+                lightning: savedLightningData, // Use the 7-day high-resolution lightning data
                 pm25Ch1: existingData.pm25Ch1,
                 pm25Ch2: existingData.pm25Ch2,
                 pm25Ch3: existingData.pm25Ch3,
@@ -558,7 +558,7 @@ class WeatherStationService: ObservableObject {
         let calendar = Calendar.current
         let now = Date()
         let endDate = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: now) ?? now
-        let startDate = calendar.date(byAdding: .day, value: -29, to: calendar.startOfDay(for: now)) ?? now
+        let startDate = calendar.date(byAdding: .day, value: -6, to: calendar.startOfDay(for: now)) ?? now
 
         // Format dates exactly as API example: 2022-01-01 00:00:00
         let dateFormatter = DateFormatter()
@@ -633,11 +633,11 @@ class WeatherStationService: ObservableObject {
                             tempAndHumidityCh3: existingData.tempAndHumidityCh3
                         )
                         historicalData[station.macAddress] = mergedData
-                        print(" Successfully merged 30-day lightning data")
+                        print(" Successfully merged 7-day high-resolution lightning data")
                     } else {
                         // If no existing data, just store the lightning data
                         historicalData[station.macAddress] = historicalResponse.data
-                        print(" Successfully stored 30-day lightning data")
+                        print(" Successfully stored 7-day high-resolution lightning data")
                     }
                 }
             }
@@ -711,7 +711,7 @@ class WeatherStationService: ObservableObject {
         case .last30Days:
             // Last 30 full calendar days
             endDate = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: now) ?? now
-            startDate = calendar.date(byAdding: .day, value: -29, to: calendar.startOfDay(for: now)) ?? now
+            startDate = calendar.date(byAdding: .day, value: -6, to: calendar.startOfDay(for: now)) ?? now
             
         case .last90Days:
             // Last 90 full calendar days (limited to API retention)

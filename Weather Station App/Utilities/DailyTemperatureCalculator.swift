@@ -549,48 +549,6 @@ class DailyTemperatureCalculator {
         )
     }
     
-    static func calculateStatsForTimeRange(from historicalData: HistoricalOutdoorData?, startDate: Date, endDate: Date) -> DailyTemperatureStats? {
-        guard let temperatureData = historicalData?.temperature else {
-            return nil
-        }
-        
-        let unit = temperatureData.unit
-        var tempReadings: [(temp: Double, time: Date)] = []
-        
-        for (timestampString, valueString) in temperatureData.list {
-            guard let timestamp = Double(timestampString),
-                  let temperature = Double(valueString) else {
-                continue
-            }
-            
-            let readingDate = Date(timeIntervalSince1970: timestamp)
-            
-            if readingDate >= startDate && readingDate <= endDate {
-                tempReadings.append((temp: temperature, time: readingDate))
-            }
-        }
-        
-        guard !tempReadings.isEmpty else {
-            return nil
-        }
-        
-        let sortedByTemp = tempReadings.sorted { $0.temp < $1.temp }
-        let lowestReading = sortedByTemp.first!
-        let highestReading = sortedByTemp.last!
-        
-        return DailyTemperatureStats(
-            highTemp: highestReading.temp,
-            lowTemp: lowestReading.temp,
-            highTempTime: highestReading.time,
-            lowTempTime: lowestReading.time,
-            unit: unit,
-            dataPointCount: tempReadings.count,
-            isFromHistoricalData: true
-        )
-    }
-    
-    // MARK: - Indoor Temperature stats with specific time ranges
-
     static func calculateIndoorStatsFromAvailableData(from historicalData: HistoricalIndoorData?) -> DailyTemperatureStats? {
         guard let temperatureData = historicalData?.temperature else {
             print("🏠 No indoor temperature data available for flexible calculation")
@@ -638,48 +596,6 @@ class DailyTemperatureCalculator {
         )
     }
     
-    static func calculateIndoorStatsForTimeRange(from historicalData: HistoricalIndoorData?, startDate: Date, endDate: Date) -> DailyTemperatureStats? {
-        guard let temperatureData = historicalData?.temperature else {
-            return nil
-        }
-        
-        let unit = temperatureData.unit
-        var tempReadings: [(temp: Double, time: Date)] = []
-        
-        for (timestampString, valueString) in temperatureData.list {
-            guard let timestamp = Double(timestampString),
-                  let temperature = Double(valueString) else {
-                continue
-            }
-            
-            let readingDate = Date(timeIntervalSince1970: timestamp)
-            
-            if readingDate >= startDate && readingDate <= endDate {
-                tempReadings.append((temp: temperature, time: readingDate))
-            }
-        }
-        
-        guard !tempReadings.isEmpty else {
-            return nil
-        }
-        
-        let sortedByTemp = tempReadings.sorted { $0.temp < $1.temp }
-        let lowestReading = sortedByTemp.first!
-        let highestReading = sortedByTemp.last!
-        
-        return DailyTemperatureStats(
-            highTemp: highestReading.temp,
-            lowTemp: lowestReading.temp,
-            highTempTime: highestReading.time,
-            lowTempTime: lowestReading.time,
-            unit: unit,
-            dataPointCount: tempReadings.count,
-            isFromHistoricalData: true
-        )
-    }
-    
-    // MARK: - Channel Temperature stats with specific time ranges
-
     static func calculateChannelStatsFromAvailableData(from channelData: HistoricalTempHumidityData?) -> DailyTemperatureStats? {
         guard let temperatureData = channelData?.temperature else {
             print("📡 No channel temperature data available for flexible calculation")
@@ -715,46 +631,6 @@ class DailyTemperatureCalculator {
         print("📡 All temperatures: \(tempReadings.map { $0.temp })")
         print("📡 High: \(highestReading.temp)° at \(highestReading.time)")
         print("📡 Low: \(lowestReading.temp)° at \(lowestReading.time)")
-        
-        return DailyTemperatureStats(
-            highTemp: highestReading.temp,
-            lowTemp: lowestReading.temp,
-            highTempTime: highestReading.time,
-            lowTempTime: lowestReading.time,
-            unit: unit,
-            dataPointCount: tempReadings.count,
-            isFromHistoricalData: true
-        )
-    }
-    
-    static func calculateChannelStatsForTimeRange(from channelData: HistoricalTempHumidityData?, startDate: Date, endDate: Date) -> DailyTemperatureStats? {
-        guard let temperatureData = channelData?.temperature else {
-            return nil
-        }
-        
-        let unit = temperatureData.unit
-        var tempReadings: [(temp: Double, time: Date)] = []
-        
-        for (timestampString, valueString) in temperatureData.list {
-            guard let timestamp = Double(timestampString),
-                  let temperature = Double(valueString) else {
-                continue
-            }
-            
-            let readingDate = Date(timeIntervalSince1970: timestamp)
-            
-            if readingDate >= startDate && readingDate <= endDate {
-                tempReadings.append((temp: temperature, time: readingDate))
-            }
-        }
-        
-        guard !tempReadings.isEmpty else {
-            return nil
-        }
-        
-        let sortedByTemp = tempReadings.sorted { $0.temp < $1.temp }
-        let lowestReading = sortedByTemp.first!
-        let highestReading = sortedByTemp.last!
         
         return DailyTemperatureStats(
             highTemp: highestReading.temp,
@@ -1092,9 +968,14 @@ class DailyTemperatureCalculator {
     // MARK: - Lightning Calculations
     
     static func calculateLastLightningDetection(from historicalData: HistoricalWeatherData?, currentLightningCount: String, daysToSearch: Int = 30) -> LastLightningStats? {
+        print("🔍 === LIGHTNING DETECTION DEBUG START ===")
+        print("🔍 Current lightning count: \(currentLightningCount)")
+        print("🔍 Search period: \(daysToSearch) days back from \(Date())")
+        
         // First, check if there's any current lightning activity
         if let currentCount = Int(currentLightningCount), currentCount > 0 {
             // Lightning detected recently (within current reading period)
+            print("🔍 Current count > 0, returning recent detection")
             return LastLightningStats(
                 lastDetectionTime: Date(), // Very recent
                 isFromHistoricalData: false,
@@ -1106,6 +987,7 @@ class DailyTemperatureCalculator {
         guard let lightningData = historicalData?.lightning,
               let countData = lightningData.count else {
             // No historical data available at all
+            print("🔍 No historical lightning data available")
             return LastLightningStats(
                 lastDetectionTime: nil,
                 isFromHistoricalData: false,
@@ -1113,29 +995,83 @@ class DailyTemperatureCalculator {
             )
         }
         
+        print("🔍 Historical lightning count data found with \(countData.list.count) readings")
+        
         let calendar = Calendar.current
         let now = Date()
         let searchStartDate = calendar.date(byAdding: .day, value: -daysToSearch, to: now) ?? now
         
+        print("🔍 Search window: \(searchStartDate) to \(now)")
+        
         var mostRecentLightningTime: Date?
         var actualDaysSearched = daysToSearch  // Default to full search period
         
-        // Parse and sort lightning count readings by timestamp (OLDEST to NEWEST for proper increase detection)
+        // Parse and sort lightning count readings by timestamp (OLDEST to NEWEST for proper detection)
         let sortedReadings = countData.list.compactMap { (timestampString, countString) -> (Date, Int)? in
             guard let timestamp = Double(timestampString),
                   let count = Int(countString) else {
+                print("🔍 Failed to parse reading: timestamp=\(timestampString), count=\(countString)")
                 return nil
             }
             
+            // DEBUG: Show raw timestamp values and converted dates
             let readingDate = Date(timeIntervalSince1970: timestamp)
+            
+            let utcFormatter = DateFormatter()
+            utcFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+            utcFormatter.timeZone = TimeZone(identifier: "UTC")
+            
+            let localFormatter = DateFormatter()
+            localFormatter.dateFormat = "MM/dd/yy, h:mm:ss a"
+            localFormatter.timeZone = TimeZone.current
+            
+            print("🔍 Raw timestamp: \(timestampString) (\(timestamp))")
+            print("🔍   → UTC: \(utcFormatter.string(from: readingDate))")
+            print("🔍   → Local: \(localFormatter.string(from: readingDate))")
+            print("🔍   → This represents daily lightning count for: \(utcFormatter.string(from: readingDate).prefix(10))")
+            
+            // Check if timestamp is in the future
+            let now = Date()
+            if readingDate > now {
+                print("🔍 ⚠️  WARNING: Timestamp is in the future! \(readingDate) > \(now)")
+            }
             
             // Only consider readings within our search window
             guard readingDate >= searchStartDate && readingDate <= now else {
+                print("🔍 Reading outside search window: \(readingDate)")
                 return nil
             }
             
             return (readingDate, count)
-        }.sorted { $0.0 < $1.0 } // Sort by date, OLDEST first for proper increase detection
+        }.sorted { $0.0 < $1.0 } // Sort by date, OLDEST first
+        
+        print("🔍 Found \(sortedReadings.count) readings within search window")
+        
+        // Show ALL readings for debugging
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateStyle = .short
+        dateFormatter.timeStyle = .medium
+        
+        var dailySummary: [String: [(Date, Int)]] = [:]
+        
+        for (readingDate, count) in sortedReadings {
+            let dayKey = calendar.dateComponents([.year, .month, .day], from: readingDate)
+            let dayString = "\(dayKey.year!)-\(String(format: "%02d", dayKey.month!))-\(String(format: "%02d", dayKey.day!))"
+            
+            if dailySummary[dayString] == nil {
+                dailySummary[dayString] = []
+            }
+            dailySummary[dayString]!.append((readingDate, count))
+        }
+        
+        print("🔍 Lightning count data by day:")
+        for dayKey in dailySummary.keys.sorted() {
+            if let dayData = dailySummary[dayKey] {
+                let counts = dayData.map { "\($0.1)" }.joined(separator: ", ")
+                let timeRange = "\(dateFormatter.string(from: dayData.first!.0)) to \(dateFormatter.string(from: dayData.last!.0))"
+                print("🔍   \(dayKey): counts=[\(counts)] time=[\(timeRange)]")
+            }
+        }
         
         // Calculate actual days searched based on available data
         if !sortedReadings.isEmpty {
@@ -1144,28 +1080,205 @@ class DailyTemperatureCalculator {
             actualDaysSearched = min(daysToSearch, daysDifference + 1)
         }
         
-        // Look for lightning detection by analyzing count increases from oldest to newest
+        // IMPROVED ALGORITHM: Look for lightning detection with count reset handling
         var previousCount: Int?
+        var dailyCountTracker: [String: Int] = [:] // Track counts per day to detect resets
+        let dayFormatter = DateFormatter()
+        dayFormatter.dateFormat = "yyyy-MM-dd"
         
         for (readingDate, count) in sortedReadings {
+            let dayKey = dayFormatter.string(from: readingDate)
+            
+            print("🔍 Processing reading: \(dateFormatter.string(from: readingDate)) count=\(count) prevCount=\(previousCount ?? -1)")
+            
+            // Check for lightning detection in multiple ways:
+            
+            // Method 1: Simple count increase (existing logic)
             if let prevCount = previousCount {
-                // If current count is higher than previous count, lightning was detected
                 if count > prevCount {
                     mostRecentLightningTime = readingDate
+                    print("⚡ Lightning detected via count increase: \(prevCount) → \(count) at \(readingDate)")
                 }
-            } else if count > 0 {
-                // First reading and it has a non-zero count
-                mostRecentLightningTime = readingDate
             }
             
+            // Method 2: Count reset detection - if count goes from high to low then increases
+            if let dayCount = dailyCountTracker[dayKey] {
+                // We've seen this day before, check for patterns
+                print("🔍   Day \(dayKey) seen before with max count \(dayCount)")
+                if count > 0 && count < dayCount {
+                    // Possible reset occurred, but still has lightning activity
+                    mostRecentLightningTime = readingDate
+                    print("⚡ Lightning detected via count reset pattern: \(dayCount) → \(count) at \(readingDate)")
+                } else if count > dayCount {
+                    // Normal increase within the same day
+                    mostRecentLightningTime = readingDate
+                    print("⚡ Lightning detected via daily count increase: \(dayCount) → \(count) at \(readingDate)")
+                }
+            } else if count > 0 {
+                // First reading for this day and it's non-zero
+                mostRecentLightningTime = readingDate
+                print("⚡ Lightning detected via non-zero first reading: \(count) at \(readingDate)")
+            }
+            
+            // Update tracking
+            dailyCountTracker[dayKey] = max(dailyCountTracker[dayKey] ?? 0, count)
             previousCount = count
         }
+        
+        // DEBUG: Print final results
+        print("🔍 === FINAL RESULTS ===")
+        print("🔍 Total readings analyzed: \(sortedReadings.count)")
+        if !sortedReadings.isEmpty {
+            print("🔍 Date range: \(dateFormatter.string(from: sortedReadings.first!.0)) to \(dateFormatter.string(from: sortedReadings.last!.0))")
+            print("🔍 Count values: \(sortedReadings.map { $0.1 })")
+        }
+        if let lastDetection = mostRecentLightningTime {
+            print("🔍 Last lightning detection found: \(dateFormatter.string(from: lastDetection))")
+        } else {
+            print("🔍 No lightning detections found in historical data")
+        }
+        print("🔍 Actual days searched: \(actualDaysSearched)")
+        print("🔍 === LIGHTNING DETECTION DEBUG END ===")
         
         // Return the result
         return LastLightningStats(
             lastDetectionTime: mostRecentLightningTime,
             isFromHistoricalData: true,
             searchedDaysBack: actualDaysSearched
+        )
+    }
+
+    // MARK: - Humidity Calculations
+    
+    static func calculateDailyHumidityStats(from historicalData: HistoricalOutdoorData?, for date: Date = Date(), timeZone: TimeZone = .current) -> DailyHumidityStats? {
+        guard let humidityData = historicalData?.humidity else {
+            return nil
+        }
+        
+        let unit = humidityData.unit
+        var humidityReadings: [(humidity: Double, time: Date)] = []
+        
+        let calendar = Calendar.current
+        let targetDay = calendar.startOfDay(for: date)
+        let nextDay = calendar.date(byAdding: .day, value: 1, to: targetDay) ?? targetDay
+        
+        for (timestampString, valueString) in humidityData.list {
+            guard let timestamp = Double(timestampString),
+                  let humidity = Double(valueString) else {
+                continue
+            }
+            
+            let readingDate = Date(timeIntervalSince1970: timestamp)
+            
+            if readingDate >= targetDay && readingDate < nextDay {
+                humidityReadings.append((humidity: humidity, time: readingDate))
+            }
+        }
+        
+        guard !humidityReadings.isEmpty else {
+            return nil
+        }
+        
+        let sortedByHumidity = humidityReadings.sorted { $0.humidity < $1.humidity }
+        let lowestReading = sortedByHumidity.first!
+        let highestReading = sortedByHumidity.last!
+        
+        return DailyHumidityStats(
+            highHumidity: highestReading.humidity,
+            lowHumidity: lowestReading.humidity,
+            highHumidityTime: highestReading.time,
+            lowHumidityTime: lowestReading.time,
+            unit: unit,
+            dataPointCount: humidityReadings.count,
+            isFromHistoricalData: true
+        )
+    }
+    
+    static func calculateChannelDailyHumidityStats(from channelData: HistoricalTempHumidityData?, for date: Date = Date(), timeZone: TimeZone = .current) -> DailyHumidityStats? {
+        guard let humidityData = channelData?.humidity else {
+            return nil
+        }
+        
+        let unit = humidityData.unit
+        var humidityReadings: [(humidity: Double, time: Date)] = []
+        
+        let calendar = Calendar.current
+        let targetDay = calendar.startOfDay(for: date)
+        let nextDay = calendar.date(byAdding: .day, value: 1, to: targetDay) ?? targetDay
+        
+        for (timestampString, valueString) in humidityData.list {
+            guard let timestamp = Double(timestampString),
+                  let humidity = Double(valueString) else {
+                continue
+            }
+            
+            let readingDate = Date(timeIntervalSince1970: timestamp)
+            
+            if readingDate >= targetDay && readingDate < nextDay {
+                humidityReadings.append((humidity: humidity, time: readingDate))
+            }
+        }
+        
+        guard !humidityReadings.isEmpty else {
+            return nil
+        }
+        
+        let sortedByHumidity = humidityReadings.sorted { $0.humidity < $1.humidity }
+        let lowestReading = sortedByHumidity.first!
+        let highestReading = sortedByHumidity.last!
+        
+        return DailyHumidityStats(
+            highHumidity: highestReading.humidity,
+            lowHumidity: lowestReading.humidity,
+            highHumidityTime: highestReading.time,
+            lowHumidityTime: lowestReading.time,
+            unit: unit,
+            dataPointCount: humidityReadings.count,
+            isFromHistoricalData: true
+        )
+    }
+    
+    static func calculateIndoorDailyHumidityStats(from historicalData: HistoricalIndoorData?, for date: Date = Date(), timeZone: TimeZone = .current) -> DailyHumidityStats? {
+        guard let humidityData = historicalData?.humidity else {
+            return nil
+        }
+        
+        let unit = humidityData.unit
+        var humidityReadings: [(humidity: Double, time: Date)] = []
+        
+        let calendar = Calendar.current
+        let targetDay = calendar.startOfDay(for: date)
+        let nextDay = calendar.date(byAdding: .day, value: 1, to: targetDay) ?? targetDay
+        
+        for (timestampString, valueString) in humidityData.list {
+            guard let timestamp = Double(timestampString),
+                  let humidity = Double(valueString) else {
+                continue
+            }
+            
+            let readingDate = Date(timeIntervalSince1970: timestamp)
+            
+            if readingDate >= targetDay && readingDate < nextDay {
+                humidityReadings.append((humidity: humidity, time: readingDate))
+            }
+        }
+        
+        guard !humidityReadings.isEmpty else {
+            return nil
+        }
+        
+        let sortedByHumidity = humidityReadings.sorted { $0.humidity < $1.humidity }
+        let lowestReading = sortedByHumidity.first!
+        let highestReading = sortedByHumidity.last!
+        
+        return DailyHumidityStats(
+            highHumidity: highestReading.humidity,
+            lowHumidity: lowestReading.humidity,
+            highHumidityTime: highestReading.time,
+            lowHumidityTime: lowestReading.time,
+            unit: unit,
+            dataPointCount: humidityReadings.count,
+            isFromHistoricalData: true
         )
     }
     
@@ -1352,153 +1465,5 @@ class DailyTemperatureCalculator {
         
         // Only use daily stats from 00:00 to 23:59:59 of the target day
         return calculateChannelDailyHumidityStats(from: historical.tempAndHumidityCh3, for: date, timeZone: station.timeZone)
-    }
-
-    /// Get humidity stats from 00:00 to 23:59:59 of the target day
-    static func getFlexibleDailyHumidityStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyHumidityStats? {
-        guard let historical = historicalData else { return nil }
-        
-        // Only use daily stats from 00:00 to 23:59:59 of the target day
-        return calculateDailyHumidityStats(from: historical.outdoor, for: date, timeZone: station.timeZone)
-    }
-    
-    /// Get indoor humidity stats from 00:00 to 23:59:59 of the target day
-    static func getFlexibleIndoorDailyHumidityStats(weatherData: WeatherStationData, historicalData: HistoricalWeatherData?, station: WeatherStation, for date: Date = Date()) -> DailyHumidityStats? {
-        guard let historical = historicalData else { return nil }
-        
-        // Only use daily stats from 00:00 to 23:59:59 of the target day
-        return calculateIndoorDailyHumidityStats(from: historical.indoor, for: date, timeZone: station.timeZone)
-    }
-    
-    static func calculateDailyHumidityStats(from historicalData: HistoricalOutdoorData?, for date: Date = Date(), timeZone: TimeZone = .current) -> DailyHumidityStats? {
-        guard let humidityData = historicalData?.humidity else {
-            return nil
-        }
-        
-        let unit = humidityData.unit
-        var humidityReadings: [(humidity: Double, time: Date)] = []
-        
-        let calendar = Calendar.current
-        let targetDay = calendar.startOfDay(for: date)
-        let nextDay = calendar.date(byAdding: .day, value: 1, to: targetDay) ?? targetDay
-        
-        for (timestampString, valueString) in humidityData.list {
-            guard let timestamp = Double(timestampString),
-                  let humidity = Double(valueString) else {
-                continue
-            }
-            
-            let readingDate = Date(timeIntervalSince1970: timestamp)
-            
-            if readingDate >= targetDay && readingDate < nextDay {
-                humidityReadings.append((humidity: humidity, time: readingDate))
-            }
-        }
-        
-        guard !humidityReadings.isEmpty else {
-            return nil
-        }
-        
-        let sortedByHumidity = humidityReadings.sorted { $0.humidity < $1.humidity }
-        let lowestReading = sortedByHumidity.first!
-        let highestReading = sortedByHumidity.last!
-        
-        return DailyHumidityStats(
-            highHumidity: highestReading.humidity,
-            lowHumidity: lowestReading.humidity,
-            highHumidityTime: highestReading.time,
-            lowHumidityTime: lowestReading.time,
-            unit: unit,
-            dataPointCount: humidityReadings.count,
-            isFromHistoricalData: true
-        )
-    }
-    
-    static func calculateChannelDailyHumidityStats(from channelData: HistoricalTempHumidityData?, for date: Date = Date(), timeZone: TimeZone = .current) -> DailyHumidityStats? {
-        guard let humidityData = channelData?.humidity else {
-            return nil
-        }
-        
-        let unit = humidityData.unit
-        var humidityReadings: [(humidity: Double, time: Date)] = []
-        
-        let calendar = Calendar.current
-        let targetDay = calendar.startOfDay(for: date)
-        let nextDay = calendar.date(byAdding: .day, value: 1, to: targetDay) ?? targetDay
-        
-        for (timestampString, valueString) in humidityData.list {
-            guard let timestamp = Double(timestampString),
-                  let humidity = Double(valueString) else {
-                continue
-            }
-            
-            let readingDate = Date(timeIntervalSince1970: timestamp)
-            
-            if readingDate >= targetDay && readingDate < nextDay {
-                humidityReadings.append((humidity: humidity, time: readingDate))
-            }
-        }
-        
-        guard !humidityReadings.isEmpty else {
-            return nil
-        }
-        
-        let sortedByHumidity = humidityReadings.sorted { $0.humidity < $1.humidity }
-        let lowestReading = sortedByHumidity.first!
-        let highestReading = sortedByHumidity.last!
-        
-        return DailyHumidityStats(
-            highHumidity: highestReading.humidity,
-            lowHumidity: lowestReading.humidity,
-            highHumidityTime: highestReading.time,
-            lowHumidityTime: lowestReading.time,
-            unit: unit,
-            dataPointCount: humidityReadings.count,
-            isFromHistoricalData: true
-        )
-    }
-    
-    static func calculateIndoorDailyHumidityStats(from historicalData: HistoricalIndoorData?, for date: Date = Date(), timeZone: TimeZone = .current) -> DailyHumidityStats? {
-        guard let humidityData = historicalData?.humidity else {
-            return nil
-        }
-        
-        let unit = humidityData.unit
-        var humidityReadings: [(humidity: Double, time: Date)] = []
-        
-        let calendar = Calendar.current
-        let targetDay = calendar.startOfDay(for: date)
-        let nextDay = calendar.date(byAdding: .day, value: 1, to: targetDay) ?? targetDay
-        
-        for (timestampString, valueString) in humidityData.list {
-            guard let timestamp = Double(timestampString),
-                  let humidity = Double(valueString) else {
-                continue
-            }
-            
-            let readingDate = Date(timeIntervalSince1970: timestamp)
-            
-            if readingDate >= targetDay && readingDate < nextDay {
-                humidityReadings.append((humidity: humidity, time: readingDate))
-            }
-        }
-        
-        guard !humidityReadings.isEmpty else {
-            return nil
-        }
-        
-        let sortedByHumidity = humidityReadings.sorted { $0.humidity < $1.humidity }
-        let lowestReading = sortedByHumidity.first!
-        let highestReading = sortedByHumidity.last!
-        
-        return DailyHumidityStats(
-            highHumidity: highestReading.humidity,
-            lowHumidity: lowestReading.humidity,
-            highHumidityTime: highestReading.time,
-            lowHumidityTime: lowestReading.time,
-            unit: unit,
-            dataPointCount: humidityReadings.count,
-            isFromHistoricalData: true
-        )
     }
 }

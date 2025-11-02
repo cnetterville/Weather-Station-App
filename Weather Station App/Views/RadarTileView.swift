@@ -265,7 +265,6 @@ struct RadarTileView: View {
         isLoading = true
         hasError = false
         lastRefreshTime = Date()
-        nextRefreshTime = Date().addingTimeInterval(radarRefreshInterval)
         loadAttempts = 0
         
         startLoadingTimeout()
@@ -281,11 +280,12 @@ struct RadarTileView: View {
     private func startLoadingTimeout() {
         stopLoadingTimeout()
         
-        loadingTimeoutTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: false) { _ in
+        loadingTimeoutTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: false) { _ in
             DispatchQueue.main.async {
                 if isLoading {
-                    print("Radar loading timeout - clearing loading state")
+                    print("Radar loading timeout - clearing loading state and resetting countdown")
                     isLoading = false
+                    nextRefreshTime = Date().addingTimeInterval(radarRefreshInterval)
                 }
             }
         }
@@ -302,6 +302,8 @@ struct RadarTileView: View {
         autoRefreshTimer = Timer.scheduledTimer(withTimeInterval: radarRefreshInterval, repeats: true) { _ in
             DispatchQueue.main.async {
                 if !hasError {
+                    // FIXED: Update next refresh time BEFORE calling refresh to avoid UI stuck state
+                    nextRefreshTime = Date().addingTimeInterval(radarRefreshInterval)
                     refreshRadar()
                 }
             }
@@ -333,8 +335,16 @@ struct RadarTileView: View {
         let _ = countdownTrigger // Reference the trigger to force UI updates
         let timeRemaining = nextRefreshTime.timeIntervalSince(Date())
         
+        // FIXED: Improved logic to prevent getting stuck on "refreshing..."
         if timeRemaining <= 0 {
-            return "refreshing..."
+            // Only show "refreshing..." if we're actually loading
+            if isLoading {
+                return "refreshing..."
+            } else {
+                // Reset to next refresh cycle if we're not loading
+                nextRefreshTime = Date().addingTimeInterval(radarRefreshInterval)
+                return "\(Int(radarRefreshInterval))s"
+            }
         }
         
         let minutes = Int(timeRemaining) / 60
