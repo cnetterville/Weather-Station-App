@@ -21,6 +21,8 @@ struct RadarTileView: View {
     @State private var hasInitiallyLoaded = false
     @State private var loadAttempts = 0
     @State private var currentStationId: String = ""
+    @State private var isRefreshing = false // Prevent overlapping refreshes
+    @State private var notificationObserver: NSObjectProtocol? // Track observer properly
     
     // Use the persistent radar refresh manager
     @StateObject private var radarRefreshManager = RadarRefreshManager.shared
@@ -85,6 +87,18 @@ struct RadarTileView: View {
                         window.webkit.messageHandlers.radarLoaded.postMessage('loaded');
                     }
                     console.log('Radar iframe loaded');
+                }
+                
+                // Function to refresh just the iframe without reloading the entire page
+                function refreshRadarIframe() {
+                    const iframe = document.querySelector('iframe');
+                    if (iframe) {
+                        const currentSrc = iframe.src;
+                        const newTimestamp = Math.floor(Date.now() / 1000);
+                        const newSrc = currentSrc.replace(/timestamp=\\d+/, 'timestamp=' + newTimestamp);
+                        console.log('Refreshing iframe with new timestamp:', newTimestamp);
+                        iframe.src = newSrc;
+                    }
                 }
                 
                 // Set a timeout to clear loading state even if iframe doesn't signal
@@ -247,15 +261,22 @@ struct RadarTileView: View {
                 radarRefreshManager.startTracking(stationId: station.macAddress)
             }
             
+            // Clean up any existing observer first
+            if let observer = notificationObserver {
+                NotificationCenter.default.removeObserver(observer)
+                notificationObserver = nil
+            }
+            
             // Listen for refresh triggers from the persistent manager
-            NotificationCenter.default.addObserver(
+            notificationObserver = NotificationCenter.default.addObserver(
                 forName: .radarRefreshTriggered,
                 object: nil,
                 queue: .main
             ) { notification in
                 if let triggeredStationId = notification.object as? String,
                    triggeredStationId == station.macAddress {
-                    refreshRadar()
+                    // Use lightweight auto-refresh instead of full reload
+                    autoRefreshRadar()
                 }
             }
         }
@@ -268,7 +289,11 @@ struct RadarTileView: View {
             // Stop radar tracking when view disappears
             radarRefreshManager.stopTracking(stationId: station.macAddress)
             
-            NotificationCenter.default.removeObserver(self, name: .radarRefreshTriggered, object: nil)
+            // Clean up notification observer properly
+            if let observer = notificationObserver {
+                NotificationCenter.default.removeObserver(observer)
+                notificationObserver = nil
+            }
         }
         // Force UI updates when refresh state changes
         .onChange(of: radarRefreshManager.getRefreshState(for: station.macAddress)?.timeRemaining) { _ in
@@ -296,6 +321,10 @@ struct RadarTileView: View {
     }
     
     private func refreshRadar() {
+        // Prevent overlapping refreshes
+        guard !isRefreshing else { return }
+        isRefreshing = true
+        
         print("🔄 Manual radar refresh for \(station.name)")
         isLoading = true
         hasError = false
@@ -304,13 +333,39 @@ struct RadarTileView: View {
         
         startLoadingTimeout()
         
-        // Force reload by recreating the WebView
+        // For manual refresh, do a full reload by recreating the WebView
         let newHTML = radarHTML
         webView?.loadHTMLString(newHTML, baseURL: URL(string: "https://embed.windy.com"))
         
         // Don't restart timers - the persistent manager handles that
         // Just trigger the manager to reset its timer
         radarRefreshManager.triggerRefresh(for: station.macAddress)
+        
+        // Clear refreshing flag after a delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            isRefreshing = false
+        }
+    }
+    
+    private func autoRefreshRadar() {
+        // Prevent overlapping refreshes
+        guard !isRefreshing && !isLoading else { 
+            print("🔄 Skipping auto-refresh - already refreshing or loading")
+            return 
+        }
+        
+        print("🔄 Auto radar refresh for \(station.name) - lightweight iframe refresh")
+        
+        // For auto-refresh, just update the iframe timestamp without reloading HTML
+        webView?.evaluateJavaScript("refreshRadarIframe()") { result, error in
+            if let error = error {
+                print("⚠️ Auto-refresh JavaScript error: \(error.localizedDescription)")
+            } else {
+                print("✅ Auto-refresh iframe updated successfully")
+            }
+        }
+        
+        lastRefreshTime = Date()
     }
     
     private func startLoadingTimeout() {
