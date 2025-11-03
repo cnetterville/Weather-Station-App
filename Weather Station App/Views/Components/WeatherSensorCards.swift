@@ -551,7 +551,7 @@ struct DailyHighLowView: View {
                         .foregroundColor(.orange)
                     
                     // Show timestamp if available, regardless of reliability status
-                    if let highTime = tempStats.highTempTime {
+                    if tempStats.highTempTime != nil {
                         Text("at \(tempStats.formattedHighTime)")
                             .font(.caption2)
                             .foregroundColor(.secondary)
@@ -579,7 +579,7 @@ struct DailyHighLowView: View {
                         .foregroundColor(.blue)
                     
                     // Show timestamp if available, regardless of reliability status
-                    if let lowTime = tempStats.lowTempTime {
+                    if tempStats.lowTempTime != nil {
                         Text("at \(tempStats.formattedLowTime)")
                             .font(.caption2)
                             .foregroundColor(.secondary)
@@ -629,7 +629,7 @@ struct DailyHighLowView: View {
                             .foregroundColor(.teal)
                         
                         // Show timestamp if available
-                        if let highTime = humidityStats.highHumidityTime {
+                        if humidityStats.highHumidityTime != nil {
                             Text("at \(humidityStats.formattedHighTime)")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
@@ -657,7 +657,7 @@ struct DailyHighLowView: View {
                             .foregroundColor(.brown)
                         
                         // Show timestamp if available
-                        if let lowTime = humidityStats.lowHumidityTime {
+                        if humidityStats.lowHumidityTime != nil {
                             Text("at \(humidityStats.formattedLowTime)")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
