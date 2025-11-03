@@ -21,12 +21,14 @@ struct RadarTileView: View {
     @State private var hasInitiallyLoaded = false
     @State private var loadAttempts = 0
     @State private var currentStationId: String = ""
-    @State private var isRefreshing = false // Prevent overlapping refreshes
-    @State private var notificationObserver: NSObjectProtocol? // Track observer properly
+    @State private var isRefreshing = false
+    @State private var notificationObserver: NSObjectProtocol?
     
-    // Use the persistent radar refresh manager
     @StateObject private var radarRefreshManager = RadarRefreshManager.shared
-    @State private var refreshTrigger = 0 // For forcing UI updates
+    @State private var refreshTrigger = 0
+    
+    // Access to all stations for marking on map
+    @ObservedObject private var weatherService = WeatherStationService.shared
     
     // Calculate a unique delay for this station's radar based on MAC address
     private var initialLoadDelay: TimeInterval {
@@ -47,6 +49,42 @@ struct RadarTileView: View {
         let zoom = 9
         let timestamp = Int(Date().timeIntervalSince1970)
         
+        // Collect all stations with coordinates for creating markers
+        let stationsWithCoords = weatherService.weatherStations.compactMap { station -> (name: String, lat: Double, lon: Double, isCurrent: Bool)? in
+            guard let stationLat = station.latitude,
+                  let stationLon = station.longitude else {
+                return nil
+            }
+            return (
+                name: station.name,
+                lat: stationLat,
+                lon: stationLon,
+                isCurrent: station.macAddress == self.station.macAddress
+            )
+        }
+        
+        // Create marker overlay HTML
+        let markersHTML = stationsWithCoords.enumerated().map { index, station in
+            let color = station.isCurrent ? "#3b82f6" : "#10b981" // Blue for current, green for others
+            let size = station.isCurrent ? "10" : "7"
+            let zIndex = station.isCurrent ? "10002" : "10001"
+            
+            return """
+                <div class="station-marker" 
+                     id="marker-\(index)"
+                     data-lat="\(station.lat)" 
+                     data-lon="\(station.lon)"
+                     data-name="\(station.name)"
+                     style="
+                         width: \(size)px; 
+                         height: \(size)px; 
+                         background: \(color);
+                         z-index: \(zIndex);
+                     ">
+                </div>
+            """
+        }.joined(separator: "\n            ")
+        
         return """
         <!DOCTYPE html>
         <html>
@@ -54,6 +92,12 @@ struct RadarTileView: View {
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
+                * {
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                }
+                
                 body { 
                     margin: 0; 
                     padding: 0; 
@@ -61,35 +105,170 @@ struct RadarTileView: View {
                     font-family: -apple-system, BlinkMacSystemFont, 'Segui UI', sans-serif;
                     height: 100vh;
                     overflow: hidden;
+                    position: relative;
                 }
+                
+                #iframe-container {
+                    position: relative;
+                    width: 100%;
+                    height: 100%;
+                }
+                
                 iframe {
+                    position: absolute;
+                    top: 0;
+                    left: 0;
                     width: 100%;
                     height: 100%;
                     border: none;
                     border-radius: 12px;
                 }
-                .loading-indicator {
+                
+                #marker-overlay {
                     position: absolute;
-                    top: 50%;
-                    left: 50%;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    pointer-events: none;
+                    z-index: 10000;
+                }
+                
+                .station-marker {
+                    position: absolute;
+                    border-radius: 50%;
+                    border: 2px solid white;
+                    box-shadow: 0 2px 6px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,0,0,0.2);
+                    pointer-events: none;
                     transform: translate(-50%, -50%);
-                    color: #888;
-                    font-size: 14px;
+                    transition: none;
                 }
             </style>
             <script>
                 let loadingComplete = false;
+                let mapCenter = { lat: \(lat), lon: \(lon) };
+                let mapZoom = \(zoom);
+                let containerWidth = 0;
+                let containerHeight = 0;
+                let markersVisible = true;
+                
+                // Mercator projection helpers
+                function latToY(lat) {
+                    const latRad = lat * Math.PI / 180;
+                    return Math.log(Math.tan(Math.PI / 4 + latRad / 2));
+                }
+                
+                function lonToX(lon) {
+                    return lon * Math.PI / 180;
+                }
+                
+                function latLonToPixel(lat, lon) {
+                    const scale = 256 * Math.pow(2, mapZoom) / (2 * Math.PI);
+                    
+                    const centerX = lonToX(mapCenter.lon) * scale;
+                    const centerY = latToY(mapCenter.lat) * scale;
+                    
+                    const pointX = lonToX(lon) * scale;
+                    const pointY = latToY(lat) * scale;
+                    
+                    return {
+                        x: containerWidth / 2 + (pointX - centerX),
+                        y: containerHeight / 2 + (centerY - pointY)
+                    };
+                }
+                
+                function hideMarkers() {
+                    if (markersVisible) {
+                        const overlay = document.getElementById('marker-overlay');
+                        if (overlay) {
+                            overlay.style.opacity = '0';
+                            overlay.style.transition = 'opacity 0.3s ease-out';
+                            markersVisible = false;
+                            console.log('Markers hidden due to map interaction');
+                        }
+                    }
+                }
+                
+                function showMarkers() {
+                    if (!markersVisible) {
+                        const overlay = document.getElementById('marker-overlay');
+                        if (overlay) {
+                            overlay.style.opacity = '1';
+                            overlay.style.transition = 'opacity 0.3s ease-in';
+                            markersVisible = true;
+                            console.log('Markers shown');
+                        }
+                    }
+                }
+                
+                function updateMarkerPositions() {
+                    const markers = document.querySelectorAll('.station-marker');
+                    markers.forEach(marker => {
+                        const lat = parseFloat(marker.getAttribute('data-lat'));
+                        const lon = parseFloat(marker.getAttribute('data-lon'));
+                        
+                        const pos = latLonToPixel(lat, lon);
+                        marker.style.left = pos.x + 'px';
+                        marker.style.top = pos.y + 'px';
+                    });
+                }
+                
+                function updateContainerSize() {
+                    const container = document.getElementById('iframe-container');
+                    if (container) {
+                        containerWidth = container.offsetWidth;
+                        containerHeight = container.offsetHeight;
+                        updateMarkerPositions();
+                    }
+                }
+                
+                function setupMapInteractionDetection() {
+                    const iframe = document.querySelector('iframe');
+                    if (!iframe) return;
+                    
+                    let interactionTimeout;
+                    
+                    // Detect when mouse enters iframe (potential interaction)
+                    iframe.addEventListener('mouseenter', function() {
+                        // Give a small delay before hiding in case it's just passing through
+                        interactionTimeout = setTimeout(hideMarkers, 500);
+                    });
+                    
+                    // Detect when mouse leaves iframe
+                    iframe.addEventListener('mouseleave', function() {
+                        clearTimeout(interactionTimeout);
+                        // Don't show markers again automatically
+                        // They'll only show on refresh
+                    });
+                    
+                    // Detect mouse wheel (zoom) over iframe
+                    iframe.addEventListener('wheel', function() {
+                        hideMarkers();
+                    }, { passive: true });
+                }
                 
                 function onIframeLoad() {
                     loadingComplete = true;
-                    // Signal to WebView that iframe has loaded
+                    
                     if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.radarLoaded) {
                         window.webkit.messageHandlers.radarLoaded.postMessage('loaded');
                     }
                     console.log('Radar iframe loaded');
+                    
+                    updateContainerSize();
+                    showMarkers();
+                    
+                    // Setup interaction detection
+                    setupMapInteractionDetection();
+                    
+                    // Listen for messages from Windy iframe about map movements (if available)
+                    window.addEventListener('message', function(event) {
+                        if (event.data && event.data.type === 'mapMove') {
+                            hideMarkers();
+                        }
+                    });
                 }
                 
-                // Function to refresh just the iframe without reloading the entire page
                 function refreshRadarIframe() {
                     const iframe = document.querySelector('iframe');
                     if (iframe) {
@@ -98,10 +277,20 @@ struct RadarTileView: View {
                         const newSrc = currentSrc.replace(/timestamp=\\d+/, 'timestamp=' + newTimestamp);
                         console.log('Refreshing iframe with new timestamp:', newTimestamp);
                         iframe.src = newSrc;
+                        
+                        setTimeout(function() {
+                            updateContainerSize();
+                            showMarkers();
+                        }, 1000);
                     }
                 }
                 
-                // Set a timeout to clear loading state even if iframe doesn't signal
+                // Update on window resize
+                window.addEventListener('resize', updateContainerSize);
+                
+                // Initial positioning after short delay
+                setTimeout(updateContainerSize, 500);
+                
                 setTimeout(function() {
                     if (!loadingComplete) {
                         console.log('Radar loading timeout - forcing completion');
@@ -109,15 +298,20 @@ struct RadarTileView: View {
                             window.webkit.messageHandlers.radarLoaded.postMessage('timeout');
                         }
                     }
-                }, 8000); // 8 second timeout
+                }, 8000);
             </script>
         </head>
         <body>
-            <iframe 
-                src="https://embed.windy.com/embed2.html?lat=\(lat)&lon=\(lon)&detailLat=\(lat)&detailLon=\(lon)&width=100%&height=100%&zoom=\(zoom)&level=surface&overlay=rain&product=ecmwf&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=mph&metricTemp=°F&radarRange=-1&timestamp=\(timestamp)"
-                frameborder="0"
-                onload="onIframeLoad()">
-            </iframe>
+            <div id="iframe-container">
+                <iframe 
+                    src="https://embed.windy.com/embed2.html?lat=\(lat)&lon=\(lon)&detailLat=\(lat)&detailLon=\(lon)&width=100%&height=100%&zoom=\(zoom)&level=surface&overlay=rain&product=ecmwf&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=mph&metricTemp=°F&radarRange=-1&timestamp=\(timestamp)"
+                    frameborder="0"
+                    onload="onIframeLoad()">
+                </iframe>
+                <div id="marker-overlay">
+                    \(markersHTML)
+                </div>
+            </div>
         </body>
         </html>
         """
@@ -131,7 +325,6 @@ struct RadarTileView: View {
         ) {
             VStack(spacing: 8) {
                 if hasError {
-                    // Error state
                     VStack(spacing: 12) {
                         Image(systemName: "wifi.exclamationmark")
                             .font(.system(size: 32))
@@ -164,9 +357,7 @@ struct RadarTileView: View {
                     .frame(maxWidth: .infinity)
                     .frame(height: 280)
                 } else {
-                    // Radar content
                     ZStack {
-                        // WebKit view for radar
                         RadarWebView(
                             htmlContent: radarHTML,
                             webView: $webView,
@@ -177,7 +368,6 @@ struct RadarTileView: View {
                         .cornerRadius(12)
                         .id("radar-\(station.macAddress)")
                         
-                        // Loading overlay
                         if isLoading {
                             Rectangle()
                                 .fill(Color(NSColor.controlBackgroundColor))
@@ -195,9 +385,7 @@ struct RadarTileView: View {
                         }
                     }
                     
-                    // Clean control bar - just status and action buttons
                     HStack {
-                        // Auto-refresh status from persistent manager
                         if !hasError && !isLoading {
                             HStack(spacing: 4) {
                                 Circle()
@@ -229,7 +417,6 @@ struct RadarTileView: View {
             }
         }
         .onAppear {
-            // Check if station has changed
             let stationChanged = currentStationId != station.macAddress
             if stationChanged {
                 currentStationId = station.macAddress
@@ -238,7 +425,6 @@ struct RadarTileView: View {
                 print("Station changed to: \(station.name)")
             }
             
-            // Only start initial load if not already loaded for this station
             if !hasInitiallyLoaded {
                 initialLoadDelayTask = Task {
                     do {
@@ -248,8 +434,6 @@ struct RadarTileView: View {
                         await MainActor.run {
                             loadRadar()
                             hasInitiallyLoaded = true
-                            
-                            // Start persistent radar refresh tracking
                             radarRefreshManager.startTracking(stationId: station.macAddress)
                         }
                     } catch {
@@ -257,17 +441,14 @@ struct RadarTileView: View {
                     }
                 }
             } else {
-                // If already loaded, ensure tracking is started
                 radarRefreshManager.startTracking(stationId: station.macAddress)
             }
             
-            // Clean up any existing observer first
             if let observer = notificationObserver {
                 NotificationCenter.default.removeObserver(observer)
                 notificationObserver = nil
             }
             
-            // Listen for refresh triggers from the persistent manager
             notificationObserver = NotificationCenter.default.addObserver(
                 forName: .radarRefreshTriggered,
                 object: nil,
@@ -275,7 +456,6 @@ struct RadarTileView: View {
             ) { notification in
                 if let triggeredStationId = notification.object as? String,
                    triggeredStationId == station.macAddress {
-                    // Use lightweight auto-refresh instead of full reload
                     autoRefreshRadar()
                 }
             }
@@ -285,17 +465,13 @@ struct RadarTileView: View {
             initialLoadDelayTask = nil
             
             stopLoadingTimeout()
-            
-            // Stop radar tracking when view disappears
             radarRefreshManager.stopTracking(stationId: station.macAddress)
             
-            // Clean up notification observer properly
             if let observer = notificationObserver {
                 NotificationCenter.default.removeObserver(observer)
                 notificationObserver = nil
             }
         }
-        // Force UI updates when refresh state changes
         .onChange(of: radarRefreshManager.getRefreshState(for: station.macAddress)?.timeRemaining) { 
             refreshTrigger += 1
         }
@@ -316,12 +492,10 @@ struct RadarTileView: View {
         lastRefreshTime = Date()
         loadAttempts += 1
         
-        // Start a simple timeout
         startLoadingTimeout()
     }
     
     private func refreshRadar() {
-        // Prevent overlapping refreshes
         guard !isRefreshing else { return }
         isRefreshing = true
         
@@ -333,22 +507,17 @@ struct RadarTileView: View {
         
         startLoadingTimeout()
         
-        // For manual refresh, do a full reload by recreating the WebView
         let newHTML = radarHTML
         webView?.loadHTMLString(newHTML, baseURL: URL(string: "https://embed.windy.com"))
         
-        // Don't restart timers - the persistent manager handles that
-        // Just trigger the manager to reset its timer
         radarRefreshManager.triggerRefresh(for: station.macAddress)
         
-        // Clear refreshing flag after a delay
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
             isRefreshing = false
         }
     }
     
     private func autoRefreshRadar() {
-        // Prevent overlapping refreshes
         guard !isRefreshing && !isLoading else { 
             print("🔄 Skipping auto-refresh - already refreshing or loading")
             return 
@@ -356,7 +525,6 @@ struct RadarTileView: View {
         
         print("🔄 Auto radar refresh for \(station.name) - lightweight iframe refresh")
         
-        // For auto-refresh, just update the iframe timestamp without reloading HTML
         webView?.evaluateJavaScript("refreshRadarIframe()") { result, error in
             if let error = error {
                 print("⚠️ Auto-refresh JavaScript error: \(error.localizedDescription)")
@@ -371,13 +539,11 @@ struct RadarTileView: View {
     private func startLoadingTimeout() {
         stopLoadingTimeout()
         
-        // Reduce timeout to 8 seconds to match the JavaScript timeout
         loadingTimeoutTimer = Timer.scheduledTimer(withTimeInterval: 8.0, repeats: false) { _ in
             DispatchQueue.main.async {
                 if self.isLoading {
                     print("⚠️ Radar loading timeout after 8s - forcing clear")
                     self.isLoading = false
-                    // Don't set error state on timeout - just clear loading
                 }
             }
         }
@@ -389,10 +555,7 @@ struct RadarTileView: View {
     }
     
     private func timeUntilNextRefresh() -> String {
-        // Force UI update trigger
         let _ = refreshTrigger
-        
-        // Get time remaining from persistent manager
         return radarRefreshManager.getTimeRemainingString(for: station.macAddress)
     }
     
@@ -404,7 +567,6 @@ struct RadarTileView: View {
     
     private func openFullRadar() {
         guard let latitude = station.latitude, let longitude = station.longitude else {
-            // Open default location if no coordinates
             let defaultURL = "https://www.windy.com/?radar,39.83,-98.58,6"
             
             if let url = URL(string: defaultURL) {
@@ -431,7 +593,6 @@ struct RadarWebView: NSViewRepresentable {
         let configuration = WKWebViewConfiguration()
         configuration.mediaTypesRequiringUserActionForPlayback = []
         
-        // Add message handler for radar loaded notification
         configuration.userContentController.add(context.coordinator, name: "radarLoaded")
         
         let webView = WKWebView(frame: .zero, configuration: configuration)
@@ -448,7 +609,6 @@ struct RadarWebView: NSViewRepresentable {
     }
     
     func updateNSView(_ nsView: WKWebView, context: Context) {
-        // Don't reload constantly - let the .id() modifier handle station changes
     }
     
     func makeCoordinator() -> Coordinator {
@@ -471,7 +631,6 @@ struct RadarWebView: NSViewRepresentable {
         
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             print("Radar WebView didFinish navigation - waiting for iframe load signal...")
-            // Don't clear loading state here - wait for iframe load message or timeout
         }
         
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
@@ -490,7 +649,6 @@ struct RadarWebView: NSViewRepresentable {
             print("Radar WebView failed provisional navigation: \(error.localizedDescription)")
         }
         
-        // Handle messages from JavaScript
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             if message.name == "radarLoaded" {
                 DispatchQueue.main.async {
