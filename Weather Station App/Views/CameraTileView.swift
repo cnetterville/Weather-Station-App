@@ -7,6 +7,7 @@
 
 import SwiftUI
 import UniformTypeIdentifiers
+import AppKit
 
 struct CameraTileView: View {
     let station: WeatherStation
@@ -17,7 +18,6 @@ struct CameraTileView: View {
     @State private var isLoadingImage = false
     @State private var lastUpdated: Date?
     @State private var imageTimestamp: String?
-    @State private var showingFullScreen = false
     @State private var refreshTimer: Timer?
     
     var body: some View {
@@ -46,7 +46,7 @@ struct CameraTileView: View {
                             .clipped()
                             .cornerRadius(8)
                             .onTapGesture {
-                                showingFullScreen = true
+                                openFullScreenWindow(imageURL: imageURL)
                             }
                     } placeholder: {
                         Rectangle()
@@ -89,7 +89,7 @@ struct CameraTileView: View {
                         .disabled(isLoadingImage)
                         
                         Button("View Full") {
-                            showingFullScreen = true
+                            openFullScreenWindow(imageURL: imageURL)
                         }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.mini)
@@ -120,14 +120,6 @@ struct CameraTileView: View {
                 }
             }
         }
-        .sheet(isPresented: $showingFullScreen) {
-            if let imageURL = cameraImageURL {
-                FullScreenCameraView(
-                    imageURL: imageURL, 
-                    stationName: station.name
-                )
-            }
-        }
         .onAppear {
             refreshCameraImage()
             startRefreshTimer()
@@ -135,6 +127,29 @@ struct CameraTileView: View {
         .onDisappear {
             stopRefreshTimer()
         }
+    }
+    
+    private func openFullScreenWindow(imageURL: String) {
+        let hostingController = NSHostingController(rootView: FullScreenCameraView(
+            imageURL: imageURL,
+            stationName: station.name
+        ))
+        
+        let window = NSWindow(contentViewController: hostingController)
+        window.title = "Camera - \(station.name)"
+        window.styleMask = [.titled, .closable, .resizable, .fullSizeContentView]
+        window.backgroundColor = .black
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        
+        // Make it large and centered
+        if let screen = NSScreen.main {
+            let size = NSSize(width: screen.frame.width * 0.6, height: screen.frame.height * 0.6)
+            window.setContentSize(size)
+            window.center()
+        }
+        
+        window.makeKeyAndOrderFront(nil)
     }
     
     private func refreshCameraImage() {
@@ -230,7 +245,7 @@ struct FullScreenCameraView: View {
             VStack {
                 HStack {
                     Button("Done") {
-                        dismiss()
+                        NSApplication.shared.keyWindow?.close()
                     }
                     .foregroundColor(.white)
                     .font(.system(size: 17, weight: .medium))
