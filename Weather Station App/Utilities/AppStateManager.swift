@@ -156,10 +156,14 @@ class AppStateManager: ObservableObject {
         }
         
         let wasVisible = isMainAppVisible
-        isMainAppVisible = hasVisibleMainWindow
         
-        if wasVisible != isMainAppVisible {
-            print("📱 Main app visibility changed: \(wasVisible) → \(isMainAppVisible)")
+        // Defer the @Published property update to avoid "Publishing changes from within view updates" warning
+        Task { @MainActor in
+            self.isMainAppVisible = hasVisibleMainWindow
+            
+            if wasVisible != self.isMainAppVisible {
+                print("📱 Main app visibility changed: \(wasVisible) → \(self.isMainAppVisible)")
+            }
         }
     }
     
