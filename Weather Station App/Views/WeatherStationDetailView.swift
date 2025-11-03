@@ -13,6 +13,7 @@ struct WeatherStationDetailView: View {
     @StateObject private var weatherService = WeatherStationService.shared
     
     @State private var showingHistory = false
+    @State private var scrollViewID = UUID()
     
     var body: some View {
         GeometryReader { geometry in
@@ -38,7 +39,13 @@ struct WeatherStationDetailView: View {
                 }
                 .padding()
             }
-            .clipped() // Prevent content from overflowing during layout changes
+            .id(scrollViewID)
+            .focusable()
+            .onAppear {
+                // Refresh scroll view to ensure it's focusable
+                scrollViewID = UUID()
+            }
+            .clipped()
         }
         .navigationTitle(station.name)
         .toolbar {
@@ -74,8 +81,14 @@ struct WeatherStationDetailView: View {
             }
             .frame(minWidth: 800, minHeight: 600)
         }
-        .id(station.id) // Ensure view is recreated when station changes to prevent state conflicts
-        .animation(.none, value: station.id) // Disable animations for station changes
+        .id(station.id)
+        .animation(.none, value: station.id)
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
+            // Reset scroll view when window becomes key to restore scroll functionality
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                scrollViewID = UUID()
+            }
+        }
     }
 }
 
