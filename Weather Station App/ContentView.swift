@@ -72,6 +72,7 @@ struct ContentView: View {
                     .menuStyle(.borderlessButton)
                 }
                 
+                // Other stations preview
                 if weatherService.weatherStations.count > 1 {
                     HStack(spacing: 12) {
                         ForEach(weatherService.weatherStations.filter { $0.id != selectedStation?.id }) { station in
@@ -82,6 +83,12 @@ struct ContentView: View {
                                     Circle()
                                         .fill(getStatusColor(for: station))
                                         .frame(width: 6, height: 6)
+                                    
+                                    if let icon = getTodaysForecastIcon(for: station) {
+                                        Image(systemName: icon)
+                                            .font(.system(size: 13))
+                                            .foregroundColor(.blue)
+                                    }
                                     
                                     Text(station.name)
                                         .font(.subheadline)
@@ -155,24 +162,6 @@ struct ContentView: View {
             .background(Color(NSColor.windowBackgroundColor))
             
             Divider()
-            
-            // Auto-refresh toggle bar
-            if !weatherService.weatherStations.isEmpty {
-                HStack {
-                    Toggle("Always refresh when open", isOn: $appStateManager.mainAppRefreshEnabled)
-                        .toggleStyle(.switch)
-                        .controlSize(.small)
-                        .font(.caption)
-                        .help("Keep refreshing weather data while the main app window is visible")
-                    
-                    Spacer()
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 8)
-                .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
-                
-                Divider()
-            }
             
             // Main content
             Group {
@@ -298,6 +287,20 @@ struct ContentView: View {
         
         // Format the rain amount
         return MeasurementConverter.formatRainfall(dailyRain, originalUnit: unit)
+    }
+    
+    private func getTodaysForecastIcon(for station: WeatherStation) -> String? {
+        guard let forecast = WeatherForecastService.shared.getForecast(for: station) else {
+            return nil
+        }
+        
+        // Find today's forecast
+        if let todaysForecast = forecast.dailyForecasts.first(where: { $0.isToday }) {
+            return todaysForecast.weatherIcon
+        }
+        
+        // Fallback to first available forecast
+        return forecast.dailyForecasts.first?.weatherIcon
     }
 }
 
