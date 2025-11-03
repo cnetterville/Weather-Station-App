@@ -221,14 +221,6 @@ struct DailyWindMaximumsView: View {
                     }
                 }
             }
-            
-            // Confidence indicator for wind data
-            if !windStats.isReliable {
-                Text(windStats.confidenceDescription)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-                    .italic()
-            }
         }
     }
 }
@@ -400,12 +392,6 @@ struct DailyPressureRangeView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                 Spacer()
-                if !pressureStats.isReliable {
-                    Text(pressureStats.confidenceDescription)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                        .italic()
-                }
             }
         }
     }
@@ -935,12 +921,6 @@ struct DailyAirQualityRangeView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                 Spacer()
-                if !pm25Stats.isReliable {
-                    Text(pm25Stats.confidenceDescription)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                        .italic()
-                }
             }
         }
     }

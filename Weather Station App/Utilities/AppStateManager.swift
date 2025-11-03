@@ -18,7 +18,7 @@ class AppStateManager: ObservableObject {
     
     // Timer for main app refresh (when app is visible)
     private var mainAppRefreshTimer: Timer?
-    private var mainAppRefreshInterval: TimeInterval = 300 // 5 minutes default
+    private var mainAppRefreshInterval: TimeInterval = 120 // 2 minutes default - matches data freshness
     
     // Settings
     @Published var mainAppRefreshEnabled: Bool = true {
@@ -44,7 +44,7 @@ class AppStateManager: ObservableObject {
     
     private func loadSettings() {
         mainAppRefreshEnabled = UserDefaults.standard.object(forKey: "MainAppRefreshEnabled") as? Bool ?? true
-        mainAppRefreshInterval = UserDefaults.standard.object(forKey: "MainAppRefreshInterval") as? TimeInterval ?? 300
+        mainAppRefreshInterval = UserDefaults.standard.object(forKey: "MainAppRefreshInterval") as? TimeInterval ?? 120
     }
     
     private func setupAppStateMonitoring() {

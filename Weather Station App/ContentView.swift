@@ -69,7 +69,7 @@ struct ContentView: View {
                         }
                     }
                 )) { station in
-                    StationListItem(station: station, refreshInterval: 300) // Use a fixed display value
+                    StationListItem(station: station, refreshInterval: 120) // Use a fixed display value
                         .tag(station.id)
                 }
                 .listStyle(.sidebar)
@@ -166,7 +166,7 @@ struct ContentView: View {
         .sheet(isPresented: $showingSettings) {
             SettingsView(
                 autoRefreshEnabled: $appStateManager.mainAppRefreshEnabled,
-                refreshInterval: .constant(300) // Show a fixed value, actual interval managed by AppStateManager
+                refreshInterval: .constant(120) // Show a fixed value, actual interval managed by AppStateManager
             ) {
                 // Settings changed callback - AppStateManager handles the refresh logic now
                 print("🔄 Settings changed - AppStateManager will update refresh behavior")

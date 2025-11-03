@@ -1,4 +1,4 @@
-//
+// 
 //  SpecializedSensorCards.swift
 //  Weather Station App
 // 
@@ -586,11 +586,7 @@ struct LastLightningDetectionView: View {
                     Spacer()
                 }
                 
-                // Confidence/search range indicator
-                Text(lightningStats.confidenceDescription)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-                    .italic()
+                // Removed existing code that displayed lightning confidence indicator here
             }
         } else {
             // Fallback when no lightning data available

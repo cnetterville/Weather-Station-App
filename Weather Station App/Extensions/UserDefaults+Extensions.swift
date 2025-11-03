@@ -47,7 +47,7 @@ extension UserDefaults {
     var menuBarRefreshInterval: TimeInterval {
         get {
             let value = double(forKey: "MenuBarRefreshInterval")
-            return value > 0 ? value : 300.0 // Default to 5 minutes
+            return value > 0 ? value : 120.0 // Default to 2 minutes - matches data freshness
         }
         set {
             set(newValue, forKey: "MenuBarRefreshInterval")

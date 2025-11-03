@@ -596,9 +596,6 @@ struct DailyHighLowView: View {
                 Image(systemName: tempStats.isReliable ? "checkmark.circle.fill" : "clock.fill")
                     .foregroundColor(tempStats.isReliable ? .green : .orange)
                     .font(.caption2)
-                Text(tempStats.confidenceDescription)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
                 
                 Spacer()
                 

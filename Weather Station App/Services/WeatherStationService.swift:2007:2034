@@ -1,0 +1,55 @@
+private func cleanInactiveStationData() {
+        let activeStationIds = Set(weatherStations.filter { $0.isActive }.map { $0.macAddress })
+        
+        // FIXED: Only remove data for stations that are explicitly marked as inactive AND haven't been updated recently
+        // Don't aggressively remove all non-active station data during memory cleanup
+        let cutoffDate = Date().addingTimeInterval(-24 * 60 * 60) // 24 hours ago
+        
+        let oldWeatherDataCount = weatherData.count
+        weatherData = weatherData.filter { stationId, _ in
+            // Keep data if station is active OR if we don't have a matching station (preserve unknown data temporarily)
+            if activeStationIds.contains(stationId) {
+                return true
+            }
+            
+            // Keep data for inactive stations if they were recently updated (within 24 hours)
+            if let station = weatherStations.first(where: { $0.macAddress == stationId }),
+               let lastUpdated = station.lastUpdated,
+               lastUpdated > cutoffDate {
+                return true
+            }
+            
+            // Remove only if station is explicitly inactive AND data is old
+            return false
+        }
+        
+        let oldHistoricalDataCount = historicalData.count
+        historicalData = historicalData.filter { stationId, _ in
+            // Keep data if station is active OR if we don't have a matching station
+            if activeStationIds.contains(stationId) {
+                return true
+            }
+            
+            // Keep data for inactive stations if they were recently updated
+            if let station = weatherStations.first(where: { $0.macAddress == stationId }),
+               let lastUpdated = station.lastUpdated,
+               lastUpdated > cutoffDate {
+                return true
+            }
+            
+            return false
+        }
+        
+        let oldChartDataCount = chartHistoricalData.count
+        chartHistoricalData = chartHistoricalData.filter { stationId, _ in
+            activeStationIds.contains(stationId)
+        }
+        
+        let removedWeather = oldWeatherDataCount - weatherData.count
+        let removedHistorical = oldHistoricalDataCount - historicalData.count
+        let removedChart = oldChartDataCount - chartHistoricalData.count
+        
+        if removedWeather > 0 || removedHistorical > 0 || removedChart > 0 {
+            print("🧹 Cleaned inactive station data: \(removedWeather) weather, \(removedHistorical) historical, \(removedChart) chart entries")
+        }
+    }
