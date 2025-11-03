@@ -7,6 +7,7 @@
 
 import SwiftUI
 import CoreLocation
+import MapKit
 
 struct ForecastCard: View {
     let station: WeatherStation
@@ -210,45 +211,53 @@ struct ForecastContent: View {
     private func getCityNameAndFlagAsync(latitude: Double, longitude: Double) async -> (String?, String) {
         let location = CLLocation(latitude: latitude, longitude: longitude)
         
-        return await withCheckedContinuation { continuation in
-            // Suppress deprecation warning - CLGeocoder still works fine
-            #if compiler(>=6.0)
-            #warning("CLGeocoder deprecated in macOS 26.0 - consider updating when newer MapKit APIs are available")
-            #endif
+        guard let request = MKReverseGeocodingRequest(location: location) else {
+            print("Failed to create reverse geocoding request")
+            return (nil, "")
+        }
+        
+        do {
+            let mapItems = try await request.mapItems
             
-            let geocoder = CLGeocoder()
-            geocoder.reverseGeocodeLocation(location) { placemarks, error in
-                if let error = error {
-                    print("Error in reverse geocoding: \(error.localizedDescription)")
-                    continuation.resume(returning: (nil, ""))
-                    return
+            guard let firstItem = mapItems.first,
+                  let addressReps = firstItem.addressRepresentations else {
+                return (nil, "")
+            }
+            
+            // Get city name
+            let cityName = addressReps.cityName
+            
+            // Get country flag emoji from region name
+            // For country code, we need to extract it from the full address or use a different approach
+            // Since regionName gives us the full country name (e.g., "United States"), 
+            // we can use Locale to get the country code
+            let flagEmoji = getCountryFlagFromRegionName(addressReps.regionName)
+            
+            return (cityName, flagEmoji)
+            
+        } catch {
+            print("Error in reverse geocoding: \(error.localizedDescription)")
+            return (nil, "")
+        }
+    }
+    
+    private func getCountryFlagFromRegionName(_ regionName: String?) -> String {
+        guard let regionName = regionName else { return "" }
+        
+        // Try to find the country code from the region name
+        // This searches through all known locales to find a matching country
+        for localeID in Locale.availableIdentifiers {
+            let locale = Locale(identifier: localeID)
+            if let countryName = locale.localizedString(forRegionCode: locale.region?.identifier ?? ""),
+               countryName.localizedCaseInsensitiveContains(regionName) ||
+               regionName.localizedCaseInsensitiveContains(countryName) {
+                if let countryCode = locale.region?.identifier {
+                    return getCountryFlagEmoji(countryCode: countryCode)
                 }
-                
-                guard let placemark = placemarks?.first else {
-                    continuation.resume(returning: (nil, ""))
-                    return
-                }
-                
-                // Get location name
-                let cityName: String?
-                if let city = placemark.locality {
-                    cityName = city
-                } else if let area = placemark.subAdministrativeArea {
-                    cityName = area
-                } else if let state = placemark.administrativeArea {
-                    cityName = state
-                } else if let country = placemark.country {
-                    cityName = country
-                } else {
-                    cityName = nil
-                }
-                
-                // Get country flag emoji
-                let flagEmoji = getCountryFlagEmoji(countryCode: placemark.isoCountryCode)
-                
-                continuation.resume(returning: (cityName, flagEmoji))
             }
         }
+        
+        return ""
     }
     
     private func getCountryFlagEmoji(countryCode: String?) -> String {
