@@ -26,7 +26,7 @@ A modern macOS application for monitoring multiple Ecowitt weather stations with
 - **Timezone Support**: Accurate timestamps across different locations
 
 ### 🌦️ Weather Integration
-- **Live Radar**: Integrated Windy.com radar with auto-refresh
+- **Live Radar**: Integrated radar with auto-refresh
 - **5-Day Forecast**: Detailed weather predictions with emoji icons
 - **Sunrise/Sunset**: Accurate astronomical calculations with day length
 - **Moon Phases**: Lunar calendar with rise/set times
