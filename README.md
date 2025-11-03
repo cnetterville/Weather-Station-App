@@ -1,5 +1,3 @@
-# Weather Station App
-
 A modern macOS application for monitoring multiple Ecowitt weather stations with real-time data, historical analytics, weather radar, and forecasting capabilities.
 
 ## Features
@@ -28,7 +26,7 @@ A modern macOS application for monitoring multiple Ecowitt weather stations with
 - **Timezone Support**: Accurate timestamps across different locations
 
 ### 🌦️ Weather Integration
-- **Live Radar**: Integrated Windy.com radar with auto-refresh
+- **Live Radar**: Integrated radar with auto-refresh
 - **5-Day Forecast**: Detailed weather predictions with emoji icons
 - **Sunrise/Sunset**: Accurate astronomical calculations with day length
 - **Moon Phases**: Lunar calendar with rise/set times
@@ -51,7 +49,3 @@ A modern macOS application for monitoring multiple Ecowitt weather stations with
 - **Hardware**: Intel or Apple Silicon Mac
 - **Internet**: Required for API access and radar data
 - **Ecowitt Account**: Weather station registered with Ecowitt
-
-## Installation
-
-1. Clone the repository:
