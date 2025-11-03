@@ -24,18 +24,25 @@ struct TemperatureSensorsSection: View {
                         weatherService.updateStation(station)
                     },
                     getDailyTemperatureStats: {
-                        DailyTemperatureCalculator.getDailyStats(
+                        // Use flexible stats that fall back to available data
+                        DailyTemperatureCalculator.getFlexibleDailyStats(
                             weatherData: data,
                             historicalData: weatherService.historicalData[station.macAddress],
                             station: station
                         )
                     },
                     getDailyHumidityStats: {
-                        DailyTemperatureCalculator.getDailyHumidityStats(
+                        // Try daily stats first, then fall back to available data
+                        if let dailyStats = DailyTemperatureCalculator.getDailyHumidityStats(
                             weatherData: data,
                             historicalData: weatherService.historicalData[station.macAddress],
                             station: station
-                        )
+                        ) {
+                            return dailyStats
+                        }
+                        // Fallback to available data
+                        guard let historical = weatherService.historicalData[station.macAddress] else { return nil }
+                        return DailyTemperatureCalculator.calculateHumidityStatsFromAvailableData(from: historical.outdoor)
                     }
                 )
             }
@@ -69,18 +76,25 @@ struct TemperatureSensorsSection: View {
                         weatherService.updateStation(station)
                     },
                     getDailyTemperatureStats: {
-                        DailyTemperatureCalculator.getIndoorDailyStats(
+                        // Use flexible stats that fall back to available data
+                        DailyTemperatureCalculator.getFlexibleIndoorDailyStats(
                             weatherData: data,
                             historicalData: weatherService.historicalData[station.macAddress],
                             station: station
                         )
                     },
                     getDailyHumidityStats: {
-                        DailyTemperatureCalculator.getIndoorDailyHumidityStats(
+                        // Try daily stats first, then fall back to available data
+                        if let dailyStats = DailyTemperatureCalculator.getIndoorDailyHumidityStats(
                             weatherData: data,
                             historicalData: weatherService.historicalData[station.macAddress],
                             station: station
-                        )
+                        ) {
+                            return dailyStats
+                        }
+                        // Fallback to available data
+                        guard let historical = weatherService.historicalData[station.macAddress] else { return nil }
+                        return DailyTemperatureCalculator.calculateIndoorHumidityStatsFromAvailableData(from: historical.indoor)
                     }
                 )
             }
@@ -96,18 +110,25 @@ struct TemperatureSensorsSection: View {
                         weatherService.updateStation(station)
                     },
                     getDailyTemperatureStats: {
-                        DailyTemperatureCalculator.getTempHumidityCh1DailyStats(
+                        // Use flexible stats that fall back to available data
+                        DailyTemperatureCalculator.getFlexibleTempHumidityCh1DailyStats(
                             weatherData: data,
                             historicalData: weatherService.historicalData[station.macAddress],
                             station: station
                         )
                     },
                     getDailyHumidityStats: {
-                        DailyTemperatureCalculator.getTempHumidityCh1DailyHumidityStats(
+                        // Try daily stats first, then fall back to available data
+                        if let dailyStats = DailyTemperatureCalculator.getTempHumidityCh1DailyHumidityStats(
                             weatherData: data,
                             historicalData: weatherService.historicalData[station.macAddress],
                             station: station
-                        )
+                        ) {
+                            return dailyStats
+                        }
+                        // Fallback to available data
+                        guard let historical = weatherService.historicalData[station.macAddress] else { return nil }
+                        return DailyTemperatureCalculator.calculateChannelHumidityStatsFromAvailableData(from: historical.tempAndHumidityCh1)
                     }
                 )
             }
@@ -123,18 +144,25 @@ struct TemperatureSensorsSection: View {
                         weatherService.updateStation(station)
                     },
                     getDailyTemperatureStats: {
-                        DailyTemperatureCalculator.getTempHumidityCh2DailyStats(
+                        // Use flexible stats that fall back to available data
+                        DailyTemperatureCalculator.getFlexibleTempHumidityCh2DailyStats(
                             weatherData: data,
                             historicalData: weatherService.historicalData[station.macAddress],
                             station: station
                         )
                     },
                     getDailyHumidityStats: {
-                        DailyTemperatureCalculator.getTempHumidityCh2DailyHumidityStats(
+                        // Try daily stats first, then fall back to available data
+                        if let dailyStats = DailyTemperatureCalculator.getTempHumidityCh2DailyHumidityStats(
                             weatherData: data,
                             historicalData: weatherService.historicalData[station.macAddress],
                             station: station
-                        )
+                        ) {
+                            return dailyStats
+                        }
+                        // Fallback to available data
+                        guard let historical = weatherService.historicalData[station.macAddress] else { return nil }
+                        return DailyTemperatureCalculator.calculateChannelHumidityStatsFromAvailableData(from: historical.tempAndHumidityCh2)
                     }
                 )
             }
@@ -150,18 +178,25 @@ struct TemperatureSensorsSection: View {
                         weatherService.updateStation(station)
                     },
                     getDailyTemperatureStats: {
-                        DailyTemperatureCalculator.getTempHumidityCh3DailyStats(
+                        // Use flexible stats that fall back to available data
+                        DailyTemperatureCalculator.getFlexibleTempHumidityCh3DailyStats(
                             weatherData: data,
                             historicalData: weatherService.historicalData[station.macAddress],
                             station: station
                         )
                     },
                     getDailyHumidityStats: {
-                        DailyTemperatureCalculator.getTempHumidityCh3DailyHumidityStats(
+                        // Try daily stats first, then fall back to available data
+                        if let dailyStats = DailyTemperatureCalculator.getTempHumidityCh3DailyHumidityStats(
                             weatherData: data,
                             historicalData: weatherService.historicalData[station.macAddress],
                             station: station
-                        )
+                        ) {
+                            return dailyStats
+                        }
+                        // Fallback to available data
+                        guard let historical = weatherService.historicalData[station.macAddress] else { return nil }
+                        return DailyTemperatureCalculator.calculateChannelHumidityStatsFromAvailableData(from: historical.tempAndHumidityCh3)
                     }
                 )
             }

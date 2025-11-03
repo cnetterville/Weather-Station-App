@@ -549,8 +549,14 @@ struct DailyHighLowView: View {
                     Text(tempStats.formattedHigh)
                         .font(.system(size: 14, weight: .semibold, design: .rounded))
                         .foregroundColor(.orange)
-                    if tempStats.isReliable && tempStats.highTempTime != nil {
+                    
+                    // Show timestamp if available, regardless of reliability status
+                    if let highTime = tempStats.highTempTime {
                         Text("at \(tempStats.formattedHighTime)")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    } else if !tempStats.isFromHistoricalData {
+                        Text("current reading")
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
@@ -571,13 +577,39 @@ struct DailyHighLowView: View {
                     Text(tempStats.formattedLow)
                         .font(.system(size: 14, weight: .semibold, design: .rounded))
                         .foregroundColor(.blue)
-                    if tempStats.isReliable && tempStats.lowTempTime != nil {
+                    
+                    // Show timestamp if available, regardless of reliability status
+                    if let lowTime = tempStats.lowTempTime {
                         Text("at \(tempStats.formattedLowTime)")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    } else if !tempStats.isFromHistoricalData {
+                        Text("current reading")
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
                 }
             }
+            
+            // Data confidence indicator
+            HStack {
+                Image(systemName: tempStats.isReliable ? "checkmark.circle.fill" : "clock.fill")
+                    .foregroundColor(tempStats.isReliable ? .green : .orange)
+                    .font(.caption2)
+                Text(tempStats.confidenceDescription)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                
+                Spacer()
+                
+                // Last update time
+                if tempStats.isFromHistoricalData {
+                    Text("Updated \(formatLastUpdateTime())")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding(.top, 4)
             
             // Humidity High/Low
             if let humidityStats = humidityStats {
@@ -595,8 +627,14 @@ struct DailyHighLowView: View {
                         Text(humidityStats.formattedHigh)
                             .font(.system(size: 14, weight: .semibold, design: .rounded))
                             .foregroundColor(.teal)
-                        if humidityStats.isReliable && humidityStats.highHumidityTime != nil {
+                        
+                        // Show timestamp if available
+                        if let highTime = humidityStats.highHumidityTime {
                             Text("at \(humidityStats.formattedHighTime)")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        } else if !humidityStats.isFromHistoricalData {
+                            Text("current reading")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
                         }
@@ -617,13 +655,46 @@ struct DailyHighLowView: View {
                         Text(humidityStats.formattedLow)
                             .font(.system(size: 14, weight: .semibold, design: .rounded))
                             .foregroundColor(.brown)
-                        if humidityStats.isReliable && humidityStats.lowHumidityTime != nil {
+                        
+                        // Show timestamp if available
+                        if let lowTime = humidityStats.lowHumidityTime {
                             Text("at \(humidityStats.formattedLowTime)")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        } else if !humidityStats.isFromHistoricalData {
+                            Text("current reading")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
                         }
                     }
                 }
+            }
+        }
+    }
+    
+    private func formatLastUpdateTime() -> String {
+        // Show the most recent timestamp from high or low
+        let times = [tempStats.highTempTime, tempStats.lowTempTime].compactMap { $0 }
+        
+        guard let mostRecent = times.max() else {
+            return "recently"
+        }
+        
+        let now = Date()
+        let timeInterval = now.timeIntervalSince(mostRecent)
+        let minutes = Int(timeInterval / 60)
+        
+        if minutes < 1 {
+            return "just now"
+        } else if minutes < 60 {
+            return "\(minutes)m ago"
+        } else {
+            let hours = Int(timeInterval / 3600)
+            if hours < 24 {
+                return "\(hours)h ago"
+            } else {
+                let days = Int(timeInterval / 86400)
+                return "\(days)d ago"
             }
         }
     }
