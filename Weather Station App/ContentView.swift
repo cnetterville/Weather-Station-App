@@ -237,6 +237,14 @@ struct ContentView: View {
                 }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .weatherDataUpdated)) { _ in
+            // FIXED: Sync selectedStation with updated station from service
+            // This ensures the timestamp updates propagate to the UI
+            if let current = selectedStation,
+               let updatedStation = weatherService.weatherStations.first(where: { $0.id == current.id }) {
+                selectedStation = updatedStation
+            }
+        }
     }
     
     private func getRefreshStatusText() -> String {
