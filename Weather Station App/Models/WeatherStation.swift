@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct WeatherStation: Identifiable, Codable, Equatable {
+struct WeatherStation: Identifiable, Codable, Equatable, Hashable {
     let id = UUID()
     var name: String
     var macAddress: String
@@ -56,13 +56,17 @@ struct WeatherStation: Identifiable, Codable, Equatable {
         return defaultMenuBarLabel
     }
     
-    // Equatable conformance
+    // Equatable conformance - only compare by ID
     static func == (lhs: WeatherStation, rhs: WeatherStation) -> Bool {
         lhs.id == rhs.id
     }
+    
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
 }
 
-struct SensorLabels: Codable, Equatable {
+struct SensorLabels: Codable, Equatable, Hashable {
     var outdoorTemp: String = "Outdoor Temperature"
     var indoorTemp: String = "Indoor Temperature" 
     var wind: String = "Wind"
@@ -86,7 +90,7 @@ struct SensorLabels: Codable, Equatable {
     var forecast: String = "5-Day Forecast" // Updated from "4-Day Forecast" to "5-Day Forecast"
 }
 
-struct SensorPreferences: Codable, Equatable {
+struct SensorPreferences: Codable, Equatable, Hashable {
     var showOutdoorTemp: Bool = true
     var showIndoorTemp: Bool = true
     var showWind: Bool = true
