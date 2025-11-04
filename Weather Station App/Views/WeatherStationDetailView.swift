@@ -29,9 +29,12 @@ struct WeatherStationDetailView: View {
                         weatherService: weatherService
                     )
                 } else {
-                    // Normal mode: Scrollable grid
+                    // Normal mode: Scrollable grid with Station Info at top
                     ScrollView {
                         VStack(spacing: 16) {
+                            // Station Information Card - Always at top
+                            StationInfoCard(station: station)
+                            
                             let columns = WeatherDetailLayoutHelper.calculateColumns(for: geometry.size.width)
                             let tileSize = WeatherDetailLayoutHelper.calculateTileSize(for: geometry.size.width, columns: columns)
                             LazyVGrid(columns: Array(repeating: GridItem(.fixed(tileSize), spacing: 16), count: columns), spacing: 16) {
@@ -250,7 +253,7 @@ struct ReorderModeView: View {
     
     private func shouldShowCard(_ cardType: CardType, station: WeatherStation, data: WeatherStationData) -> Bool {
         switch cardType {
-        case .stationInfo: return true
+        case .stationInfo: return false // Station Info is fixed at top, not reorderable
         case .outdoorTemp: return station.sensorPreferences.showOutdoorTemp
         case .forecast: return station.sensorPreferences.showForecast
         case .radar: return station.sensorPreferences.showRadar && station.latitude != nil && station.longitude != nil
@@ -362,7 +365,7 @@ struct ReorderableWeatherCardsView: View {
     
     private func shouldShowCard(_ cardType: CardType) -> Bool {
         switch cardType {
-        case .stationInfo: return true
+        case .stationInfo: return false // Station Info is now fixed at top
         case .outdoorTemp: return station.sensorPreferences.showOutdoorTemp
         case .forecast: return station.sensorPreferences.showForecast
         case .radar: return station.sensorPreferences.showRadar && station.latitude != nil && station.longitude != nil
