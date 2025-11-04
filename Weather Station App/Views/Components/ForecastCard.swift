@@ -162,6 +162,7 @@ struct ForecastContent: View {
                 ForEach(Array(forecast.dailyForecasts.enumerated()), id: \.offset) { index, dailyForecast in
                     ForecastDayRow(
                         forecast: dailyForecast,
+                        station: station,
                         isFirst: index == 0
                     )
                     
@@ -281,7 +282,16 @@ struct ForecastContent: View {
 
 struct ForecastDayRow: View {
     let forecast: DailyWeatherForecast
+    let station: WeatherStation
     let isFirst: Bool
+    
+    private var displayIcon: String {
+        // Only apply night icon conversion for today's forecast
+        if forecast.isToday {
+            return WeatherIconHelper.adaptIconForTimeOfDay(forecast.weatherIcon, station: station)
+        }
+        return forecast.weatherIcon
+    }
     
     var body: some View {
         VStack(spacing: 2) {
@@ -294,7 +304,7 @@ struct ForecastDayRow: View {
                     .frame(width: 45, alignment: .leading)
                 
                 // Weather icon
-                Image(systemName: forecast.weatherIcon)
+                Image(systemName: displayIcon)
                     .font(.system(size: 16))
                     .foregroundColor(.blue)
                     .frame(width: 18)

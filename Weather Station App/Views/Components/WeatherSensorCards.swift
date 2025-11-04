@@ -17,16 +17,18 @@ struct OutdoorTemperatureCard: View {
     // Get today's forecast SF symbol
     private func getTodaysForecastIcon() -> String {
         guard let forecast = WeatherForecastService.shared.getForecast(for: station) else {
-            return "sun.max.fill" // Default fallback
+            return WeatherIconHelper.adaptIconForTimeOfDay("sun.max.fill", station: station)
         }
         
         // Find today's forecast
         if let todaysForecast = forecast.dailyForecasts.first(where: { $0.isToday }) {
-            return todaysForecast.weatherIcon
+            let baseIcon = todaysForecast.weatherIcon
+            return WeatherIconHelper.adaptIconForTimeOfDay(baseIcon, station: station)
         }
         
         // Fallback to first available forecast
-        return forecast.dailyForecasts.first?.weatherIcon ?? "sun.max.fill"
+        let baseIcon = forecast.dailyForecasts.first?.weatherIcon ?? "sun.max.fill"
+        return WeatherIconHelper.adaptIconForTimeOfDay(baseIcon, station: station)
     }
     
     // Get today's forecast description

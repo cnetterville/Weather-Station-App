@@ -55,6 +55,15 @@ struct WeatherForecast {
         // Refresh forecast every 3 hours
         Date().timeIntervalSince(lastUpdated) > 10800
     }
+    
+    func weatherIcon(for forecast: DailyWeatherForecast) -> String {
+        return WeatherCodeInterpreter.systemIcon(
+            for: forecast.weatherCode,
+            latitude: location.latitude,
+            longitude: location.longitude,
+            timeZone: forecast.timezone
+        )
+    }
 }
 
 struct ForecastLocation {
@@ -363,6 +372,52 @@ struct WeatherCodeInterpreter {
         case 95: return "cloud.bolt.fill"
         case 96, 99: return "cloud.bolt.rain.fill"
         default: return "questionmark.circle.fill"
+        }
+    }
+    
+    static func systemIcon(for code: Int, latitude: Double?, longitude: Double?, timeZone: TimeZone) -> String {
+        // Get base icon
+        let baseIcon = systemIcon(for: code)
+        
+        // If we don't have location data, return base icon
+        guard let lat = latitude, let lon = longitude else {
+            return baseIcon
+        }
+        
+        // Check if it's currently nighttime
+        if let sunTimes = SunCalculator.calculateSunTimes(for: Date(), latitude: lat, longitude: lon, timeZone: timeZone) {
+            let isNighttime = !sunTimes.isCurrentlyDaylight
+            
+            if isNighttime {
+                return convertToNightIcon(baseIcon)
+            }
+        }
+        
+        return baseIcon
+    }
+    
+    private static func convertToNightIcon(_ dayIcon: String) -> String {
+        switch dayIcon {
+        case "sun.max.fill":
+            return "moon.stars.fill"
+        case "sun.max":
+            return "moon.fill"
+        case "cloud.sun.fill":
+            return "cloud.moon.fill"
+        case "cloud.sun":
+            return "cloud.moon"
+        case "cloud.sun.rain.fill":
+            return "cloud.moon.rain.fill"
+        case "cloud.sun.rain":
+            return "cloud.moon.rain"
+        case "cloud.sun.bolt.fill":
+            return "cloud.moon.bolt.fill"
+        case "cloud.sun.bolt":
+            return "cloud.moon.bolt"
+        default:
+            // For weather that doesn't have sun/moon variants (rain, snow, fog, etc.)
+            // keep the original icon
+            return dayIcon
         }
     }
 }

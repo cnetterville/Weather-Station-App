@@ -304,11 +304,17 @@ struct ContentView: View {
         
         // Find today's forecast
         if let todaysForecast = forecast.dailyForecasts.first(where: { $0.isToday }) {
-            return todaysForecast.weatherIcon
+            let baseIcon = todaysForecast.weatherIcon
+            return WeatherIconHelper.adaptIconForTimeOfDay(baseIcon, station: station)
         }
         
         // Fallback to first available forecast
-        return forecast.dailyForecasts.first?.weatherIcon
+        if let firstForecast = forecast.dailyForecasts.first {
+            let baseIcon = firstForecast.weatherIcon
+            return WeatherIconHelper.adaptIconForTimeOfDay(baseIcon, station: station)
+        }
+        
+        return nil
     }
 }
 

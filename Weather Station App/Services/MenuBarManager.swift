@@ -651,17 +651,36 @@ class MenuBarManager: ObservableObject {
             return nil
         }
         
+        // Get the day/night adapted icon
+        let baseIcon = todaysForecast.weatherIcon
+        let adaptedIcon = WeatherIconHelper.adaptIconForTimeOfDay(baseIcon, station: station)
+        
         // Convert the SF Symbol to an emoji equivalent for menubar display
-        return convertSFSymbolToEmoji(todaysForecast.weatherIcon)
+        return convertSFSymbolToEmoji(adaptedIcon)
     }
     
     // Helper method to convert SF Symbols to appropriate emoji for menubar
     private func convertSFSymbolToEmoji(_ sfSymbol: String) -> String? {
         switch sfSymbol {
+        // Day icons
         case "sun.max.fill", "sun.max":
             return "☀️"
         case "cloud.sun.fill":
             return "⛅"
+            
+        // Night icons
+        case "moon.stars.fill":
+            return "🌙"
+        case "moon.fill":
+            return "🌙"
+        case "cloud.moon.fill":
+            return "☁️" // Cloudy night still uses cloud emoji
+        case "cloud.moon.rain.fill":
+            return "🌧️"
+        case "cloud.moon.bolt.fill":
+            return "⛈️"
+            
+        // Weather conditions (day/night agnostic)
         case "cloud.fill":
             return "☁️"
         case "cloud.fog.fill":
