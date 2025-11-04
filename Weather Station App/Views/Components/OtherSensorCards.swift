@@ -742,23 +742,35 @@ struct AirQualityCard: View {
             onTitleChange: onTitleChange
         ) {
             VStack(alignment: .leading, spacing: 12) {
-                // Current Air Quality - Main Display
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("\(data.pm25.value) \(data.pm25.unit)")
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
-                    
+                // Air Quality Icon and Current Reading
+                HStack(alignment: .center, spacing: 16) {
+                    // Dynamic AQI Icon
                     let currentAQI = Int(data.realTimeAqi.value) ?? 0
                     let aqiCategory = AirQualityHelpers.getAQICategory(aqi: currentAQI)
                     
-                    HStack(spacing: 8) {
-                        Text("AQI: \(data.realTimeAqi.value)")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(aqiCategory.color)
+                    AirQualityIconView(aqiCategory: aqiCategory, aqi: currentAQI)
+                        .frame(width: 60, height: 60)
+                    
+                    // Current Values
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("\(data.pm25.value) \(data.pm25.unit)")
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
                         
-                        Text("(\(aqiCategory.category))")
-                            .font(.subheadline)
-                            .foregroundColor(aqiCategory.color)
+                        HStack(spacing: 8) {
+                            Text("AQI: \(data.realTimeAqi.value)")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(aqiCategory.color)
+                            
+                            Text("(\(aqiCategory.category))")
+                                .font(.subheadline)
+                                .foregroundColor(aqiCategory.color)
+                        }
+                        
+                        Text(aqiCategory.healthImpact)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .lineLimit(2)
                     }
                 }
                 
@@ -806,6 +818,128 @@ struct AirQualityCard: View {
                 }
             }
         }
+    }
+}
+
+struct AirQualityIconView: View {
+    let aqiCategory: (category: String, color: Color, healthImpact: String)
+    let aqi: Int
+    
+    @State private var animationAmount: Double = 1.0
+    
+    var body: some View {
+        ZStack {
+            // Background circle
+            Circle()
+                .fill(aqiCategory.color.opacity(0.2))
+                .overlay(
+                    Circle()
+                        .stroke(aqiCategory.color.opacity(0.5), lineWidth: 2)
+                )
+            
+            // Animated particles based on AQI level
+            if aqi > 50 {
+                AirQualityParticles(
+                    count: particleCount,
+                    color: aqiCategory.color,
+                    animationAmount: animationAmount
+                )
+            }
+            
+            // Icon based on AQI level
+            VStack(spacing: 2) {
+                Image(systemName: aqiIconName)
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(aqiCategory.color)
+                
+                Text("\(aqi)")
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundColor(aqiCategory.color)
+            }
+        }
+        .onAppear {
+            startAnimation()
+        }
+        .onChange(of: aqi) { _, _ in
+            startAnimation()
+        }
+    }
+    
+    private var aqiIconName: String {
+        switch aqi {
+        case 0...50:
+            return "checkmark.circle.fill"
+        case 51...100:
+            return "exclamationmark.circle.fill"
+        case 101...150:
+            return "exclamationmark.triangle.fill"
+        case 151...200:
+            return "xmark.octagon.fill"
+        case 201...300:
+            return "exclamationmark.octagon.fill"
+        default:
+            return "exclamationmark.shield.fill"
+        }
+    }
+    
+    private var particleCount: Int {
+        switch aqi {
+        case 0...50: return 0
+        case 51...100: return 3
+        case 101...150: return 5
+        case 151...200: return 7
+        case 201...300: return 10
+        default: return 12
+        }
+    }
+    
+    private func startAnimation() {
+        if aqi > 50 {
+            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+                animationAmount = 1.5
+            }
+        }
+    }
+}
+
+struct AirQualityParticles: View {
+    let count: Int
+    let color: Color
+    let animationAmount: Double
+    
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                ForEach(0..<count, id: \.self) { index in
+                    Circle()
+                        .fill(color.opacity(0.4))
+                        .frame(width: particleSize(for: index), height: particleSize(for: index))
+                        .position(
+                            x: particleX(for: index, in: geometry.size),
+                            y: particleY(for: index, in: geometry.size, animation: animationAmount)
+                        )
+                        .blur(radius: 1)
+                }
+            }
+        }
+    }
+    
+    private func particleSize(for index: Int) -> CGFloat {
+        let sizes: [CGFloat] = [2, 3, 4, 2.5, 3.5]
+        return sizes[index % sizes.count]
+    }
+    
+    private func particleX(for index: Int, in size: CGSize) -> CGFloat {
+        let angle = (Double(index) / Double(count)) * 2 * .pi
+        let radius = size.width * 0.35
+        return size.width / 2 + CGFloat(cos(angle)) * radius
+    }
+    
+    private func particleY(for index: Int, in size: CGSize, animation: Double) -> CGFloat {
+        let angle = (Double(index) / Double(count)) * 2 * .pi
+        let baseRadius = size.height * 0.35
+        let radius = baseRadius * CGFloat(animation)
+        return size.height / 2 + CGFloat(sin(angle)) * radius
     }
 }
 
