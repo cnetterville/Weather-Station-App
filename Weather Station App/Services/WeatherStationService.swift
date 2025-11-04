@@ -451,16 +451,38 @@ class WeatherStationService: ObservableObject {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         
+        // Track the most recent timestamp to check staleness
+        var mostRecentTimestamp: Double = 0
+        var hasDataFromToday = false
+        
         for (timestampString, _) in temperature.list {
             if let timestamp = Double(timestampString) {
                 let readingDate = Date(timeIntervalSince1970: timestamp)
                 if calendar.isDate(readingDate, inSameDayAs: today) {
-                    return true
+                    hasDataFromToday = true
+                    mostRecentTimestamp = max(mostRecentTimestamp, timestamp)
                 }
             }
         }
         
-        return false
+        // If we have no data from today, return false
+        guard hasDataFromToday else {
+            return false
+        }
+        
+        // Check if the most recent data is stale (older than 10 minutes)
+        let mostRecentDate = Date(timeIntervalSince1970: mostRecentTimestamp)
+        let ageInMinutes = Date().timeIntervalSince(mostRecentDate) / 60
+        
+        // Consider data stale if it's older than 10 minutes
+        let isStale = ageInMinutes > 10
+        
+        if isStale {
+            logData(" Historical data for \(station.name) is stale (age: \(Int(ageInMinutes)) minutes)")
+        }
+        
+        // Return false if data is stale, forcing a refresh
+        return !isStale
     }
     
     private func hasRecentLightningHistoricalData(for station: WeatherStation, daysBack: Int = 7) -> Bool {
