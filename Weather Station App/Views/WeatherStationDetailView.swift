@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct WeatherStationDetailView: View {
     @Binding var station: WeatherStation
@@ -14,41 +15,77 @@ struct WeatherStationDetailView: View {
     
     @State private var showingHistory = false
     @State private var scrollViewID = UUID()
+    @State private var isReorderMode = false
+    @State private var refreshTrigger = UUID()
     
     var body: some View {
         GeometryReader { geometry in
-            ScrollView {
-                VStack(spacing: 16) {
-                    // Station Information Card
-                    StationInfoCard(station: station)
-                    
-                    if let data = weatherData {
-                        let columns = WeatherDetailLayoutHelper.calculateColumns(for: geometry.size.width)
-                        let tileSize = WeatherDetailLayoutHelper.calculateTileSize(for: geometry.size.width, columns: columns)
-                        LazyVGrid(columns: Array(repeating: GridItem(.fixed(tileSize), spacing: 16), count: columns), spacing: 16) {
-                            
-                            WeatherSensorGridView(
-                                station: $station,
-                                data: data,
-                                weatherService: weatherService
-                            )
+            if let data = weatherData {
+                if isReorderMode {
+                    // Reorder mode: Show full-screen list
+                    ReorderModeView(
+                        station: $station,
+                        data: data,
+                        weatherService: weatherService
+                    )
+                } else {
+                    // Normal mode: Scrollable grid
+                    ScrollView {
+                        VStack(spacing: 16) {
+                            let columns = WeatherDetailLayoutHelper.calculateColumns(for: geometry.size.width)
+                            let tileSize = WeatherDetailLayoutHelper.calculateTileSize(for: geometry.size.width, columns: columns)
+                            LazyVGrid(columns: Array(repeating: GridItem(.fixed(tileSize), spacing: 16), count: columns), spacing: 16) {
+                                ReorderableWeatherCardsView(
+                                    station: $station,
+                                    data: data,
+                                    weatherService: weatherService,
+                                    isReorderMode: isReorderMode
+                                )
+                            }
                         }
-                    } else {
-                        NoDataView(stationName: station.name)
+                        .padding()
                     }
+                    .id(refreshTrigger)
+                    .focusable()
+                    .clipped()
                 }
-                .padding()
+            } else {
+                NoDataView(stationName: station.name)
             }
-            .id(scrollViewID)
-            .focusable()
-            .onAppear {
-                // Refresh scroll view to ensure it's focusable
-                scrollViewID = UUID()
-            }
-            .clipped()
         }
         .navigationTitle(station.name)
         .toolbar {
+            ToolbarItem(placement: .automatic) {
+                Button(isReorderMode ? "Done" : "Rearrange Cards") {
+                    if !isReorderMode {
+                        // Entering reorder mode
+                        print("📋 Entering reorder mode")
+                        print("   Current card order: \(station.cardOrder.map { $0.displayName })")
+                    } else {
+                        // Exiting reorder mode
+                        print("✅ Exiting reorder mode")
+                        
+                        // Fetch fresh station from service
+                        if let updatedStation = weatherService.weatherStations.first(where: { $0.id == station.id }) {
+                            print("   Service has card order: \(updatedStation.cardOrder.map { $0.displayName })")
+                            print("   Current binding has: \(station.cardOrder.map { $0.displayName })")
+                            
+                            // Update binding
+                            station = updatedStation
+                            
+                            print("   After assignment: \(station.cardOrder.map { $0.displayName })")
+                            
+                            // Force refresh
+                            refreshTrigger = UUID()
+                        }
+                    }
+                    
+                    withAnimation {
+                        isReorderMode.toggle()
+                    }
+                }
+            }
+            
             ToolbarItem(placement: .primaryAction) {
                 Button("History") {
                     showingHistory = true
@@ -89,6 +126,700 @@ struct WeatherStationDetailView: View {
                 scrollViewID = UUID()
             }
         }
+    }
+}
+
+struct ReorderModeView: View {
+    @Binding var station: WeatherStation
+    let data: WeatherStationData
+    let weatherService: WeatherStationService
+    
+    var visibleCards: [CardType] {
+        let cards = station.cardOrder.filter { cardType in
+            self.shouldShowCard(cardType, station: station, data: data)
+        }
+        return cards
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Header
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Rearrange Cards")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                
+                Text("Drag cards to reorder them. Changes save when you click Done.")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal)
+            .padding(.top)
+            
+            // List of cards
+            List {
+                ForEach(visibleCards) { cardType in
+                    HStack(spacing: 16) {
+                        Image(systemName: "line.3.horizontal")
+                            .font(.title3)
+                            .foregroundColor(.secondary)
+                        
+                        Image(systemName: self.iconForCardType(cardType))
+                            .font(.title3)
+                            .foregroundColor(.blue)
+                            .frame(width: 30)
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(cardType.displayName)
+                                .font(.body)
+                                .fontWeight(.medium)
+                            
+                            Text(self.getCardLabel(for: cardType))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Spacer()
+                    }
+                    .padding(.vertical, 12)
+                    .contentShape(Rectangle())
+                }
+                .onMove { sourceIndices, destinationIndex in
+                    self.handleMove(from: sourceIndices, to: destinationIndex)
+                }
+            }
+            .listStyle(.inset)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    
+    private func handleMove(from sourceIndices: IndexSet, to destinationIndex: Int) {
+        print("🔄 Moving cards from \(sourceIndices) to \(destinationIndex)")
+        
+        // Get current visible cards
+        var reorderedCards = visibleCards
+        
+        // Move the cards
+        reorderedCards.move(fromOffsets: sourceIndices, toOffset: destinationIndex)
+        print("   After move: \(reorderedCards.map { $0.displayName })")
+        
+        // Get invisible cards
+        let invisibleCards = station.cardOrder.filter { cardType in
+            !self.shouldShowCard(cardType, station: station, data: data)
+        }
+        
+        // Rebuild full order: visible cards first (in new order), then invisible cards
+        let newOrder = reorderedCards + invisibleCards
+        
+        // Update via the service to ensure proper persistence
+        weatherService.updateStationCardOrder(station, newOrder: newOrder)
+        
+        // Update local binding after service update
+        DispatchQueue.main.async {
+            station.cardOrder = newOrder
+        }
+        
+        print("💾 Saved new order")
+    }
+    
+    private func getCardLabel(for cardType: CardType) -> String {
+        switch cardType {
+        case .stationInfo: return station.name
+        case .outdoorTemp: return station.customLabels.outdoorTemp
+        case .forecast: return station.customLabels.forecast
+        case .radar: return station.customLabels.radar
+        case .indoorTemp: return station.customLabels.indoorTemp
+        case .tempHumidityCh1: return station.customLabels.tempHumidityCh1
+        case .tempHumidityCh2: return station.customLabels.tempHumidityCh2
+        case .tempHumidityCh3: return station.customLabels.tempHumidityCh3
+        case .wind: return station.customLabels.wind
+        case .pressure: return station.customLabels.pressure
+        case .rainfall: return station.customLabels.rainfall
+        case .rainfallPiezo: return station.customLabels.rainfallPiezo
+        case .airQualityCh1: return station.customLabels.airQualityCh1
+        case .airQualityCh2: return station.customLabels.airQualityCh2
+        case .airQualityCh3: return station.customLabels.airQualityCh3
+        case .solar: return station.customLabels.solar
+        case .lightning: return station.customLabels.lightning
+        case .batteryStatus: return station.customLabels.batteryStatus
+        case .sunriseSunset: return station.customLabels.sunriseSunset
+        case .lunar: return station.customLabels.lunar
+        case .camera: return station.customLabels.camera
+        }
+    }
+    
+    private func shouldShowCard(_ cardType: CardType, station: WeatherStation, data: WeatherStationData) -> Bool {
+        switch cardType {
+        case .stationInfo: return true
+        case .outdoorTemp: return station.sensorPreferences.showOutdoorTemp
+        case .forecast: return station.sensorPreferences.showForecast
+        case .radar: return station.sensorPreferences.showRadar && station.latitude != nil && station.longitude != nil
+        case .indoorTemp: return station.sensorPreferences.showIndoorTemp
+        case .tempHumidityCh1: return station.sensorPreferences.showTempHumidityCh1
+        case .tempHumidityCh2: return station.sensorPreferences.showTempHumidityCh2
+        case .tempHumidityCh3: return station.sensorPreferences.showTempHumidityCh3 && data.tempAndHumidityCh3 != nil
+        case .wind: return station.sensorPreferences.showWind
+        case .pressure: return station.sensorPreferences.showPressure
+        case .rainfall: return station.sensorPreferences.showRainfall && data.rainfall != nil
+        case .rainfallPiezo: return station.sensorPreferences.showRainfallPiezo
+        case .airQualityCh1: return station.sensorPreferences.showAirQualityCh1 && data.pm25Ch1.pm25.value != "0" && !data.pm25Ch1.pm25.value.isEmpty
+        case .airQualityCh2: return station.sensorPreferences.showAirQualityCh2 && data.pm25Ch2 != nil && data.pm25Ch2!.pm25.value != "0" && !data.pm25Ch2!.pm25.value.isEmpty
+        case .airQualityCh3: return station.sensorPreferences.showAirQualityCh3 && data.pm25Ch3 != nil && data.pm25Ch3!.pm25.value != "0" && !data.pm25Ch3!.pm25.value.isEmpty
+        case .solar: return station.sensorPreferences.showSolar
+        case .lightning: return station.sensorPreferences.showLightning
+        case .batteryStatus: return station.sensorPreferences.showBatteryStatus
+        case .sunriseSunset: return station.sensorPreferences.showSunriseSunset && station.latitude != nil && station.longitude != nil
+        case .lunar: return station.sensorPreferences.showLunar && station.latitude != nil && station.longitude != nil
+        case .camera: return station.sensorPreferences.showCamera && station.associatedCameraMAC != nil
+        }
+    }
+    
+    private func iconForCardType(_ cardType: CardType) -> String {
+        switch cardType {
+        case .stationInfo: return "info.circle.fill"
+        case .outdoorTemp: return "thermometer"
+        case .forecast: return "calendar"
+        case .radar: return "waveform.path.ecg"
+        case .indoorTemp: return "house.fill"
+        case .tempHumidityCh1, .tempHumidityCh2, .tempHumidityCh3: return "thermometer"
+        case .wind: return "wind"
+        case .pressure: return "barometer"
+        case .rainfall, .rainfallPiezo: return "cloud.rain.fill"
+        case .airQualityCh1, .airQualityCh2, .airQualityCh3: return "aqi.medium"
+        case .solar: return "sun.max.fill"
+        case .lightning: return "bolt.fill"
+        case .batteryStatus: return "battery.100"
+        case .sunriseSunset: return "sunrise.fill"
+        case .lunar: return "moon.fill"
+        case .camera: return "camera.fill"
+        }
+    }
+}
+
+struct ReorderableWeatherCardsView: View {
+    @Binding var station: WeatherStation
+    let data: WeatherStationData
+    let weatherService: WeatherStationService
+    let isReorderMode: Bool
+    
+    @State private var draggingCard: CardType?
+    
+    var body: some View {
+        ForEach(station.cardOrder) { cardType in
+            if shouldShowCard(cardType) {
+                if isReorderMode {
+                    reorderModeCard(for: cardType)
+                } else {
+                    cardView(for: cardType)
+                }
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func reorderModeCard(for cardType: CardType) -> some View {
+        cardView(for: cardType)
+            .overlay(reorderOverlay())
+            .overlay(dragHandle(), alignment: .topTrailing)
+            .opacity(draggingCard == cardType ? 0.5 : 1.0)
+            .onDrag {
+                print("🎯 onDrag started for: \(cardType.displayName)")
+                draggingCard = cardType
+                print("   Set draggingCard to: \(draggingCard?.displayName ?? "nil")")
+                return createDragItem(for: cardType)
+            }
+            .onDrop(of: [.text], delegate: CardReorderDropDelegate(
+                destinationCard: cardType,
+                cardOrder: $station.cardOrder,
+                draggingCard: $draggingCard
+            ))
+    }
+    
+    private func reorderOverlay() -> some View {
+        RoundedRectangle(cornerRadius: 16)
+            .stroke(Color.blue.opacity(0.5), lineWidth: 2)
+    }
+    
+    private func dragHandle() -> some View {
+        Image(systemName: "line.3.horizontal")
+            .font(.title2)
+            .foregroundColor(.white)
+            .padding(8)
+            .background(Color.blue)
+            .clipShape(Circle())
+            .padding(8)
+    }
+    
+    private func createDragItem(for cardType: CardType) -> NSItemProvider {
+        let itemProvider = NSItemProvider()
+        itemProvider.registerDataRepresentation(forTypeIdentifier: UTType.text.identifier, visibility: .all) { completion in
+            let data = cardType.rawValue.data(using: .utf8) ?? Data()
+            completion(data, nil)
+            return nil
+        }
+        return itemProvider
+    }
+    
+    private func shouldShowCard(_ cardType: CardType) -> Bool {
+        switch cardType {
+        case .stationInfo: return true
+        case .outdoorTemp: return station.sensorPreferences.showOutdoorTemp
+        case .forecast: return station.sensorPreferences.showForecast
+        case .radar: return station.sensorPreferences.showRadar && station.latitude != nil && station.longitude != nil
+        case .indoorTemp: return station.sensorPreferences.showIndoorTemp
+        case .tempHumidityCh1: return station.sensorPreferences.showTempHumidityCh1
+        case .tempHumidityCh2: return station.sensorPreferences.showTempHumidityCh2
+        case .tempHumidityCh3: return station.sensorPreferences.showTempHumidityCh3 && data.tempAndHumidityCh3 != nil
+        case .wind: return station.sensorPreferences.showWind
+        case .pressure: return station.sensorPreferences.showPressure
+        case .rainfall: return station.sensorPreferences.showRainfall && data.rainfall != nil
+        case .rainfallPiezo: return station.sensorPreferences.showRainfallPiezo
+        case .airQualityCh1: return station.sensorPreferences.showAirQualityCh1 && data.pm25Ch1.pm25.value != "0" && !data.pm25Ch1.pm25.value.isEmpty
+        case .airQualityCh2: return station.sensorPreferences.showAirQualityCh2 && data.pm25Ch2 != nil && data.pm25Ch2!.pm25.value != "0" && !data.pm25Ch2!.pm25.value.isEmpty
+        case .airQualityCh3: return station.sensorPreferences.showAirQualityCh3 && data.pm25Ch3 != nil && data.pm25Ch3!.pm25.value != "0" && !data.pm25Ch3!.pm25.value.isEmpty
+        case .solar: return station.sensorPreferences.showSolar
+        case .lightning: return station.sensorPreferences.showLightning
+        case .batteryStatus: return station.sensorPreferences.showBatteryStatus
+        case .sunriseSunset: return station.sensorPreferences.showSunriseSunset && station.latitude != nil && station.longitude != nil
+        case .lunar: return station.sensorPreferences.showLunar && station.latitude != nil && station.longitude != nil
+        case .camera: return station.sensorPreferences.showCamera && station.associatedCameraMAC != nil
+        }
+    }
+    
+    @ViewBuilder
+    private func cardView(for cardType: CardType) -> some View {
+        switch cardType {
+        case .stationInfo:
+            stationInfoCardView()
+        case .outdoorTemp:
+            outdoorTempCardView()
+        case .forecast:
+            forecastCardView()
+        case .radar:
+            radarCardView()
+        case .indoorTemp:
+            indoorTempCardView()
+        case .tempHumidityCh1:
+            tempHumidityCardView(channel: 1)
+        case .tempHumidityCh2:
+            tempHumidityCardView(channel: 2)
+        case .tempHumidityCh3:
+            tempHumidityCardView(channel: 3)
+        case .wind:
+            windCardView()
+        case .pressure:
+            pressureCardView()
+        case .rainfall:
+            rainfallCardView()
+        case .rainfallPiezo:
+            rainfallPiezoCardView()
+        case .airQualityCh1:
+            airQualityCardView(channel: 1)
+        case .airQualityCh2:
+            airQualityCardView(channel: 2)
+        case .airQualityCh3:
+            airQualityCardView(channel: 3)
+        case .solar:
+            solarCardView()
+        case .lightning:
+            lightningCardView()
+        case .batteryStatus:
+            batteryStatusCardView()
+        case .sunriseSunset:
+            sunriseSunsetCardView()
+        case .lunar:
+            lunarCardView()
+        case .camera:
+            cameraCardView()
+        }
+    }
+    
+    // MARK: - Individual Card Views
+    
+    private func stationInfoCardView() -> some View {
+        StationInfoCard(station: station)
+    }
+    
+    private func outdoorTempCardView() -> some View {
+        OutdoorTemperatureCard(
+            station: station,
+            data: data,
+            onTitleChange: { newTitle in
+                updateStationLabel(\.outdoorTemp, with: newTitle)
+            },
+            getDailyTemperatureStats: {
+                DailyTemperatureCalculator.getFlexibleDailyStats(
+                    weatherData: data,
+                    historicalData: weatherService.historicalData[station.macAddress],
+                    station: station
+                )
+            },
+            getDailyHumidityStats: {
+                getOutdoorHumidityStats()
+            }
+        )
+    }
+    
+    private func forecastCardView() -> some View {
+        ForecastCard(
+            station: station,
+            onTitleChange: { newTitle in
+                updateStationLabel(\.forecast, with: newTitle)
+            }
+        )
+    }
+    
+    private func radarCardView() -> some View {
+        RadarTileView(
+            station: station,
+            onTitleChange: { newTitle in
+                updateStationLabel(\.radar, with: newTitle)
+            }
+        )
+    }
+    
+    private func indoorTempCardView() -> some View {
+        IndoorTemperatureCard(
+            station: station,
+            data: data,
+            onTitleChange: { newTitle in
+                updateStationLabel(\.indoorTemp, with: newTitle)
+            },
+            getDailyTemperatureStats: {
+                DailyTemperatureCalculator.getFlexibleIndoorDailyStats(
+                    weatherData: data,
+                    historicalData: weatherService.historicalData[station.macAddress],
+                    station: station
+                )
+            },
+            getDailyHumidityStats: {
+                getIndoorHumidityStats()
+            }
+        )
+    }
+    
+    @ViewBuilder
+    private func tempHumidityCardView(channel: Int) -> some View {
+        let channelData: TempHumidityData
+        let title: String
+        let labelKeyPath: WritableKeyPath<SensorLabels, String>
+        let statsGetter: () -> DailyTemperatureStats?
+        let humidityGetter: () -> DailyHumidityStats?
+        
+        switch channel {
+        case 1:
+            channelData = data.tempAndHumidityCh1
+            title = station.customLabels.tempHumidityCh1
+            labelKeyPath = \.tempHumidityCh1
+            statsGetter = {
+                DailyTemperatureCalculator.getFlexibleTempHumidityCh1DailyStats(
+                    weatherData: data,
+                    historicalData: weatherService.historicalData[station.macAddress],
+                    station: station
+                )
+            }
+            humidityGetter = {
+                getTempHumidityCh1HumidityStats()
+            }
+        case 2:
+            channelData = data.tempAndHumidityCh2
+            title = station.customLabels.tempHumidityCh2
+            labelKeyPath = \.tempHumidityCh2
+            statsGetter = {
+                DailyTemperatureCalculator.getFlexibleTempHumidityCh2DailyStats(
+                    weatherData: data,
+                    historicalData: weatherService.historicalData[station.macAddress],
+                    station: station
+                )
+            }
+            humidityGetter = {
+                getTempHumidityCh2HumidityStats()
+            }
+        case 3:
+            guard let ch3Data = data.tempAndHumidityCh3 else {
+                return AnyView(EmptyView())
+            }
+            channelData = ch3Data
+            title = station.customLabels.tempHumidityCh3
+            labelKeyPath = \.tempHumidityCh3
+            statsGetter = {
+                DailyTemperatureCalculator.getFlexibleTempHumidityCh3DailyStats(
+                    weatherData: data,
+                    historicalData: weatherService.historicalData[station.macAddress],
+                    station: station
+                )
+            }
+            humidityGetter = {
+                getTempHumidityCh3HumidityStats()
+            }
+        default:
+            return AnyView(EmptyView())
+        }
+        
+        return AnyView(
+            ChannelTemperatureCard(
+                station: station,
+                data: channelData,
+                title: title,
+                onTitleChange: { newTitle in
+                    updateStationLabel(labelKeyPath, with: newTitle)
+                },
+                getDailyTemperatureStats: statsGetter,
+                getDailyHumidityStats: humidityGetter
+            )
+        )
+    }
+    
+    private func windCardView() -> some View {
+        WindCard(
+            station: station,
+            data: data,
+            onTitleChange: { newTitle in
+                updateStationLabel(\.wind, with: newTitle)
+            },
+            getDailyWindStats: {
+                DailyTemperatureCalculator.getDailyWindStats(
+                    weatherData: data,
+                    historicalData: weatherService.historicalData[station.macAddress],
+                    station: station
+                )
+            }
+        )
+    }
+    
+    private func pressureCardView() -> some View {
+        PressureCard(
+            station: station,
+            data: data,
+            onTitleChange: { newTitle in
+                updateStationLabel(\.pressure, with: newTitle)
+            },
+            getDailyPressureStats: {
+                DailyTemperatureCalculator.getDailyPressureStats(
+                    weatherData: data,
+                    historicalData: weatherService.historicalData[station.macAddress],
+                    station: station
+                )
+            }
+        )
+    }
+    
+    @ViewBuilder
+    private func rainfallCardView() -> some View {
+        if let rainfallData = data.rainfall {
+            TraditionalRainfallCard(
+                station: station,
+                data: data,
+                rainfallData: rainfallData,
+                onTitleChange: { newTitle in
+                    updateStationLabel(\.rainfall, with: newTitle)
+                }
+            )
+        }
+    }
+    
+    private func rainfallPiezoCardView() -> some View {
+        RainfallCard(
+            station: station,
+            data: data,
+            onTitleChange: { newTitle in
+                updateStationLabel(\.rainfallPiezo, with: newTitle)
+            }
+        )
+    }
+    
+    @ViewBuilder
+    private func airQualityCardView(channel: Int) -> some View {
+        switch channel {
+        case 1:
+            AirQualityCard(
+                title: station.customLabels.airQualityCh1,
+                data: data.pm25Ch1,
+                systemImage: "aqi.medium",
+                onTitleChange: { newTitle in
+                    updateStationLabel(\.airQualityCh1, with: newTitle)
+                },
+                getDailyPM25Stats: {
+                    DailyTemperatureCalculator.getDailyPM25Ch1Stats(
+                        weatherData: data,
+                        historicalData: weatherService.historicalData[station.macAddress],
+                        station: station
+                    )
+                }
+            )
+        case 2:
+            if let pm25Ch2 = data.pm25Ch2 {
+                AirQualityCard(
+                    title: station.customLabels.airQualityCh2,
+                    data: pm25Ch2,
+                    systemImage: "aqi.medium",
+                    onTitleChange: { newTitle in
+                        updateStationLabel(\.airQualityCh2, with: newTitle)
+                    },
+                    getDailyPM25Stats: {
+                        DailyTemperatureCalculator.getDailyPM25Ch2Stats(
+                            weatherData: data,
+                            historicalData: weatherService.historicalData[station.macAddress],
+                            station: station
+                        )
+                    }
+                )
+            }
+        case 3:
+            if let pm25Ch3 = data.pm25Ch3 {
+                AirQualityCard(
+                    title: station.customLabels.airQualityCh3,
+                    data: pm25Ch3,
+                    systemImage: "aqi.medium",
+                    onTitleChange: { newTitle in
+                        updateStationLabel(\.airQualityCh3, with: newTitle)
+                    },
+                    getDailyPM25Stats: {
+                        DailyTemperatureCalculator.getDailyPM25Ch3Stats(
+                            weatherData: data,
+                            historicalData: weatherService.historicalData[station.macAddress],
+                            station: station
+                        )
+                    }
+                )
+            }
+        default:
+            EmptyView()
+        }
+    }
+    
+    private func solarCardView() -> some View {
+        SolarUVCard(
+            station: station,
+            data: data,
+            onTitleChange: { newTitle in
+                updateStationLabel(\.solar, with: newTitle)
+            }
+        )
+    }
+    
+    private func lightningCardView() -> some View {
+        LightningCard(
+            station: station,
+            data: data,
+            onTitleChange: { newTitle in
+                updateStationLabel(\.lightning, with: newTitle)
+            },
+            getLastLightningStats: {
+                DailyTemperatureCalculator.getLastLightningStats(
+                    weatherData: data,
+                    historicalData: weatherService.historicalData[station.macAddress],
+                    station: station,
+                    daysToSearch: 30
+                )
+            }
+        )
+    }
+    
+    private func batteryStatusCardView() -> some View {
+        BatteryStatusCard(
+            station: station,
+            data: data,
+            onTitleChange: { newTitle in
+                updateStationLabel(\.batteryStatus, with: newTitle)
+            }
+        )
+    }
+    
+    private func sunriseSunsetCardView() -> some View {
+        SunriseSunsetCard(
+            station: station,
+            onTitleChange: { newTitle in
+                updateStationLabel(\.sunriseSunset, with: newTitle)
+            }
+        )
+    }
+    
+    private func lunarCardView() -> some View {
+        LunarCard(
+            station: station,
+            onTitleChange: { newTitle in
+                updateStationLabel(\.lunar, with: newTitle)
+            }
+        )
+    }
+    
+    private func cameraCardView() -> some View {
+        CameraTileView(
+            station: station,
+            onTitleChange: { newTitle in
+                updateStationLabel(\.camera, with: newTitle)
+            }
+        )
+    }
+    
+    // MARK: - Helper Methods
+    
+    private func updateStationLabel(_ keyPath: WritableKeyPath<SensorLabels, String>, with newTitle: String) {
+        var updatedStation = station
+        updatedStation.customLabels[keyPath: keyPath] = newTitle
+        station = updatedStation
+        weatherService.updateStation(station)
+    }
+    
+    private func getOutdoorHumidityStats() -> DailyHumidityStats? {
+        if let dailyStats = DailyTemperatureCalculator.getDailyHumidityStats(
+            weatherData: data,
+            historicalData: weatherService.historicalData[station.macAddress],
+            station: station
+        ) {
+            return dailyStats
+        }
+        guard let historical = weatherService.historicalData[station.macAddress] else { return nil }
+        return DailyTemperatureCalculator.calculateHumidityStatsFromAvailableData(from: historical.outdoor)
+    }
+    
+    private func getIndoorHumidityStats() -> DailyHumidityStats? {
+        if let dailyStats = DailyTemperatureCalculator.getIndoorDailyHumidityStats(
+            weatherData: data,
+            historicalData: weatherService.historicalData[station.macAddress],
+            station: station
+        ) {
+            return dailyStats
+        }
+        guard let historical = weatherService.historicalData[station.macAddress] else { return nil }
+        return DailyTemperatureCalculator.calculateIndoorHumidityStatsFromAvailableData(from: historical.indoor)
+    }
+    
+    private func getTempHumidityCh1HumidityStats() -> DailyHumidityStats? {
+        if let dailyStats = DailyTemperatureCalculator.getTempHumidityCh1DailyHumidityStats(
+            weatherData: data,
+            historicalData: weatherService.historicalData[station.macAddress],
+            station: station
+        ) {
+            return dailyStats
+        }
+        guard let historical = weatherService.historicalData[station.macAddress] else { return nil }
+        return DailyTemperatureCalculator.calculateChannelHumidityStatsFromAvailableData(from: historical.tempAndHumidityCh1)
+    }
+    
+    private func getTempHumidityCh2HumidityStats() -> DailyHumidityStats? {
+        if let dailyStats = DailyTemperatureCalculator.getTempHumidityCh2DailyHumidityStats(
+            weatherData: data,
+            historicalData: weatherService.historicalData[station.macAddress],
+            station: station
+        ) {
+            return dailyStats
+        }
+        guard let historical = weatherService.historicalData[station.macAddress] else { return nil }
+        return DailyTemperatureCalculator.calculateChannelHumidityStatsFromAvailableData(from: historical.tempAndHumidityCh2)
+    }
+    
+    private func getTempHumidityCh3HumidityStats() -> DailyHumidityStats? {
+        if let dailyStats = DailyTemperatureCalculator.getTempHumidityCh3DailyHumidityStats(
+            weatherData: data,
+            historicalData: weatherService.historicalData[station.macAddress],
+            station: station
+        ) {
+            return dailyStats
+        }
+        guard let historical = weatherService.historicalData[station.macAddress] else { return nil }
+        return DailyTemperatureCalculator.calculateChannelHumidityStatsFromAvailableData(from: historical.tempAndHumidityCh3)
     }
 }
 

@@ -169,10 +169,15 @@ struct ContentView: View {
                     EmptyStateView(showingSettings: $showingSettings)
                 } else if let selectedStation = selectedStation {
                     let stationBinding = Binding<WeatherStation>(
-                        get: { selectedStation },
+                        get: { 
+                            // Always get the latest station from the service
+                            weatherService.weatherStations.first(where: { $0.id == selectedStation.id }) ?? selectedStation
+                        },
                         set: { newValue in
                             if let index = weatherService.weatherStations.firstIndex(where: { $0.id == newValue.id }) {
                                 weatherService.weatherStations[index] = newValue
+                                // Also update selectedStation to reflect changes immediately
+                                self.selectedStation = newValue
                             }
                         }
                     )

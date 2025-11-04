@@ -1264,16 +1264,6 @@ class WeatherStationService: ObservableObject {
         saveWeatherStations()
     }
     
-    
-    func updateStationCardOrder(_ station: WeatherStation, newOrder: [CardType]) {
-        if let index = weatherStations.firstIndex(where: { $0.id == station.id }) {
-            objectWillChange.send()
-            weatherStations[index].cardOrder = newOrder
-            saveWeatherStations()
-            print("✅ Updated card order for: \(station.name)")
-            print("   New order: \(newOrder.map { $0.displayName })")
-        }
-    }
     func updateStation(_ station: WeatherStation) {
         updateWeatherStation(station)
     }

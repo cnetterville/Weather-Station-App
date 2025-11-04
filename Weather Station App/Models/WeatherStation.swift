@@ -23,9 +23,43 @@ struct WeatherStation: Identifiable, Codable, Equatable, Hashable {
     var timeZoneId: String?
     var associatedCameraMAC: String? // Link to camera device
     var menuBarLabel: String? // Custom short label for menubar display
+    var cardOrder: [CardType] = CardType.defaultOrder // Custom card order
     
     enum CodingKeys: String, CodingKey {
-        case name, macAddress, isActive, lastUpdated, sensorPreferences, customLabels, stationType, creationDate, deviceType, latitude, longitude, timeZoneId, associatedCameraMAC, menuBarLabel
+        case name, macAddress, isActive, lastUpdated, sensorPreferences, customLabels, stationType, creationDate, deviceType, latitude, longitude, timeZoneId, associatedCameraMAC, menuBarLabel, cardOrder
+    }
+    
+    // Custom decoder to handle missing cardOrder
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        name = try container.decode(String.self, forKey: .name)
+        macAddress = try container.decode(String.self, forKey: .macAddress)
+        isActive = try container.decodeIfPresent(Bool.self, forKey: .isActive) ?? true
+        lastUpdated = try container.decodeIfPresent(Date.self, forKey: .lastUpdated)
+        sensorPreferences = try container.decodeIfPresent(SensorPreferences.self, forKey: .sensorPreferences) ?? SensorPreferences()
+        customLabels = try container.decodeIfPresent(SensorLabels.self, forKey: .customLabels) ?? SensorLabels()
+        stationType = try container.decodeIfPresent(String.self, forKey: .stationType)
+        creationDate = try container.decodeIfPresent(Date.self, forKey: .creationDate)
+        deviceType = try container.decodeIfPresent(Int.self, forKey: .deviceType)
+        latitude = try container.decodeIfPresent(Double.self, forKey: .latitude)
+        longitude = try container.decodeIfPresent(Double.self, forKey: .longitude)
+        timeZoneId = try container.decodeIfPresent(String.self, forKey: .timeZoneId)
+        associatedCameraMAC = try container.decodeIfPresent(String.self, forKey: .associatedCameraMAC)
+        menuBarLabel = try container.decodeIfPresent(String.self, forKey: .menuBarLabel)
+        
+        // Handle cardOrder with default fallback
+        cardOrder = try container.decodeIfPresent([CardType].self, forKey: .cardOrder) ?? CardType.defaultOrder
+        
+        print("📋 Decoded station '\(name)' with \(cardOrder.count) cards in order")
+    }
+    
+    // Add explicit initializer for creating new stations
+    init(name: String, macAddress: String) {
+        self.name = name
+        self.macAddress = macAddress
+        self.cardOrder = CardType.defaultOrder
+        print("🆕 Created new station '\(name)' with default card order (\(cardOrder.count) cards)")
     }
     
     // Computed property to get the station's timezone
@@ -63,6 +97,86 @@ struct WeatherStation: Identifiable, Codable, Equatable, Hashable {
     
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
+    }
+}
+
+// MARK: - Card Type Enum for Reordering
+
+enum CardType: String, Codable, CaseIterable, Identifiable {
+    case stationInfo = "station_info"
+    case outdoorTemp = "outdoor_temp"
+    case forecast = "forecast"
+    case radar = "radar"
+    case indoorTemp = "indoor_temp"
+    case tempHumidityCh1 = "temp_humidity_ch1"
+    case tempHumidityCh2 = "temp_humidity_ch2"
+    case tempHumidityCh3 = "temp_humidity_ch3"
+    case wind = "wind"
+    case pressure = "pressure"
+    case rainfall = "rainfall"
+    case rainfallPiezo = "rainfall_piezo"
+    case airQualityCh1 = "air_quality_ch1"
+    case airQualityCh2 = "air_quality_ch2"
+    case airQualityCh3 = "air_quality_ch3"
+    case solar = "solar"
+    case lightning = "lightning"
+    case batteryStatus = "battery_status"
+    case sunriseSunset = "sunrise_sunset"
+    case lunar = "lunar"
+    case camera = "camera"
+    
+    var id: String { rawValue }
+    
+    var displayName: String {
+        switch self {
+        case .stationInfo: return "Station Info"
+        case .outdoorTemp: return "Outdoor Temperature"
+        case .forecast: return "Forecast"
+        case .radar: return "Radar"
+        case .indoorTemp: return "Indoor Temperature"
+        case .tempHumidityCh1: return "Temp/Humidity Ch1"
+        case .tempHumidityCh2: return "Temp/Humidity Ch2"
+        case .tempHumidityCh3: return "Temp/Humidity Ch3"
+        case .wind: return "Wind"
+        case .pressure: return "Pressure"
+        case .rainfall: return "Rainfall (Traditional)"
+        case .rainfallPiezo: return "Rainfall (Piezo)"
+        case .airQualityCh1: return "Air Quality Ch1"
+        case .airQualityCh2: return "Air Quality Ch2"
+        case .airQualityCh3: return "Air Quality Ch3"
+        case .solar: return "Solar & UV"
+        case .lightning: return "Lightning"
+        case .batteryStatus: return "Battery Status"
+        case .sunriseSunset: return "Sunrise/Sunset"
+        case .lunar: return "Lunar"
+        case .camera: return "Camera"
+        }
+    }
+    
+    static var defaultOrder: [CardType] {
+        return [
+            .stationInfo,
+            .outdoorTemp,
+            .forecast,
+            .radar,
+            .indoorTemp,
+            .tempHumidityCh1,
+            .tempHumidityCh2,
+            .tempHumidityCh3,
+            .wind,
+            .pressure,
+            .rainfall,
+            .rainfallPiezo,
+            .airQualityCh1,
+            .airQualityCh2,
+            .airQualityCh3,
+            .solar,
+            .lightning,
+            .batteryStatus,
+            .sunriseSunset,
+            .lunar,
+            .camera
+        ]
     }
 }
 
