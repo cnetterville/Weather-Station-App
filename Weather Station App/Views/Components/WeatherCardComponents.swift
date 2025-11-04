@@ -53,12 +53,14 @@ struct EditableWeatherCard<Content: View>: View {
     
     @State private var isEditing = false
     @State private var editedTitle = ""
+    @State private var displayedTitle = ""
     
     init(title: Binding<String>, systemImage: String, onTitleChange: @escaping (String) -> Void, @ViewBuilder content: () -> Content) {
         self._title = title
         self.systemImage = systemImage
         self.onTitleChange = onTitleChange
         self.content = content()
+        self._displayedTitle = State(initialValue: title.wrappedValue)
     }
     
     var body: some View {
@@ -76,20 +78,27 @@ struct EditableWeatherCard<Content: View>: View {
                         .font(.headline)
                         .fontWeight(.semibold)
                         .onSubmit {
-                            onTitleChange(editedTitle)
-                            title = editedTitle
+                            if !editedTitle.isEmpty && editedTitle != displayedTitle {
+                                displayedTitle = editedTitle
+                                onTitleChange(editedTitle)
+                            }
                             isEditing = false
                         }
                         .onAppear {
-                            editedTitle = title
+                            editedTitle = displayedTitle
+                        }
+                        .onExitCommand {
+                            // Cancel editing on Escape key
+                            editedTitle = displayedTitle
+                            isEditing = false
                         }
                 } else {
-                    Text(title)
+                    Text(displayedTitle)
                         .font(.headline)
                         .fontWeight(.semibold)
                         .foregroundColor(.primary)
                         .onTapGesture {
-                            editedTitle = title
+                            editedTitle = displayedTitle
                             isEditing = true
                         }
                 }
@@ -100,8 +109,8 @@ struct EditableWeatherCard<Content: View>: View {
             // Content - now adaptive to content size
             content
         }
-        .frame(maxWidth: .infinity, minHeight: 120, alignment: .topLeading) // Fixed parameter order
-        .padding(16) // Slightly reduced padding
+        .frame(maxWidth: .infinity, minHeight: 120, alignment: .topLeading)
+        .padding(16)
         .background {
             // Modern multi-layer background effect
             ZStack {
@@ -139,6 +148,10 @@ struct EditableWeatherCard<Content: View>: View {
         )
         .scaleEffect(1.0)
         .animation(.easeInOut(duration: 0.2), value: isEditing)
+        .onChange(of: title) { _, newValue in
+            // Update display when title binding changes from parent
+            displayedTitle = newValue
+        }
     }
 }
 

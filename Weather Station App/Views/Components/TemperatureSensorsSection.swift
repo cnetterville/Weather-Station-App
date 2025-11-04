@@ -52,7 +52,9 @@ struct TemperatureSensorsSection: View {
                 ForecastCard(
                     station: station,
                     onTitleChange: { newTitle in
-                        station.customLabels.forecast = newTitle
+                        var updatedStation = station
+                        updatedStation.customLabels.forecast = newTitle
+                        station = updatedStation
                         weatherService.updateStation(station)
                     }
                 )

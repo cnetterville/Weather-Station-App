@@ -1270,8 +1270,11 @@ class WeatherStationService: ObservableObject {
     
     func updateWeatherStation(_ station: WeatherStation) {
         if let index = weatherStations.firstIndex(where: { $0.id == station.id }) {
+            // Trigger objectWillChange BEFORE updating to ensure UI refresh
+            objectWillChange.send()
             weatherStations[index] = station
             saveWeatherStations()
+            print("✅ Updated station: \(station.name)")
         }
     }
     
