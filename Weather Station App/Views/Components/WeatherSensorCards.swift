@@ -46,6 +46,74 @@ struct OutdoorTemperatureCard: View {
         return forecast.dailyForecasts.first?.weatherDescription ?? "Clear sky"
     }
     
+    // Get today's precipitation probability
+    private func getTodaysPrecipitationProbability() -> Int? {
+        guard let forecast = WeatherForecastService.shared.getForecast(for: station) else {
+            return nil
+        }
+        
+        // Find today's forecast
+        if let todaysForecast = forecast.dailyForecasts.first(where: { $0.isToday }) {
+            return todaysForecast.precipitationProbability > 0 ? todaysForecast.precipitationProbability : nil
+        }
+        
+        // Fallback to first available forecast
+        if let firstForecast = forecast.dailyForecasts.first {
+            return firstForecast.precipitationProbability > 0 ? firstForecast.precipitationProbability : nil
+        }
+        
+        return nil
+    }
+    
+    // Get today's precipitation amount
+    private func getTodaysPrecipitation() -> Double? {
+        guard let forecast = WeatherForecastService.shared.getForecast(for: station) else {
+            return nil
+        }
+        
+        // Find today's forecast
+        if let todaysForecast = forecast.dailyForecasts.first(where: { $0.isToday }) {
+            return todaysForecast.precipitation > 0.1 ? todaysForecast.precipitation : nil
+        }
+        
+        // Fallback to first available forecast
+        if let firstForecast = forecast.dailyForecasts.first {
+            return firstForecast.precipitation > 0.1 ? firstForecast.precipitation : nil
+        }
+        
+        return nil
+    }
+    
+    // Format precipitation amount using the same logic as DailyWeatherForecast
+    private func formatPrecipitation(_ precipitation: Double) -> String {
+        let displayMode = UserDefaults.standard.unitSystemDisplayMode
+        
+        switch displayMode {
+        case .imperial:
+            let inches = precipitation * 0.0393701
+            if inches < 0.05 {
+                return "0.00in"
+            } else {
+                return String(format: "%.2fin", inches)
+            }
+            
+        case .metric:
+            if precipitation < 0.5 {
+                return "0.0mm"
+            } else {
+                return String(format: "%.1fmm", precipitation)
+            }
+            
+        case .both:
+            let inches = precipitation * 0.0393701
+            if precipitation < 0.5 && inches < 0.05 {
+                return "0.0mm/0.00in"
+            } else {
+                return String(format: "%.1fmm/%.2fin", precipitation, inches)
+            }
+        }
+    }
+    
     // Get temperature emoji based on actual temperature value
     private func getTemperatureEmoji(for tempString: String) -> String {
         guard let temp = Double(tempString) else { return "🌡️" }
@@ -98,6 +166,37 @@ struct OutdoorTemperatureCard: View {
                             .font(.caption2)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
+                        
+                        // Precipitation info - amount and/or probability
+                        if let precipitation = getTodaysPrecipitation() {
+                            // Show both amount and probability if probability > 0
+                            HStack(spacing: 2) {
+                                Image(systemName: "drop.fill")
+                                    .font(.system(size: 8))
+                                    .foregroundColor(.blue)
+                                Text(formatPrecipitation(precipitation))
+                                    .font(.caption2)
+                                    .foregroundColor(.blue)
+                                
+                                if let precipProb = getTodaysPrecipitationProbability() {
+                                    Text("(\(precipProb)%)")
+                                        .font(.caption2)
+                                        .foregroundColor(.blue.opacity(0.8))
+                                }
+                            }
+                            .padding(.top, 2)
+                        } else if let precipProb = getTodaysPrecipitationProbability(), precipProb > 20 {
+                            // Show only probability if there's a chance but minimal amount
+                            HStack(spacing: 2) {
+                                Image(systemName: "drop.fill")
+                                    .font(.system(size: 8))
+                                    .foregroundColor(.blue.opacity(0.7))
+                                Text("\(precipProb)%")
+                                    .font(.caption2)
+                                    .foregroundColor(.blue.opacity(0.7))
+                            }
+                            .padding(.top, 2)
+                        }
                     }
                     
                     Spacer()

@@ -337,7 +337,7 @@ struct ForecastDayRow: View {
                 .frame(width: 65, alignment: .trailing)
             }
             
-            // Bottom row: Date, Precipitation, Wind
+            // Bottom row: Date, Precipitation/Probability, Wind
             HStack(spacing: 8) {
                 // Date
                 if !forecast.isToday {
@@ -350,8 +350,9 @@ struct ForecastDayRow: View {
                         .frame(width: 45)
                 }
                 
-                // Precipitation
+                // Precipitation amount and/or probability
                 if forecast.precipitation > 0.1 {
+                    // Show both amount and probability if probability > 0
                     HStack(spacing: 2) {
                         Image(systemName: "drop.fill")
                             .font(.system(size: 8))
@@ -359,6 +360,22 @@ struct ForecastDayRow: View {
                         Text(forecast.formattedPrecipitation)
                             .font(.system(size: 9))
                             .foregroundColor(.blue)
+                        
+                        if forecast.precipitationProbability > 0 {
+                            Text("(\(forecast.precipitationProbability)%)")
+                                .font(.system(size: 9))
+                                .foregroundColor(.blue.opacity(0.8))
+                        }
+                    }
+                } else if forecast.precipitationProbability > 20 {
+                    // Show only probability if there's a chance but no expected amount
+                    HStack(spacing: 2) {
+                        Image(systemName: "drop.fill")
+                            .font(.system(size: 8))
+                            .foregroundColor(.blue.opacity(0.7))
+                        Text("\(forecast.precipitationProbability)%")
+                            .font(.system(size: 9))
+                            .foregroundColor(.blue.opacity(0.7))
                     }
                 } else {
                     Spacer()

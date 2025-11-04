@@ -67,7 +67,7 @@ class WeatherForecastService: ObservableObject {
         urlComponents?.queryItems = [
             URLQueryItem(name: "latitude", value: String(latitude)),
             URLQueryItem(name: "longitude", value: String(longitude)),
-            URLQueryItem(name: "daily", value: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant"),
+            URLQueryItem(name: "daily", value: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_direction_10m_dominant"),
             URLQueryItem(name: "timezone", value: "auto"),
             URLQueryItem(name: "forecast_days", value: "5")
         ]
@@ -153,6 +153,7 @@ class WeatherForecastService: ObservableObject {
                     maxTemperature: response.daily.temperature2mMax[i],
                     minTemperature: response.daily.temperature2mMin[i],
                     precipitation: response.daily.precipitationSum[i],
+                    precipitationProbability: response.daily.precipitationProbabilityMax[i],
                     maxWindSpeed: response.daily.windSpeed10mMax[i],
                     windDirection: response.daily.windDirection10mDominant[i],
                     timezone: forecastTimeZone

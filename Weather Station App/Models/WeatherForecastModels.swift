@@ -30,6 +30,7 @@ struct DailyForecast: Codable {
     let temperature2mMax: [Double]
     let temperature2mMin: [Double]
     let precipitationSum: [Double]
+    let precipitationProbabilityMax: [Int]
     let windSpeed10mMax: [Double]
     let windDirection10mDominant: [Int]
     
@@ -39,6 +40,7 @@ struct DailyForecast: Codable {
         case temperature2mMax = "temperature_2m_max"
         case temperature2mMin = "temperature_2m_min"
         case precipitationSum = "precipitation_sum"
+        case precipitationProbabilityMax = "precipitation_probability_max"
         case windSpeed10mMax = "wind_speed_10m_max"
         case windDirection10mDominant = "wind_direction_10m_dominant"
     }
@@ -79,6 +81,7 @@ struct DailyWeatherForecast {
     let maxTemperature: Double
     let minTemperature: Double
     let precipitation: Double
+    let precipitationProbability: Int
     let maxWindSpeed: Double
     let windDirection: Int
     let timezone: TimeZone // Add timezone property
