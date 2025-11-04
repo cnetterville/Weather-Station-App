@@ -192,17 +192,141 @@ struct SunStrengthIndicator: View {
                     lineWidth: 8
                 )
                 
-                // Animated sun icon at center
-                AnimatedSunIcon(
-                    intensity: intensityLevel,
-                    solarRadiation: solarRadiation
-                )
-                .position(x: centerX, y: centerY - 5)
+                // Choose your preferred icon style (uncomment one):
+                
+                // OPTION 1: Simple static SF Symbol
+                // SimpleSunIcon(intensity: intensityLevel, solarRadiation: solarRadiation)
+                //     .position(x: centerX, y: centerY - 5)
+                
+                // OPTION 2: Static custom sun with rays (no animation)
+                // StaticCustomSunIcon(intensity: intensityLevel, solarRadiation: solarRadiation)
+                //     .position(x: centerX, y: centerY - 5)
+                
+                // OPTION 3: Subtle pulsing glow only (no rotation)
+                PulsingSunIcon(intensity: intensityLevel, solarRadiation: solarRadiation)
+                    .position(x: centerX, y: centerY - 5)
+                
+                // OPTION 4: Original animated version (rotating rays + pulse)
+                // AnimatedSunIcon(intensity: intensityLevel, solarRadiation: solarRadiation)
+                //     .position(x: centerX, y: centerY - 5)
             }
         }
     }
 }
 
+// OPTION 1: Simple SF Symbol Icon
+struct SimpleSunIcon: View {
+    let intensity: SunStrengthIndicator.SolarIntensityLevel
+    let solarRadiation: Double
+    
+    var body: some View {
+        Image(systemName: "sun.max.fill")
+            .font(.system(size: intensity.sunSize))
+            .foregroundStyle(intensity.color)
+            .shadow(color: intensity.color.opacity(0.4), radius: intensity.glowRadius)
+    }
+}
+
+// OPTION 2: Static Custom Sun with Rays (no animation)
+struct StaticCustomSunIcon: View {
+    let intensity: SunStrengthIndicator.SolarIntensityLevel
+    let solarRadiation: Double
+    
+    var body: some View {
+        ZStack {
+            // Static sun rays
+            ForEach(0..<8, id: \.self) { index in
+                Rectangle()
+                    .fill(intensity.color)
+                    .frame(width: 2, height: intensity.rayLength)
+                    .offset(y: -(intensity.sunSize / 2 + intensity.rayLength / 2 + 2))
+                    .rotationEffect(.degrees(Double(index) * 45))
+                    .opacity(solarRadiation > 100 ? 0.8 : 0.3)
+            }
+            
+            // Central sun circle
+            Circle()
+                .fill(
+                    RadialGradient(
+                        gradient: Gradient(colors: [
+                            intensity.color.opacity(0.9),
+                            intensity.color
+                        ]),
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: intensity.sunSize / 2
+                    )
+                )
+                .frame(width: intensity.sunSize, height: intensity.sunSize)
+                .shadow(
+                    color: intensity.color.opacity(0.6),
+                    radius: intensity.glowRadius
+                )
+        }
+    }
+}
+
+// OPTION 3: Pulsing Glow Only (no rotation)
+struct PulsingSunIcon: View {
+    let intensity: SunStrengthIndicator.SolarIntensityLevel
+    let solarRadiation: Double
+    
+    @State private var pulseScale: CGFloat = 1.0
+    
+    var body: some View {
+        ZStack {
+            // Static sun rays
+            ForEach(0..<8, id: \.self) { index in
+                Rectangle()
+                    .fill(intensity.color)
+                    .frame(width: 2, height: intensity.rayLength)
+                    .offset(y: -(intensity.sunSize / 2 + intensity.rayLength / 2 + 2))
+                    .rotationEffect(.degrees(Double(index) * 45))
+                    .opacity(solarRadiation > 100 ? 0.8 : 0.3)
+            }
+            
+            // Central sun circle with pulse
+            Circle()
+                .fill(
+                    RadialGradient(
+                        gradient: Gradient(colors: [
+                            intensity.color.opacity(0.9),
+                            intensity.color
+                        ]),
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: intensity.sunSize / 2
+                    )
+                )
+                .frame(width: intensity.sunSize, height: intensity.sunSize)
+                .scaleEffect(pulseScale)
+                .shadow(
+                    color: intensity.color.opacity(0.6),
+                    radius: intensity.glowRadius
+                )
+        }
+        .onAppear {
+            if intensity.glowRadius > 0 {
+                withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+                    pulseScale = 1.15
+                }
+            }
+        }
+        .onChange(of: intensity) { _, newIntensity in
+            if newIntensity.glowRadius > 0 {
+                withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+                    pulseScale = 1.15
+                }
+            } else {
+                withAnimation(.easeOut(duration: 0.3)) {
+                    pulseScale = 1.0
+                }
+            }
+        }
+    }
+}
+
+// OPTION 4: Original Animated Version (kept for reference)
 struct AnimatedSunIcon: View {
     let intensity: SunStrengthIndicator.SolarIntensityLevel
     let solarRadiation: Double
