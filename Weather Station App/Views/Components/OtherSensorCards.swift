@@ -37,7 +37,7 @@ struct WindCard: View {
                         direction: Double(data.wind.windDirection.value) ?? 0,
                         speed: Double(data.wind.windSpeed.value) ?? 0
                     )
-                    .frame(width: 45, height: 45)
+                    .frame(width: 120, height: 120)
                     
                     Spacer()
                     
@@ -75,66 +75,118 @@ struct WindCompass: View {
     
     var body: some View {
         ZStack {
-            // Compass base circle
+            // Outer compass ring
             Circle()
-                .stroke(Color.secondary.opacity(0.3), lineWidth: 1.5)
+                .stroke(
+                    LinearGradient(
+                        colors: [Color.blue.opacity(0.3), Color.cyan.opacity(0.3)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 2
+                )
                 .background(
                     Circle()
-                        .fill(Color.primary.opacity(0.05))
+                        .fill(
+                            RadialGradient(
+                                colors: [Color.primary.opacity(0.08), Color.primary.opacity(0.02)],
+                                center: .center,
+                                startRadius: 0,
+                                endRadius: 60
+                            )
+                        )
                 )
             
-            // Cardinal direction markers
-            ForEach([0, 90, 180, 270], id: \.self) { angle in
+            // Major tick marks (every 30 degrees)
+            ForEach(0..<12, id: \.self) { index in
+                let angle = Double(index) * 30.0
                 Rectangle()
-                    .fill(Color.secondary.opacity(0.4))
-                    .frame(width: 1, height: 6)
-                    .offset(y: -17)
-                    .rotationEffect(.degrees(Double(angle)))
+                    .fill(Color.secondary.opacity(0.6))
+                    .frame(width: 1.5, height: isCardinalDirection(angle) ? 12 : 8)
+                    .offset(y: -48)
+                    .rotationEffect(.degrees(angle))
             }
             
-            // Cardinal direction labels using absolute positioning
-            Text("N")
-                .font(.caption2)
-                .fontWeight(.semibold)
-                .foregroundColor(.secondary)
-                .position(x: 22.5, y: 6)
+            // Minor tick marks (every 10 degrees)
+            ForEach(0..<36, id: \.self) { index in
+                let angle = Double(index) * 10.0
+                if !isMajorTick(angle) {
+                    Rectangle()
+                        .fill(Color.secondary.opacity(0.3))
+                        .frame(width: 1, height: 4)
+                        .offset(y: -48)
+                        .rotationEffect(.degrees(angle))
+                }
+            }
             
-            Text("S")
-                .font(.caption2)
-                .fontWeight(.semibold)
-                .foregroundColor(.secondary)
-                .position(x: 22.5, y: 39)
-                
-            Text("W")
-                .font(.caption2)
-                .fontWeight(.semibold)
-                .foregroundColor(.secondary)
-                .position(x: 6, y: 22.5)
-                
-            Text("E")
-                .font(.caption2)
-                .fontWeight(.semibold)
-                .foregroundColor(.secondary)
-                .position(x: 39, y: 22.5)
+            // Cardinal direction labels (N, S, E, W)
+            CompassLabel(text: "N", angle: 0, distance: 38, color: .red)
+            CompassLabel(text: "S", angle: 180, distance: 38, color: .primary)
+            CompassLabel(text: "E", angle: 90, distance: 38, color: .primary)
+            CompassLabel(text: "W", angle: 270, distance: 38, color: .primary)
             
-            // Wind direction arrow
-            Image(systemName: "location.north.fill")
-                .foregroundColor(windArrowColor)
-                .font(.system(size: 14, weight: .bold))
-                .rotationEffect(.degrees(rotationAngle))
-                .scaleEffect(pulseScale)
-                .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: pulseScale)
-                .onAppear {
-                    updateRotation()
-                    startPulseAnimation()
-                }
-                .onChange(of: direction) { _, _ in
-                    updateRotation()
-                }
-                .onChange(of: speed) { _, _ in
-                    startPulseAnimation()
-                }
+            // Intercardinal direction labels (NE, SE, SW, NW)
+            CompassLabel(text: "NE", angle: 45, distance: 35, color: .secondary, fontSize: 9)
+            CompassLabel(text: "SE", angle: 135, distance: 35, color: .secondary, fontSize: 9)
+            CompassLabel(text: "SW", angle: 225, distance: 35, color: .secondary, fontSize: 9)
+            CompassLabel(text: "NW", angle: 315, distance: 35, color: .secondary, fontSize: 9)
+            
+            // Center dot
+            Circle()
+                .fill(Color.primary.opacity(0.2))
+                .frame(width: 8, height: 8)
+            
+            // Wind direction arrow with enhanced design
+            ZStack {
+                // Arrow shadow for depth
+                Image(systemName: "arrowtriangle.up.fill")
+                    .foregroundColor(.black.opacity(0.2))
+                    .font(.system(size: 20, weight: .bold))
+                    .offset(y: -2)
+                    .blur(radius: 2)
+                
+                // Main arrow
+                Image(systemName: "arrowtriangle.up.fill")
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [windArrowColor, windArrowColor.opacity(0.7)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .font(.system(size: 20, weight: .bold))
+                
+                // Tail marker (opposite end)
+                Circle()
+                    .fill(windArrowColor.opacity(0.5))
+                    .frame(width: 6, height: 6)
+                    .offset(y: 15)
+            }
+            .rotationEffect(.degrees(rotationAngle))
+            .scaleEffect(pulseScale)
+            .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: pulseScale)
+            .onAppear {
+                updateRotation()
+                startPulseAnimation()
+            }
+            .onChange(of: direction) { _, _ in
+                updateRotation()
+            }
+            .onChange(of: speed) { _, _ in
+                startPulseAnimation()
+            }
         }
+        .frame(width: 120, height: 120)
+    }
+    
+    private func isCardinalDirection(_ angle: Double) -> Bool {
+        let normalized = angle.truncatingRemainder(dividingBy: 360)
+        return normalized == 0 || normalized == 90 || normalized == 180 || normalized == 270
+    }
+    
+    private func isMajorTick(_ angle: Double) -> Bool {
+        let normalized = angle.truncatingRemainder(dividingBy: 360)
+        return normalized.truncatingRemainder(dividingBy: 30) == 0
     }
     
     private var windArrowColor: Color {
@@ -164,6 +216,23 @@ struct WindCompass: View {
                 pulseScale = 1.0 + (intensity * 0.2)
             }
         }
+    }
+}
+
+// Helper view for compass labels
+struct CompassLabel: View {
+    let text: String
+    let angle: Double
+    let distance: CGFloat
+    let color: Color
+    var fontSize: CGFloat = 11
+    
+    var body: some View {
+        Text(text)
+            .font(.system(size: fontSize, weight: .bold, design: .rounded))
+            .foregroundColor(color)
+            .offset(y: -distance)
+            .rotationEffect(.degrees(angle))
     }
 }
 
