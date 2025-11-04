@@ -1180,10 +1180,10 @@ struct SunTimesView: View {
                 Spacer()
             }
             
-            // Sun Position Arc - Made more compact
+            // Sun Position Arc - Enhanced version
             SunPositionArc(sunTimes: sunTimes)
-                .frame(height: 35) 
-                .padding(.vertical, 2) 
+                .frame(height: 50) 
+                .padding(.vertical, 4) 
             
             // Sunrise and sunset times
             HStack {
@@ -1339,6 +1339,26 @@ struct SunPositionArc: View {
         return now >= sunTimes.sunrise && now <= sunTimes.sunset
     }
     
+    // Sky gradient colors based on time of day
+    private var skyGradientColors: [Color] {
+        if !isDaytime {
+            // Nighttime - dark blue to black
+            return [Color.black.opacity(0.3), Color.blue.opacity(0.4), Color.black.opacity(0.3)]
+        }
+        
+        // Daytime gradient based on sun position
+        if sunPosition < 0.2 {
+            // Sunrise colors (orange/pink)
+            return [Color.orange.opacity(0.4), Color.pink.opacity(0.3), Color.blue.opacity(0.2)]
+        } else if sunPosition > 0.8 {
+            // Sunset colors (red/orange)
+            return [Color.blue.opacity(0.2), Color.orange.opacity(0.4), Color.red.opacity(0.3)]
+        } else {
+            // Midday - bright blue sky
+            return [Color.blue.opacity(0.3), Color.cyan.opacity(0.2), Color.blue.opacity(0.3)]
+        }
+    }
+    
     var body: some View {
         GeometryReader { geometry in
             let width = geometry.size.width
@@ -1346,6 +1366,22 @@ struct SunPositionArc: View {
             let arcHeight = height * 0.7
             
             ZStack {
+                // Sky gradient background
+                LinearGradient(
+                    gradient: Gradient(colors: skyGradientColors),
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(height: height)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .opacity(0.4)
+                
+                // Horizon line
+                Rectangle()
+                    .fill(Color.secondary.opacity(0.2))
+                    .frame(height: 1)
+                    .position(x: width / 2, y: height)
+                
                 // Background arc representing the sun's path
                 Path { path in
                     path.move(to: CGPoint(x: 0, y: height))
@@ -1354,9 +1390,24 @@ struct SunPositionArc: View {
                         control: CGPoint(x: width / 2, y: height - arcHeight)
                     )
                 }
-                .stroke(Color.secondary.opacity(0.3), lineWidth: 2)
+                .stroke(
+                    Color.secondary.opacity(0.3),
+                    style: StrokeStyle(lineWidth: 2, dash: [5, 5])
+                )
                 
-                // Daylight portion of the arc (if currently daylight)
+                // Noon marker
+                let noonX = width * 0.5
+                let noonY = height - (arcHeight * sin(.pi * 0.5))
+                Circle()
+                    .fill(Color.secondary.opacity(0.4))
+                    .frame(width: 4, height: 4)
+                    .position(x: noonX, y: noonY)
+                Text("Noon")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .position(x: noonX, y: noonY - 12)
+                
+                // Daylight portion of the arc (if currently daylight) - enhanced with gradient
                 if isDaytime {
                     Path { path in
                         path.move(to: CGPoint(x: 0, y: height))
@@ -1372,39 +1423,141 @@ struct SunPositionArc: View {
                     }
                     .stroke(
                         LinearGradient(
-                            gradient: Gradient(colors: [.orange, .yellow]),
+                            gradient: Gradient(colors: [
+                                .orange.opacity(0.8),
+                                .yellow.opacity(0.9),
+                                .orange.opacity(0.8)
+                            ]),
                             startPoint: .leading,
                             endPoint: .trailing
                         ),
-                        lineWidth: 3
+                        style: StrokeStyle(lineWidth: 4, lineCap: .round)
                     )
+                    .shadow(color: .orange.opacity(0.3), radius: 2)
                 }
                 
-                // Sun position indicator
+                // Sunrise marker with label
+                VStack(spacing: 2) {
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                gradient: Gradient(colors: [.orange.opacity(0.8), .orange]),
+                                center: .center,
+                                startRadius: 0,
+                                endRadius: 4
+                            )
+                        )
+                        .frame(width: 8, height: 8)
+                        .shadow(color: .orange.opacity(0.6), radius: 2)
+                    
+                    Text("↑")
+                        .font(.caption2)
+                        .foregroundColor(.orange)
+                }
+                .position(x: 0, y: height - 10)
+                
+                // Sunset marker with label
+                VStack(spacing: 2) {
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                gradient: Gradient(colors: [.red.opacity(0.8), .red]),
+                                center: .center,
+                                startRadius: 0,
+                                endRadius: 4
+                            )
+                        )
+                        .frame(width: 8, height: 8)
+                        .shadow(color: .red.opacity(0.6), radius: 2)
+                    
+                    Text("↓")
+                        .font(.caption2)
+                        .foregroundColor(.red)
+                }
+                .position(x: width, y: height - 10)
+                
+                // Sun position indicator - enhanced with glow and rays
                 let sunX = width * sunPosition
-                let sunY = isDaytime ? 
-                    height - (arcHeight * sin(.pi * sunPosition)) : 
+                let sunY = isDaytime ?
+                    height - (arcHeight * sin(.pi * sunPosition)) :
                     height + 5 // Below horizon when not daylight
                 
-                Circle()
-                    .fill(isDaytime ? .yellow : .gray)
-                    .frame(width: 12, height: 12)
-                    .position(x: sunX, y: sunY)
-                    .shadow(color: isDaytime ? .yellow.opacity(0.6) : .clear, radius: 2)
+                ZStack {
+                    // Sun glow effect (outer layer)
+                    if isDaytime {
+                        Circle()
+                            .fill(
+                                RadialGradient(
+                                    gradient: Gradient(colors: [
+                                        .yellow.opacity(0.3),
+                                        .orange.opacity(0.1),
+                                        .clear
+                                    ]),
+                                    center: .center,
+                                    startRadius: 0,
+                                    endRadius: 12
+                                )
+                            )
+                            .frame(width: 24, height: 24)
+                        
+                        // Sun rays
+                        ForEach(0..<8) { index in
+                            Rectangle()
+                                .fill(.yellow.opacity(0.5))
+                                .frame(width: 1, height: 6)
+                                .offset(y: -10)
+                                .rotationEffect(.degrees(Double(index) * 45))
+                        }
+                    }
+                    
+                    // Main sun circle
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                gradient: Gradient(colors: [
+                                    .yellow.opacity(0.9),
+                                    isDaytime ? .yellow : .gray
+                                ]),
+                                center: .center,
+                                startRadius: 0,
+                                endRadius: 8
+                            )
+                        )
+                        .frame(width: 16, height: 16)
+                        .shadow(color: isDaytime ? .yellow.opacity(0.8) : .clear, radius: 4)
+                    
+                    // Sun highlight
+                    Circle()
+                        .fill(.white.opacity(0.6))
+                        .frame(width: 6, height: 6)
+                        .offset(x: -2, y: -2)
+                }
+                .position(x: sunX, y: sunY)
                 
-                // Sunrise marker
-                Circle()
-                    .fill(.orange)
-                    .frame(width: 6, height: 6)
-                    .position(x: 0, y: height)
-                
-                // Sunset marker  
-                Circle()
-                    .fill(.red)
-                    .frame(width: 6, height: 6)
-                    .position(x: width, y: height)
+                // Current time label (only during daytime)
+                if isDaytime {
+                    Text(currentTimeString)
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(
+                            Capsule()
+                                .fill(.ultraThinMaterial)
+                                .shadow(color: .black.opacity(0.1), radius: 2)
+                        )
+                        .position(x: sunX, y: sunY - 25)
+                }
             }
         }
+    }
+    
+    private var currentTimeString: String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        formatter.timeZone = sunTimes.timeZone
+        return formatter.string(from: Date())
     }
 }
 
