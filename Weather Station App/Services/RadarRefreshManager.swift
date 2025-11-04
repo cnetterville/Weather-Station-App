@@ -42,7 +42,7 @@ class RadarRefreshManager: ObservableObject {
             object: nil
         )
         
-        print("🔄 RadarRefreshManager initialized with \(Int(defaultRefreshInterval))s interval")
+        logRefresh("RadarRefreshManager initialized with \(Int(defaultRefreshInterval))s interval")
     }
     
     deinit {
@@ -77,7 +77,7 @@ class RadarRefreshManager: ObservableObject {
             self.startCountdownTimer(for: stationId)
         }
         
-        print("🔄 Started radar tracking for station: \(stationId) (interval: \(Int(interval))s)")
+        logRefresh("Started radar tracking for station: \(stationId) (interval: \(Int(interval))s)")
     }
     
     /// Stop tracking radar refresh for a station
@@ -91,7 +91,7 @@ class RadarRefreshManager: ObservableObject {
             }
         }
         
-        print("🔄 Stopped radar tracking for station: \(stationId)")
+        logRefresh("Stopped radar tracking for station: \(stationId)")
     }
     
     /// Trigger immediate refresh and reset timer
@@ -125,7 +125,7 @@ class RadarRefreshManager: ObservableObject {
             self.startPersistentTimer(for: stationId, interval: interval)
         }
         
-        print("🔄 Manual refresh triggered for station: \(stationId)")
+        logRefresh("Manual refresh triggered for station: \(stationId)")
     }
     
     /// Get current refresh state for a station
@@ -166,7 +166,7 @@ class RadarRefreshManager: ObservableObject {
         timer.resume()
         timers[stationId] = timer
         
-        print("🔄 Started persistent timer for \(stationId): \(Int(interval))s interval")
+        logTimer("Started persistent timer for \(stationId): \(Int(interval))s interval")
     }
     
     private func startCountdownTimer(for stationId: String) {
@@ -181,14 +181,14 @@ class RadarRefreshManager: ObservableObject {
         countdownTimer.resume()
         countdownTimers[stationId] = countdownTimer
         
-        print("🔄 Started countdown timer for \(stationId)")
+        logTimer("Started countdown timer for \(stationId)")
     }
     
     private func stopTimer(for stationId: String) {
         if let timer = timers[stationId] {
             timer.cancel()
             timers.removeValue(forKey: stationId)
-            print("🔄 Stopped timer for \(stationId)")
+            logTimer("Stopped timer for \(stationId)")
         }
     }
     
@@ -196,20 +196,20 @@ class RadarRefreshManager: ObservableObject {
         if let timer = countdownTimers[stationId] {
             timer.cancel()
             countdownTimers.removeValue(forKey: stationId)
-            print("🔄 Stopped countdown timer for \(stationId)")
+            logTimer("Stopped countdown timer for \(stationId)")
         }
     }
     
     private func stopAllTimers() {
         for (stationId, timer) in timers {
             timer.cancel()
-            print("🔄 Cancelled timer for \(stationId)")
+            logTimer("Cancelled timer for \(stationId)")
         }
         timers.removeAll()
         
         for (stationId, timer) in countdownTimers {
             timer.cancel()
-            print("🔄 Cancelled countdown timer for \(stationId)")
+            logTimer("Cancelled countdown timer for \(stationId)")
         }
         countdownTimers.removeAll()
     }
@@ -237,7 +237,7 @@ class RadarRefreshManager: ObservableObject {
             }
         }
         
-        print("🔄 Auto-refresh fired for station: \(stationId)")
+        logRefresh("Auto-refresh fired for station: \(stationId)")
     }
     
     private func updateTimeRemaining(for stationId: String) {
@@ -279,7 +279,7 @@ class RadarRefreshManager: ObservableObject {
             }
         }
         
-        print("🔄 Updated all timer intervals to \(Int(defaultRefreshInterval))s")
+        logRefresh("Updated all timer intervals to \(Int(defaultRefreshInterval))s")
     }
     
     @objc private func handleSettingsChange(notification: Notification) {

@@ -10,7 +10,7 @@ import SwiftUI
 // AppDelegate to handle notifications when no windows exist
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
-        print("🚀 AppDelegate: App finished launching")
+        logSuccess("AppDelegate: App finished launching")
         
         // Set up observer for showing main window when needed
         NotificationCenter.default.addObserver(
@@ -22,7 +22,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     @objc func handleShowMainWindow() {
-        print("📱 AppDelegate: Received showMainWindow notification")
+        logUI("AppDelegate: Received showMainWindow notification")
         
         // Check if there are any existing main windows
         let hasMainWindow = NSApp.windows.contains { window in
@@ -33,11 +33,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         
         if hasMainWindow {
-            print("✅ AppDelegate: Main window already exists, letting ContentView handle it")
+            logSuccess("AppDelegate: Main window already exists, letting ContentView handle it")
             return
         }
         
-        print("📱 AppDelegate: No main window exists, creating new one")
+        logUI("AppDelegate: No main window exists, creating new one")
         
         // Create a new window with proper SwiftUI lifecycle management
         DispatchQueue.main.async {
@@ -45,15 +45,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // This will trigger SwiftUI to create a new WindowGroup instance
             if NSApp.responds(to: #selector(NSDocumentController.newDocument(_:))) {
                 NSApp.sendAction(#selector(NSDocumentController.newDocument(_:)), to: nil, from: nil)
-                print("✅ AppDelegate: Sent newDocument action")
+                logSuccess("AppDelegate: Sent newDocument action")
             } else {
                 // Fallback: Try to trigger File > New menu item
                 if let fileMenu = NSApp.mainMenu?.item(withTitle: "File"),
                    let newItem = fileMenu.submenu?.items.first(where: { $0.title.contains("New") }) {
                     NSApp.sendAction(newItem.action!, to: newItem.target, from: newItem)
-                    print("✅ AppDelegate: Triggered File > New menu item")
+                    logSuccess("AppDelegate: Triggered File > New menu item")
                 } else {
-                    print("❌ AppDelegate: Could not find way to create new window")
+                    logError("AppDelegate: Could not find way to create new window")
                 }
             }
             
@@ -82,11 +82,11 @@ struct Weather_Station_AppApp: App {
                     // Disable automatic animations globally
                     NSAnimationContext.current.duration = 0
                     
-                    print("🚀 ContentView appeared")
+                    logSuccess("ContentView appeared")
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .showMainWindow)) { _ in
                     // Handle the notification within the SwiftUI context
-                    print("📱 ContentView: Received showMainWindow notification")
+                    logUI("ContentView: Received showMainWindow notification")
                     
                     // Since we're already in a ContentView, this window should already be visible
                     // Just ensure the app is activated and window is brought forward
@@ -103,9 +103,9 @@ struct Weather_Station_AppApp: App {
                             }
                             window.makeKeyAndOrderFront(nil)
                             window.orderFrontRegardless()
-                            print("✅ Activated existing window from ContentView")
+                            logSuccess("Activated existing window from ContentView")
                         } else {
-                            print("⚠️ No main window found in ContentView")
+                            logWarning("No main window found in ContentView")
                         }
                     }
                 }

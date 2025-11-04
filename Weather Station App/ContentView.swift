@@ -197,7 +197,7 @@ struct ContentView: View {
             .animation(.none, value: weatherService.weatherStations.count)
         }
         .onAppear {
-            print("📱 ContentView appeared - AppStateManager will handle refresh coordination")
+            logUI("ContentView appeared - AppStateManager will handle refresh coordination")
             if selectedStation == nil {
                 selectedStation = weatherService.weatherStations.first
             }
@@ -211,12 +211,12 @@ struct ContentView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .showMainWindow)) { _ in
-            print("📱 Received showMainWindow notification")
+            logUI("Received showMainWindow notification")
             DispatchQueue.main.async {
                 NSApp.activate(ignoringOtherApps: true)
                 if let window = NSApp.mainWindow {
                     window.makeKeyAndOrderFront(nil)
-                    print("✅ Activated main window from ContentView")
+                    logSuccess("Activated main window from ContentView")
                 }
             }
         }
@@ -225,7 +225,7 @@ struct ContentView: View {
                 autoRefreshEnabled: $appStateManager.mainAppRefreshEnabled,
                 refreshInterval: .constant(120)
             ) {
-                print("🔄 Settings changed - AppStateManager will update refresh behavior")
+                logRefresh("Settings changed - AppStateManager will update refresh behavior")
             }
         }
         .task {

@@ -189,7 +189,7 @@ class MenuBarManager: ObservableObject {
     }
     
     deinit {
-        print("🗑️ MenuBarManager deinit - cleaning up resources")
+        logMemory("MenuBarManager deinit - cleaning up resources")
         
         // Remove all observers
         NotificationCenter.default.removeObserver(self)
@@ -204,7 +204,7 @@ class MenuBarManager: ObservableObject {
             self.statusItem = nil
         }
         
-        print("🗑️ MenuBarManager cleanup completed")
+        logMemory("MenuBarManager cleanup completed")
     }
     
     private func loadSettings() {
@@ -320,7 +320,7 @@ class MenuBarManager: ObservableObject {
     }
     
     @objc private func appWillTerminate() {
-        print("🗑️ App will terminate - cleaning up MenuBarManager")
+        logMemory("App will terminate - cleaning up MenuBarManager")
         
         // Stop timers immediately
         stopCyclingTimer()
@@ -334,12 +334,12 @@ class MenuBarManager: ObservableObject {
     }
     
     @objc private func mainAppBecameVisible() {
-        print("🔄 MenuBar received mainAppVisible notification - stopping background refresh")
+        logRefresh("MenuBar received mainAppVisible notification - stopping background refresh")
         stopBackgroundRefresh()
     }
     
     @objc private func mainAppBecameHidden() {
-        print("🔄 MenuBar received mainAppHidden notification - starting background refresh if enabled")
+        logRefresh("MenuBar received mainAppHidden notification - starting background refresh if enabled")
         if backgroundRefreshEnabled && isMenuBarEnabled {
             startBackgroundRefresh()
         }
@@ -390,7 +390,7 @@ class MenuBarManager: ObservableObject {
     }
     
     @objc private func refreshWeatherData() {
-        print("🔄 Manual refresh requested from menu bar")
+        logRefresh("Manual refresh requested from menu bar")
         // Force immediate refresh
         Task {
             await weatherService.fetchAllWeatherData(forceRefresh: true)
@@ -398,7 +398,7 @@ class MenuBarManager: ObservableObject {
     }
     
     @objc private func quitApplication() {
-        print("🚪 Quit requested from menu bar context menu")
+        logInfo("Quit requested from menu bar context menu")
         NSApplication.shared.terminate(nil)
     }
     
@@ -424,7 +424,7 @@ class MenuBarManager: ObservableObject {
     }
     
     @objc private func statusItemClicked() {
-        print("🖱️ MenuBar clicked - attempting to show app")
+        logUI("MenuBar clicked - attempting to show app")
         
         // Activate the app first
         NSApp.activate(ignoringOtherApps: true)
@@ -438,7 +438,7 @@ class MenuBarManager: ObservableObject {
         }
         
         if let existingWindow = mainWindows.first {
-            print("🎯 Found existing window - bringing to front")
+            logUI("Found existing window - bringing to front")
             
             if existingWindow.isMiniaturized {
                 existingWindow.deminiaturize(nil)
@@ -448,7 +448,7 @@ class MenuBarManager: ObservableObject {
             existingWindow.orderFrontRegardless()
             
         } else {
-            print("❌ No existing window found - using simple notification approach")
+            logWarning("No existing window found - using simple notification approach")
             
             // Use a simple notification that ContentView will handle
             NotificationCenter.default.post(name: .showMainWindow, object: nil)
@@ -465,9 +465,9 @@ class MenuBarManager: ObservableObject {
                     window.frame.width > 500
                 }) {
                     newWindow.makeKeyAndOrderFront(nil)
-                    print("✅ Found and activated new window")
+                    logSuccess("Found and activated new window")
                 } else {
-                    print("⚠️ No window appeared after notification")
+                    logWarning("No window appeared after notification")
                 }
             }
         }
@@ -479,7 +479,7 @@ class MenuBarManager: ObservableObject {
                 object: nil, 
                 userInfo: ["stationMAC": selectedStation.macAddress]
             )
-            print("🎯 Posted navigation to station: \(selectedStation.name)")
+            logUI("Posted navigation to station: \(selectedStation.name)")
         }
     }
     
@@ -593,45 +593,45 @@ class MenuBarManager: ObservableObject {
     
     // Helper method to get weather icon for a specific station
     private func getWeatherIconForStation(_ weatherData: WeatherStationData, station: WeatherStation) -> String {
-        print("🎯 Getting weather icon for station: \(station.name)")
+        logWeather("Getting weather icon for station: \(station.name)")
         
         // Priority 1: Use Open-Meteo forecast icon if available
         if let forecastIcon = getForecastIconForStation(station) {
-            print("   ✅ Using forecast icon: \(forecastIcon)")
+            logWeather("  Using forecast icon: \(forecastIcon)")
             return forecastIcon
         }
         
-        print("   - showRainIcon: \(showRainIcon)")
-        print("   - showUVIcon: \(showUVIcon)")
-        print("   - showCloudyIcon: \(showCloudyIcon)")
-        print("   - showNightIcon: \(showNightIcon)")
+        logDebug("  - showRainIcon: \(showRainIcon)")
+        logDebug("  - showUVIcon: \(showUVIcon)")
+        logDebug("  - showCloudyIcon: \(showCloudyIcon)")
+        logDebug("  - showNightIcon: \(showNightIcon)")
         
         // Fallback to current weather condition icons
         // Priority 2: Rain (highest priority)
         if showRainIcon && isRaining(weatherData) {
             let icon = getRainIconString()
-            print("   ✅ Selected rain icon: \(icon)")
+            logWeather("  Selected rain icon: \(icon)")
             return icon
         }
         
         // Priority 3: High UV (sunny conditions)
         if showUVIcon && hasSignificantUV(weatherData) {
             let icon = getUVIconString()
-            print("   ✅ Selected UV icon: \(icon)")
+            logWeather("  Selected UV icon: \(icon)")
             return icon
         }
         
         // Priority 4: Cloudy daytime (overcast but still daylight)
         if showCloudyIcon && isCloudyDaytime(weatherData) {
             let icon = getCloudyIconString()
-            print("   ✅ Selected cloudy icon: \(icon)")
+            logWeather("  Selected cloudy icon: \(icon)")
             return icon
         }
         
         // Priority 5: Night time (lowest priority) - now using actual sunset/sunrise
         if showNightIcon && isNightTime(weatherData, for: station) {
             let icon = getNightIconString()
-            print("   ✅ Selected night icon: \(icon)")
+            logWeather("  Selected night icon: \(icon)")
             return icon
         }
         
@@ -641,13 +641,13 @@ class MenuBarManager: ObservableObject {
     // New method to get forecast-based weather icon
     private func getForecastIconForStation(_ station: WeatherStation) -> String? {
         guard let forecast = forecastService.getForecast(for: station) else {
-            print("   ❌ No forecast data available for \(station.name)")
+            logWeather("  No forecast data available for \(station.name)")
             return nil
         }
         
         // Find today's forecast
         guard let todaysForecast = forecast.dailyForecasts.first(where: { $0.isToday }) else {
-            print("   ❌ No today's forecast found for \(station.name)")
+            logWeather("  No today's forecast found for \(station.name)")
             return nil
         }
         
@@ -796,37 +796,37 @@ class MenuBarManager: ObservableObject {
         let rainRateString = weatherData.rainfallPiezo.rainRate.value
         
         // Debug logging to understand what we're getting
-        print("🌧️ Rain Detection Debug:")
-        print("   - Piezo State: '\(stateString)' (unit: \(weatherData.rainfallPiezo.state.unit))")
-        print("   - Rain Rate: '\(rainRateString)' (unit: \(weatherData.rainfallPiezo.rainRate.unit))")
+        logWeather("Rain Detection Debug:")
+        logWeather("  - Piezo State: '\(stateString)' (unit: \(weatherData.rainfallPiezo.state.unit))")
+        logWeather("  - Rain Rate: '\(rainRateString)' (unit: \(weatherData.rainfallPiezo.rainRate.unit))")
         
         // Primary check: piezo state (this is the key indicator for active rain)
         if let state = Double(stateString) {
-            print("   - Parsed piezo state: \(state)")
+            logWeather("  - Parsed piezo state: \(state)")
             // Piezo state typically indicates: 0 = not raining, 1 = raining
             // Some systems might use different values, so check for any positive value
             if state > 0.0 {
-                print("   ✅ Rain detected via piezo state: \(state)")
+                logWeather("  Rain detected via piezo state: \(state)")
                 return true
             }
         } else {
             // Handle case where state might be a string like "raining" or "dry"
             let stateLower = stateString.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-            print("   - Piezo state as string: '\(stateLower)'")
+            logWeather("  - Piezo state as string: '\(stateLower)'")
             
             if stateLower == "raining" || stateLower == "rain" || stateLower == "wet" || stateLower == "1" {
-                print("   ✅ Rain detected via piezo state string: '\(stateLower)'")
+                logWeather("  Rain detected via piezo state string: '\(stateLower)'")
                 return true
             }
         }
         
         // Secondary check: current rain rate (immediate rainfall)
         if let rainRate = Double(rainRateString), rainRate > 0.0 {
-            print("   ✅ Rain detected via current rate: \(rainRate)")
+            logWeather("  Rain detected via current rate: \(rainRate)")
             return true
         }
         
-        print("   ❌ No active rain detected")
+        logWeather("  No active rain detected")
         return false
     }
     
@@ -935,7 +935,7 @@ class MenuBarManager: ObservableObject {
             }
         }
         
-        print("🔄 Started cycling through \(availableStations.count) stations every \(Int(cycleInterval))s")
+        logTimer("Started cycling through \(availableStations.count) stations every \(Int(cycleInterval))s")
     }
     
     private func stopCyclingTimer() {
@@ -955,7 +955,7 @@ class MenuBarManager: ObservableObject {
         selectedStationMac = nextStation.macAddress
         updateMenuBarTitle()
         
-        print("🔄 Cycled to station: \(nextStation.name)")
+        logTimer("Cycled to station: \(nextStation.name)")
     }
     
     // MARK: - Background Refresh Management
@@ -964,18 +964,18 @@ class MenuBarManager: ObservableObject {
         stopBackgroundRefresh() // Stop any existing timer
         
         guard backgroundRefreshEnabled && isMenuBarEnabled && !availableStations.isEmpty else {
-            print("🔄 MenuBar refresh not started - disabled or no stations")
+            logRefresh("MenuBar refresh not started - disabled or no stations")
             return
         }
         
         backgroundRefreshTimer = Timer.scheduledTimer(withTimeInterval: backgroundRefreshInterval, repeats: true) { [weak self] timer in
             guard let self = self else {
-                print("❌ MenuBarManager deallocated, stopping background refresh timer")
+                logError("MenuBarManager deallocated, stopping background refresh timer")
                 timer.invalidate()
                 return
             }
             
-            print("🔄 MenuBar background refresh timer fired at \(Date())")
+            logRefresh("MenuBar background refresh timer fired at \(Date())")
             
             // Check if any data is stale before fetching - be more aggressive about refreshing
             let staleStations = self.weatherService.weatherStations.filter { station in
@@ -987,12 +987,12 @@ class MenuBarManager: ObservableObject {
                 // 3. The last update was more than 5 minutes ago (safety margin)
                 
                 if self.weatherService.weatherData[station.macAddress] == nil {
-                    print("   🔄 Station \(station.name) has no data - needs refresh")
+                    logRefresh("  Station \(station.name) has no data - needs refresh")
                     return true
                 }
                 
                 guard let lastUpdated = station.lastUpdated else {
-                    print("   🔄 Station \(station.name) has no lastUpdated timestamp - needs refresh")
+                    logRefresh("  Station \(station.name) has no lastUpdated timestamp - needs refresh")
                     return true
                 }
                 
@@ -1000,29 +1000,29 @@ class MenuBarManager: ObservableObject {
                 let isStale = dataAge > 300 // 5 minutes - more aggressive than the 2 minute default
                 
                 if isStale {
-                    print("   🔄 Station \(station.name) data is stale (age: \(Int(dataAge))s) - needs refresh")
+                    logRefresh("  Station \(station.name) data is stale (age: \(Int(dataAge))s) - needs refresh")
                 } else {
-                    print("   ✅ Station \(station.name) data is fresh (age: \(Int(dataAge))s)")
+                    logRefresh("  Station \(station.name) data is fresh (age: \(Int(dataAge))s)")
                 }
                 
                 return isStale
             }
             
             if !staleStations.isEmpty {
-                print("🔄 Found \(staleStations.count) stations with stale data")
+                logRefresh("Found \(staleStations.count) stations with stale data")
                 
                 Task { @MainActor in
-                    print("🔄 Starting background refresh for stale menu bar data")
+                    logRefresh("Starting background refresh for stale menu bar data")
                     await self.weatherService.fetchAllWeatherData(forceRefresh: false) // Smart refresh
-                    print("🔄 MenuBar background refresh completed at \(Date())")
+                    logRefresh("MenuBar background refresh completed at \(Date())")
                 }
             } else {
-                print("🔄 All menu bar data is fresh, skipping background refresh")
+                logRefresh("All menu bar data is fresh, skipping background refresh")
             }
         }
         
         let minutes = Int(backgroundRefreshInterval / 60)
-        print("🔄 MenuBar background refresh started: every \(minutes) minute\(minutes == 1 ? "" : "s")")
+        logRefresh("MenuBar background refresh started: every \(minutes) minute\(minutes == 1 ? "" : "s")")
         
         // Run an initial refresh after a short delay if data is stale
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
@@ -1041,12 +1041,12 @@ class MenuBarManager: ObservableObject {
             }
             
             if !staleStations.isEmpty {
-                print("🔄 Running initial menubar background refresh for \(staleStations.count) stations with stale data")
+                logRefresh("Running initial menubar background refresh for \(staleStations.count) stations with stale data")
                 Task {
                     await self.weatherService.fetchAllWeatherData(forceRefresh: false)
                 }
             } else {
-                print("🔄 All menubar data is fresh on startup")
+                logRefresh("All menubar data is fresh on startup")
             }
         }
     }
@@ -1054,7 +1054,7 @@ class MenuBarManager: ObservableObject {
     private func stopBackgroundRefresh() {
         backgroundRefreshTimer?.invalidate()
         backgroundRefreshTimer = nil
-        print("🛑 MenuBar background refresh stopped")
+        logRefresh("MenuBar background refresh stopped")
     }
     
     // MARK: - Dock Visibility
@@ -1063,11 +1063,11 @@ class MenuBarManager: ObservableObject {
         if hideDockIcon {
             // Hide the dock icon
             NSApp.setActivationPolicy(.accessory)
-            print("🙈 Dock icon hidden")
+            logUI("Dock icon hidden")
         } else {
             // Show the dock icon
             NSApp.setActivationPolicy(.regular)
-            print("👁️ Dock icon shown")
+            logUI("Dock icon shown")
         }
     }
 }

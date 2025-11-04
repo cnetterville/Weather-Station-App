@@ -51,7 +51,7 @@ struct WeatherStation: Identifiable, Codable, Equatable, Hashable {
         // Handle cardOrder with default fallback
         cardOrder = try container.decodeIfPresent([CardType].self, forKey: .cardOrder) ?? CardType.defaultOrder
         
-        print("📋 Decoded station '\(name)' with \(cardOrder.count) cards in order")
+        logData("Decoded station '\(name)' with \(cardOrder.count) cards in order")
     }
     
     // Add explicit initializer for creating new stations
@@ -59,7 +59,7 @@ struct WeatherStation: Identifiable, Codable, Equatable, Hashable {
         self.name = name
         self.macAddress = macAddress
         self.cardOrder = CardType.defaultOrder
-        print("🆕 Created new station '\(name)' with default card order (\(cardOrder.count) cards)")
+        logSuccess("Created new station '\(name)' with default card order (\(cardOrder.count) cards)")
     }
     
     // Computed property to get the station's timezone
@@ -201,7 +201,7 @@ struct SensorLabels: Codable, Equatable, Hashable {
     var lunar: String = "Moon & Lunar"
     var camera: String = "Weather Camera"
     var radar: String = "Weather Radar"
-    var forecast: String = "5-Day Forecast" // Updated from "4-Day Forecast" to "5-Day Forecast"
+    var forecast: String = "5-Day Forecast"
 }
 
 struct SensorPreferences: Codable, Equatable, Hashable {

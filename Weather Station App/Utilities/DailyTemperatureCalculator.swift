@@ -338,7 +338,7 @@ class DailyTemperatureCalculator {
     
     static func calculateDailyStats(from historicalData: HistoricalOutdoorData?, for date: Date = Date(), timeZone: TimeZone = .current) -> DailyTemperatureStats? {
         guard let temperatureData = historicalData?.temperature else {
-            print("🌡️ No outdoor temperature data available")
+            logTemperature("No outdoor temperature data available")
             return nil
         }
         
@@ -352,10 +352,10 @@ class DailyTemperatureCalculator {
         let targetDay = adjustedCalendar.startOfDay(for: date)  // 00:00:00 of target day
         let nextDay = adjustedCalendar.date(byAdding: .day, value: 1, to: targetDay) ?? targetDay  // 00:00:00 of next day
         
-        print("🌡️ Calculating DAILY stats from 5-minute readings")
-        print("🌡️ Timezone: \(timeZone.identifier)")
-        print("🌡️ Daily boundaries: \(targetDay) to \(nextDay)")
-        print("🌡️ Total available readings: \(temperatureData.list.count)")
+        logTemperature("Calculating DAILY stats from 5-minute readings")
+        logTemperature("Timezone: \(timeZone.identifier)")
+        logTemperature("Daily boundaries: \(targetDay) to \(nextDay)")
+        logTemperature("Total available readings: \(temperatureData.list.count)")
         
         for (timestampString, valueString) in temperatureData.list {
             guard let timestamp = Double(timestampString),
@@ -371,7 +371,7 @@ class DailyTemperatureCalculator {
         }
         
         guard !tempReadings.isEmpty else {
-            print("🌡️ No outdoor temperature readings found for the complete day (00:00-23:59)")
+            logTemperature("No outdoor temperature readings found for the complete day (00:00-23:59)")
             return nil
         }
         
@@ -379,9 +379,9 @@ class DailyTemperatureCalculator {
         let lowestReading = sortedByTemp.first!
         let highestReading = sortedByTemp.last!
         
-        print("🌡️ Found \(tempReadings.count) outdoor readings for daily calculation")
-        print("🌡️ Daily High: \(highestReading.temp)° at \(highestReading.time)")
-        print("🌡️ Daily Low: \(lowestReading.temp)° at \(lowestReading.time)")
+        logTemperature("Found \(tempReadings.count) outdoor readings for daily calculation")
+        logTemperature("Daily High: \(highestReading.temp)° at \(highestReading.time)")
+        logTemperature("Daily Low: \(lowestReading.temp)° at \(lowestReading.time)")
         
         return DailyTemperatureStats(
             highTemp: highestReading.temp,
@@ -396,7 +396,7 @@ class DailyTemperatureCalculator {
     
     static func calculateIndoorDailyStats(from historicalData: HistoricalIndoorData?, for date: Date = Date(), timeZone: TimeZone = .current) -> DailyTemperatureStats? {
         guard let temperatureData = historicalData?.temperature else {
-            print("🏠 No indoor temperature data available")
+            logIndoor("No indoor temperature data available")
             return nil
         }
         
@@ -410,10 +410,10 @@ class DailyTemperatureCalculator {
         let targetDay = adjustedCalendar.startOfDay(for: date)  // 00:00:00 of target day
         let nextDay = adjustedCalendar.date(byAdding: .day, value: 1, to: targetDay) ?? targetDay  // 00:00:00 of next day
         
-        print("🏠 Calculating DAILY indoor stats from 5-minute readings")
-        print("🏠 Timezone: \(timeZone.identifier)")
-        print("🏠 Daily boundaries: \(targetDay) to \(nextDay)")
-        print("🏠 Total available readings: \(temperatureData.list.count)")
+        logIndoor("Calculating DAILY indoor stats from 5-minute readings")
+        logIndoor("Timezone: \(timeZone.identifier)")
+        logIndoor("Daily boundaries: \(targetDay) to \(nextDay)")
+        logIndoor("Total available readings: \(temperatureData.list.count)")
         
         for (timestampString, valueString) in temperatureData.list {
             guard let timestamp = Double(timestampString),
@@ -429,7 +429,7 @@ class DailyTemperatureCalculator {
         }
         
         guard !tempReadings.isEmpty else {
-            print("🏠 No indoor temperature readings found for the complete day (00:00-23:59)")
+            logIndoor("No indoor temperature readings found for the complete day (00:00-23:59)")
             return nil
         }
         
@@ -437,9 +437,9 @@ class DailyTemperatureCalculator {
         let lowestReading = sortedByTemp.first!
         let highestReading = sortedByTemp.last!
         
-        print("🏠 Found \(tempReadings.count) indoor readings for daily calculation")
-        print("🏠 Daily High: \(highestReading.temp)° at \(highestReading.time)")
-        print("🏠 Daily Low: \(lowestReading.temp)° at \(lowestReading.time)")
+        logIndoor("Found \(tempReadings.count) indoor readings for daily calculation")
+        logIndoor("Daily High: \(highestReading.temp)° at \(highestReading.time)")
+        logIndoor("Daily Low: \(lowestReading.temp)° at \(lowestReading.time)")
         
         return DailyTemperatureStats(
             highTemp: highestReading.temp,
@@ -454,7 +454,7 @@ class DailyTemperatureCalculator {
     
     static func calculateChannelDailyStats(from channelData: HistoricalTempHumidityData?, for date: Date = Date(), timeZone: TimeZone = .current) -> DailyTemperatureStats? {
         guard let temperatureData = channelData?.temperature else {
-            print("📡 No channel temperature data available")
+            logSensor("No channel temperature data available")
             return nil
         }
         
@@ -468,10 +468,10 @@ class DailyTemperatureCalculator {
         let targetDay = adjustedCalendar.startOfDay(for: date)  // 00:00:00 of target day
         let nextDay = adjustedCalendar.date(byAdding: .day, value: 1, to: targetDay) ?? targetDay  // 00:00:00 of next day
         
-        print("📡 Calculating DAILY channel stats from 5-minute readings")
-        print("📡 Timezone: \(timeZone.identifier)")
-        print("📡 Daily boundaries: \(targetDay) to \(nextDay)")
-        print("📡 Total available readings: \(temperatureData.list.count)")
+        logSensor("Calculating DAILY channel stats from 5-minute readings")
+        logSensor("Timezone: \(timeZone.identifier)")
+        logSensor("Daily boundaries: \(targetDay) to \(nextDay)")
+        logSensor("Total available readings: \(temperatureData.list.count)")
         
         for (timestampString, valueString) in temperatureData.list {
             guard let timestamp = Double(timestampString),
@@ -487,7 +487,7 @@ class DailyTemperatureCalculator {
         }
         
         guard !tempReadings.isEmpty else {
-            print("📡 No channel temperature readings found for the complete day (00:00-23:59)")
+            logSensor("No channel temperature readings found for the complete day (00:00-23:59)")
             return nil
         }
         
@@ -495,9 +495,9 @@ class DailyTemperatureCalculator {
         let lowestReading = sortedByTemp.first!
         let highestReading = sortedByTemp.last!
         
-        print("📡 Found \(tempReadings.count) channel readings for daily calculation")
-        print("📡 Daily High: \(highestReading.temp)° at \(highestReading.time)")
-        print("📡 Daily Low: \(lowestReading.temp)° at \(lowestReading.time)")
+        logSensor("Found \(tempReadings.count) channel readings for daily calculation")
+        logSensor("Daily High: \(highestReading.temp)° at \(highestReading.time)")
+        logSensor("Daily Low: \(lowestReading.temp)° at \(lowestReading.time)")
         
         return DailyTemperatureStats(
             highTemp: highestReading.temp,
@@ -551,15 +551,15 @@ class DailyTemperatureCalculator {
     
     static func calculateIndoorStatsFromAvailableData(from historicalData: HistoricalIndoorData?) -> DailyTemperatureStats? {
         guard let temperatureData = historicalData?.temperature else {
-            print("🏠 No indoor temperature data available for flexible calculation")
+            logIndoor("No indoor temperature data available for flexible calculation")
             return nil
         }
         
         let unit = temperatureData.unit
         var tempReadings: [(temp: Double, time: Date)] = []
         
-        print("🏠 Calculating indoor stats from all available data")
-        print("🏠 Total data points available: \(temperatureData.list.count)")
+        logIndoor("Calculating indoor stats from all available data")
+        logIndoor("Total data points available: \(temperatureData.list.count)")
         
         for (timestampString, valueString) in temperatureData.list {
             guard let timestamp = Double(timestampString),
@@ -572,7 +572,7 @@ class DailyTemperatureCalculator {
         }
         
         guard !tempReadings.isEmpty else {
-            print("🏠 No indoor temperature readings found in available data")
+            logIndoor("No indoor temperature readings found in available data")
             return nil
         }
         
@@ -580,10 +580,10 @@ class DailyTemperatureCalculator {
         let lowestReading = sortedByTemp.first!
         let highestReading = sortedByTemp.last!
         
-        print("🏠 Found \(tempReadings.count) indoor readings from available data")
-        print("🏠 All temperatures: \(tempReadings.map { $0.temp })")
-        print("🏠 High: \(highestReading.temp)° at \(highestReading.time)")
-        print("🏠 Low: \(lowestReading.temp)° at \(lowestReading.time)")
+        logIndoor("Found \(tempReadings.count) indoor readings from available data")
+        logIndoor("All temperatures: \(tempReadings.map { $0.temp })")
+        logIndoor("High: \(highestReading.temp)° at \(highestReading.time)")
+        logIndoor("Low: \(lowestReading.temp)° at \(lowestReading.time)")
         
         return DailyTemperatureStats(
             highTemp: highestReading.temp,
@@ -598,15 +598,15 @@ class DailyTemperatureCalculator {
     
     static func calculateChannelStatsFromAvailableData(from channelData: HistoricalTempHumidityData?) -> DailyTemperatureStats? {
         guard let temperatureData = channelData?.temperature else {
-            print("📡 No channel temperature data available for flexible calculation")
+            logSensor("No channel temperature data available for flexible calculation")
             return nil
         }
         
         let unit = temperatureData.unit
         var tempReadings: [(temp: Double, time: Date)] = []
         
-        print("📡 Calculating channel stats from all available data")
-        print("📡 Total data points available: \(temperatureData.list.count)")
+        logSensor("Calculating channel stats from all available data")
+        logSensor("Total data points available: \(temperatureData.list.count)")
         
         for (timestampString, valueString) in temperatureData.list {
             guard let timestamp = Double(timestampString),
@@ -619,7 +619,7 @@ class DailyTemperatureCalculator {
         }
         
         guard !tempReadings.isEmpty else {
-            print("📡 No channel temperature readings found in available data")
+            logSensor("No channel temperature readings found in available data")
             return nil
         }
         
@@ -627,10 +627,10 @@ class DailyTemperatureCalculator {
         let lowestReading = sortedByTemp.first!
         let highestReading = sortedByTemp.last!
         
-        print("📡 Found \(tempReadings.count) channel readings from available data")
-        print("📡 All temperatures: \(tempReadings.map { $0.temp })")
-        print("📡 High: \(highestReading.temp)° at \(highestReading.time)")
-        print("📡 Low: \(lowestReading.temp)° at \(lowestReading.time)")
+        logSensor("Found \(tempReadings.count) channel readings from available data")
+        logSensor("All temperatures: \(tempReadings.map { $0.temp })")
+        logSensor("High: \(highestReading.temp)° at \(highestReading.time)")
+        logSensor("Low: \(lowestReading.temp)° at \(lowestReading.time)")
         
         return DailyTemperatureStats(
             highTemp: highestReading.temp,
@@ -968,14 +968,14 @@ class DailyTemperatureCalculator {
     // MARK: - Lightning Calculations
     
     static func calculateLastLightningDetection(from historicalData: HistoricalWeatherData?, currentLightningCount: String, daysToSearch: Int = 30) -> LastLightningStats? {
-        print("🔍 === LIGHTNING DETECTION DEBUG START ===")
-        print("🔍 Current lightning count: \(currentLightningCount)")
-        print("🔍 Search period: \(daysToSearch) days back from \(Date())")
+        logLightning("=== LIGHTNING DETECTION DEBUG START ===")
+        logLightning("Current lightning count: \(currentLightningCount)")
+        logLightning("Search period: \(daysToSearch) days back from \(Date())")
         
         // First, check if there's any current lightning activity
         if let currentCount = Int(currentLightningCount), currentCount > 0 {
             // Lightning detected recently (within current reading period)
-            print("🔍 Current count > 0, returning recent detection")
+            logLightning("Current count > 0, returning recent detection")
             return LastLightningStats(
                 lastDetectionTime: Date(), // Very recent
                 isFromHistoricalData: false,
@@ -987,7 +987,7 @@ class DailyTemperatureCalculator {
         guard let lightningData = historicalData?.lightning,
               let countData = lightningData.count else {
             // No historical data available at all
-            print("🔍 No historical lightning data available")
+            logLightning("No historical lightning data available")
             return LastLightningStats(
                 lastDetectionTime: nil,
                 isFromHistoricalData: false,
@@ -995,13 +995,13 @@ class DailyTemperatureCalculator {
             )
         }
         
-        print("🔍 Historical lightning count data found with \(countData.list.count) readings")
+        logLightning("Historical lightning count data found with \(countData.list.count) readings")
         
         let calendar = Calendar.current
         let now = Date()
         let searchStartDate = calendar.date(byAdding: .day, value: -daysToSearch, to: now) ?? now
         
-        print("🔍 Search window: \(searchStartDate) to \(now)")
+        logLightning("Search window: \(searchStartDate) to \(now)")
         
         var mostRecentLightningTime: Date?
         var actualDaysSearched = daysToSearch  // Default to full search period
@@ -1010,7 +1010,7 @@ class DailyTemperatureCalculator {
         let sortedReadings = countData.list.compactMap { (timestampString, countString) -> (Date, Int)? in
             guard let timestamp = Double(timestampString),
                   let count = Int(countString) else {
-                print("🔍 Failed to parse reading: timestamp=\(timestampString), count=\(countString)")
+                logLightning("Failed to parse reading: timestamp=\(timestampString), count=\(countString)")
                 return nil
             }
             
@@ -1025,27 +1025,27 @@ class DailyTemperatureCalculator {
             localFormatter.dateFormat = "MM/dd/yy, h:mm:ss a"
             localFormatter.timeZone = TimeZone.current
             
-            print("🔍 Raw timestamp: \(timestampString) (\(timestamp))")
-            print("🔍   → UTC: \(utcFormatter.string(from: readingDate))")
-            print("🔍   → Local: \(localFormatter.string(from: readingDate))")
-            print("🔍   → This represents daily lightning count for: \(utcFormatter.string(from: readingDate).prefix(10))")
+            logLightning("Raw timestamp: \(timestampString) (\(timestamp))")
+            logLightning("  → UTC: \(utcFormatter.string(from: readingDate))")
+            logLightning("  → Local: \(localFormatter.string(from: readingDate))")
+            logLightning("  → This represents daily lightning count for: \(utcFormatter.string(from: readingDate).prefix(10))")
             
             // Check if timestamp is in the future
             let now = Date()
             if readingDate > now {
-                print("🔍 ⚠️  WARNING: Timestamp is in the future! \(readingDate) > \(now)")
+                logLightning("⚠️  WARNING: Timestamp is in the future! \(readingDate) > \(now)")
             }
             
             // Only consider readings within our search window
             guard readingDate >= searchStartDate && readingDate <= now else {
-                print("🔍 Reading outside search window: \(readingDate)")
+                logLightning("Reading outside search window: \(readingDate)")
                 return nil
             }
             
             return (readingDate, count)
         }.sorted { $0.0 < $1.0 } // Sort by date, OLDEST first
         
-        print("🔍 Found \(sortedReadings.count) readings within search window")
+        logLightning("Found \(sortedReadings.count) readings within search window")
         
         // Show ALL readings for debugging
         let dateFormatter = DateFormatter()
@@ -1064,12 +1064,12 @@ class DailyTemperatureCalculator {
             dailySummary[dayString]!.append((readingDate, count))
         }
         
-        print("🔍 Lightning count data by day:")
+        logLightning("Lightning count data by day:")
         for dayKey in dailySummary.keys.sorted() {
             if let dayData = dailySummary[dayKey] {
                 let counts = dayData.map { "\($0.1)" }.joined(separator: ", ")
                 let timeRange = "\(dateFormatter.string(from: dayData.first!.0)) to \(dateFormatter.string(from: dayData.last!.0))"
-                print("🔍   \(dayKey): counts=[\(counts)] time=[\(timeRange)]")
+                logLightning("  \(dayKey): counts=[\(counts)] time=[\(timeRange)]")
             }
         }
         
@@ -1089,7 +1089,7 @@ class DailyTemperatureCalculator {
         for (readingDate, count) in sortedReadings {
             let dayKey = dayFormatter.string(from: readingDate)
             
-            print("🔍 Processing reading: \(dateFormatter.string(from: readingDate)) count=\(count) prevCount=\(previousCount ?? -1)")
+            logLightning("Processing reading: \(dateFormatter.string(from: readingDate)) count=\(count) prevCount=\(previousCount ?? -1)")
             
             // Check for lightning detection in multiple ways:
             
@@ -1097,27 +1097,27 @@ class DailyTemperatureCalculator {
             if let prevCount = previousCount {
                 if count > prevCount {
                     mostRecentLightningTime = readingDate
-                    print("⚡ Lightning detected via count increase: \(prevCount) → \(count) at \(readingDate)")
+                    logLightning("Lightning detected via count increase: \(prevCount) → \(count) at \(readingDate)")
                 }
             }
             
             // Method 2: Count reset detection - if count goes from high to low then increases
             if let dayCount = dailyCountTracker[dayKey] {
                 // We've seen this day before, check for patterns
-                print("🔍   Day \(dayKey) seen before with max count \(dayCount)")
+                logLightning("  Day \(dayKey) seen before with max count \(dayCount)")
                 if count > 0 && count < dayCount {
                     // Possible reset occurred, but still has lightning activity
                     mostRecentLightningTime = readingDate
-                    print("⚡ Lightning detected via count reset pattern: \(dayCount) → \(count) at \(readingDate)")
+                    logLightning("Lightning detected via count reset pattern: \(dayCount) → \(count) at \(readingDate)")
                 } else if count > dayCount {
                     // Normal increase within the same day
                     mostRecentLightningTime = readingDate
-                    print("⚡ Lightning detected via daily count increase: \(dayCount) → \(count) at \(readingDate)")
+                    logLightning("Lightning detected via daily count increase: \(dayCount) → \(count) at \(readingDate)")
                 }
             } else if count > 0 {
                 // First reading for this day and it's non-zero
                 mostRecentLightningTime = readingDate
-                print("⚡ Lightning detected via non-zero first reading: \(count) at \(readingDate)")
+                logLightning("Lightning detected via non-zero first reading: \(count) at \(readingDate)")
             }
             
             // Update tracking
@@ -1126,19 +1126,19 @@ class DailyTemperatureCalculator {
         }
         
         // DEBUG: Print final results
-        print("🔍 === FINAL RESULTS ===")
-        print("🔍 Total readings analyzed: \(sortedReadings.count)")
+        logLightning("=== FINAL RESULTS ===")
+        logLightning("Total readings analyzed: \(sortedReadings.count)")
         if !sortedReadings.isEmpty {
-            print("🔍 Date range: \(dateFormatter.string(from: sortedReadings.first!.0)) to \(dateFormatter.string(from: sortedReadings.last!.0))")
-            print("🔍 Count values: \(sortedReadings.map { $0.1 })")
+            logLightning("Date range: \(dateFormatter.string(from: sortedReadings.first!.0)) to \(dateFormatter.string(from: sortedReadings.last!.0))")
+            logLightning("Count values: \(sortedReadings.map { $0.1 })")
         }
         if let lastDetection = mostRecentLightningTime {
-            print("🔍 Last lightning detection found: \(dateFormatter.string(from: lastDetection))")
+            logLightning("Last lightning detection found: \(dateFormatter.string(from: lastDetection))")
         } else {
-            print("🔍 No lightning detections found in historical data")
+            logLightning("No lightning detections found in historical data")
         }
-        print("🔍 Actual days searched: \(actualDaysSearched)")
-        print("🔍 === LIGHTNING DETECTION DEBUG END ===")
+        logLightning("Actual days searched: \(actualDaysSearched)")
+        logLightning("=== LIGHTNING DETECTION DEBUG END ===")
         
         // Return the result
         return LastLightningStats(

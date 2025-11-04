@@ -35,13 +35,13 @@ class WeatherForecastService: ObservableObject {
             await MainActor.run {
                 errorMessage = "No coordinates available for \(station.name)"
             }
-            print("⚠️ No coordinates for station: \(station.name)")
+            logWarning("No coordinates for station: \(station.name)")
             return
         }
         
         // Check if we already have fresh data
         if let existingForecast = forecasts[station.macAddress], !existingForecast.isExpired {
-            print("📊 Using cached forecast for \(station.name)")
+            logData("Using cached forecast for \(station.name)")
             return
         }
         
@@ -69,7 +69,7 @@ class WeatherForecastService: ObservableObject {
             URLQueryItem(name: "longitude", value: String(longitude)),
             URLQueryItem(name: "daily", value: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant"),
             URLQueryItem(name: "timezone", value: "auto"),
-            URLQueryItem(name: "forecast_days", value: "5") // Changed from 4 to 5
+            URLQueryItem(name: "forecast_days", value: "5")
         ]
         
         guard let url = urlComponents?.url else {
@@ -80,14 +80,14 @@ class WeatherForecastService: ObservableObject {
             return
         }
         
-        print("🌤️ Fetching 5-day forecast for \(station.name) at (\(latitude), \(longitude))") // Updated log message
-        print("📍 URL: \(url.absoluteString)")
+        logWeather("Fetching 5-day forecast for \(station.name) at (\(latitude), \(longitude))")
+        logLocation("URL: \(url.absoluteString)")
         
         do {
             let (data, response) = try await session.data(from: url)
             
             if let httpResponse = response as? HTTPURLResponse {
-                print("📡 Forecast HTTP Status: \(httpResponse.statusCode)")
+                logNetwork("Forecast HTTP Status: \(httpResponse.statusCode)")
                 
                 guard httpResponse.statusCode == 200 else {
                     await MainActor.run {
@@ -98,7 +98,7 @@ class WeatherForecastService: ObservableObject {
                 }
             }
             
-            print("📦 Forecast response: \(data.count) bytes")
+            logData("Forecast response: \(data.count) bytes")
             
             // Parse the response
             let decoder = JSONDecoder()
@@ -112,7 +112,7 @@ class WeatherForecastService: ObservableObject {
                 isLoading = false
                 errorMessage = nil
                 
-                print("✅ 5-day forecast updated for \(station.name): \(processedForecast.dailyForecasts.count) days") // Updated log message
+                logSuccess("5-day forecast updated for \(station.name): \(processedForecast.dailyForecasts.count) days")
             }
             
         } catch {
@@ -120,7 +120,7 @@ class WeatherForecastService: ObservableObject {
                 errorMessage = "Failed to fetch forecast for \(station.name): \(error.localizedDescription)"
                 isLoading = false
             }
-            print("❌ Forecast error for \(station.name): \(error)")
+            logError("Forecast error for \(station.name): \(error)")
         }
         
         // Clean up completed task
@@ -155,7 +155,7 @@ class WeatherForecastService: ObservableObject {
                     precipitation: response.daily.precipitationSum[i],
                     maxWindSpeed: response.daily.windSpeed10mMax[i],
                     windDirection: response.daily.windDirection10mDominant[i],
-                    timezone: forecastTimeZone // Pass timezone to DailyWeatherForecast
+                    timezone: forecastTimeZone
                 )
                 dailyForecasts.append(forecast)
             }
@@ -175,11 +175,11 @@ class WeatherForecastService: ObservableObject {
         }
         
         guard !stationsWithCoordinates.isEmpty else {
-            print("⚠️ No stations with coordinates found")
+            logWarning("No stations with coordinates found")
             return
         }
         
-        print("🌤️ Fetching forecasts for \(stationsWithCoordinates.count) stations")
+        logWeather("Fetching forecasts for \(stationsWithCoordinates.count) stations")
         
         // Fetch forecasts concurrently with a limit to avoid overwhelming the API
         await withTaskGroup(of: Void.self) { group in
@@ -222,7 +222,7 @@ class WeatherForecastService: ObservableObject {
     /// Clear cached forecasts
     func clearCachedForecasts() {
         forecasts.removeAll()
-        print("🗑️ Cleared all cached forecasts")
+        logInfo("Cleared all cached forecasts")
     }
     
     /// Cancel all loading tasks

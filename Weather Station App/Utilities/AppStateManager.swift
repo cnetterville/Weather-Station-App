@@ -100,18 +100,18 @@ class AppStateManager: ObservableObject {
             }
         }
         
-        print("🔍 AppStateManager: Monitoring app state changes")
+        logDebug("AppStateManager: Monitoring app state changes")
     }
     
     @objc private func appDidBecomeActive() {
-        print("🟢 App became active")
+        logSuccess("App became active")
         isAppActive = true
         checkMainWindowVisibility()
         updateRefreshState()
     }
     
     @objc private func appDidResignActive() {
-        print("🟡 App resigned active")
+        logWarning("App resigned active")
         isAppActive = false
         // Don't immediately update refresh state - wait to see if windows are still visible
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
@@ -121,13 +121,13 @@ class AppStateManager: ObservableObject {
     }
     
     @objc private func appDidHide() {
-        print("🔴 App was hidden")
+        logError("App was hidden")
         isMainAppVisible = false
         updateRefreshState()
     }
     
     @objc private func appDidUnhide() {
-        print("🟢 App was unhidden")
+        logSuccess("App was unhidden")
         isMainAppVisible = true
         updateRefreshState()
     }
@@ -162,17 +162,17 @@ class AppStateManager: ObservableObject {
             self.isMainAppVisible = hasVisibleMainWindow
             
             if wasVisible != self.isMainAppVisible {
-                print("📱 Main app visibility changed: \(wasVisible) → \(self.isMainAppVisible)")
+                logUI("Main app visibility changed: \(wasVisible) → \(self.isMainAppVisible)")
             }
         }
     }
     
     /// Update refresh behavior based on current app state
     private func updateRefreshState() {
-        print("🔄 AppStateManager: Updating refresh state")
-        print("   - Main app visible: \(isMainAppVisible)")
-        print("   - App active: \(isAppActive)")
-        print("   - Main refresh enabled: \(mainAppRefreshEnabled)")
+        logRefresh("AppStateManager: Updating refresh state")
+        logRefresh("   - Main app visible: \(isMainAppVisible)")
+        logRefresh("   - App active: \(isAppActive)")
+        logRefresh("   - Main refresh enabled: \(mainAppRefreshEnabled)")
         
         if isMainAppVisible && mainAppRefreshEnabled {
             // Main app is visible - use main app refresh (always refresh)
@@ -195,33 +195,33 @@ class AppStateManager: ObservableObject {
         stopMainAppRefresh() // Stop any existing timer
         
         guard mainAppRefreshEnabled && !weatherService.weatherStations.isEmpty else {
-            print("🔄 Main app refresh not started - disabled or no stations")
+            logRefresh("Main app refresh not started - disabled or no stations")
             return
         }
         
         mainAppRefreshTimer = Timer.scheduledTimer(withTimeInterval: mainAppRefreshInterval, repeats: true) { [weak self] timer in
             guard let self = self else {
-                print("❌ AppStateManager deallocated, stopping main app refresh timer")
+                logError("AppStateManager deallocated, stopping main app refresh timer")
                 timer.invalidate()
                 return
             }
             
-            print("🔄 Main app refresh timer fired at \(Date())")
+            logRefresh("Main app refresh timer fired at \(Date())")
             
             // Always refresh when main app is visible (ignore idle state)
             if !self.weatherService.isLoading {
                 Task { @MainActor in
-                    print("🔄 Starting main app refresh (always refresh when visible)")
+                    logRefresh("Starting main app refresh (always refresh when visible)")
                     await self.weatherService.fetchAllWeatherData(forceRefresh: false)
-                    print("🔄 Main app refresh completed at \(Date())")
+                    logRefresh("Main app refresh completed at \(Date())")
                 }
             } else {
-                print("⚠️ Skipping main app refresh - previous refresh still in progress")
+                logWarning("Skipping main app refresh - previous refresh still in progress")
             }
         }
         
         let minutes = Int(mainAppRefreshInterval / 60)
-        print("🔄 Main app refresh started: every \(minutes) minute\(minutes == 1 ? "" : "s") (always active when visible)")
+        logRefresh("Main app refresh started: every \(minutes) minute\(minutes == 1 ? "" : "s") (always active when visible)")
         
         // Do an immediate refresh if data is stale
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
@@ -230,7 +230,7 @@ class AppStateManager: ObservableObject {
             }
             
             if hasStaleData {
-                print("🔄 Running immediate main app refresh for stale data")
+                logRefresh("Running immediate main app refresh for stale data")
                 Task {
                     await self.weatherService.fetchAllWeatherData(forceRefresh: false)
                 }
@@ -242,7 +242,7 @@ class AppStateManager: ObservableObject {
     private func stopMainAppRefresh() {
         mainAppRefreshTimer?.invalidate()
         mainAppRefreshTimer = nil
-        print("🛑 Main app refresh stopped")
+        logRefresh("Main app refresh stopped")
     }
     
     /// Set the main app refresh interval
@@ -257,7 +257,7 @@ class AppStateManager: ObservableObject {
     
     /// Force a refresh regardless of current state
     func forceRefresh() {
-        print("🔄 AppStateManager: Force refresh requested")
+        logRefresh("AppStateManager: Force refresh requested")
         Task {
             await weatherService.fetchAllWeatherData(forceRefresh: true)
         }

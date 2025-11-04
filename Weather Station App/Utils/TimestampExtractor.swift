@@ -27,21 +27,21 @@ struct TimestampExtractor {
             if timestampYear >= 2020 && timestampYear <= currentYear + 1 {
                 return date
             } else {
-                print("⚠️ Unix timestamp '\(timestampString)' produces date: \(date) (year \(timestampYear))")
+                logWarning("Unix timestamp '\(timestampString)' produces date: \(date) (year \(timestampYear))")
                 
                 // The API might be using milliseconds instead of seconds
                 if unixTimestamp > 1_000_000_000_000 {
                     let dateFromMs = Date(timeIntervalSince1970: unixTimestamp / 1000)
                     let msYear = Calendar.current.component(.year, from: dateFromMs)
                     if msYear >= 2020 && msYear <= currentYear + 1 {
-                        print("✅ Converted from milliseconds: \(dateFromMs)")
+                        logSuccess("Converted from milliseconds: \(dateFromMs)")
                         return dateFromMs
                     }
                 }
                 
                 // If timestamp is way in the future, the API might be using a different epoch
                 // For now, use the current time as fallback for problematic timestamps
-                print("⚠️ Using current time as fallback for problematic timestamp")
+                logWarning("Using current time as fallback for problematic timestamp")
                 return Date()
             }
         }
@@ -55,7 +55,7 @@ struct TimestampExtractor {
             }
         }
         
-        print("⚠️ Could not parse timestamp: '\(timestampString)'")
+        logWarning("Could not parse timestamp: '\(timestampString)'")
         return nil
     }
     
@@ -123,10 +123,10 @@ struct TimestampExtractor {
             validTimestamps.append(contentsOf: extractValidTimestamps(from: sensor))
         }
         
-        print("📊 Found \(validTimestamps.count) valid timestamps from weather data")
+        logData("Found \(validTimestamps.count) valid timestamps from weather data")
         
         if validTimestamps.isEmpty {
-            print("⚠️ No valid timestamps found in weather data, this suggests API timestamp format issue")
+            logWarning("No valid timestamps found in weather data, this suggests API timestamp format issue")
             // Return a very recent time so data appears fresh but is marked as problematic
             return Date().addingTimeInterval(-30) // 30 seconds ago
         }
@@ -135,7 +135,7 @@ struct TimestampExtractor {
         let uniqueTimestamps = Array(Set(validTimestamps)).sorted()
         
         if let mostRecent = uniqueTimestamps.last {
-            print("📊 Most recent data timestamp: \(mostRecent)")
+            logData("Most recent data timestamp: \(mostRecent)")
             return mostRecent
         }
         
@@ -148,7 +148,7 @@ struct TimestampExtractor {
         let validDates = timestampStrings.compactMap { parseTimestamp($0) }
         
         if validDates.isEmpty && !timestampStrings.isEmpty {
-            print("⚠️ No valid dates extracted from timestamps: \(timestampStrings)")
+            logWarning("No valid dates extracted from timestamps: \(timestampStrings)")
         }
         
         return validDates
@@ -256,7 +256,7 @@ struct TimestampExtractor {
         let timestampYear = Calendar.current.component(.year, from: date)
         
         if timestampYear >= 2020 && timestampYear <= currentYear + 1 {
-            print("✅ Applied \(knownOffsetYears) year correction to timestamp: \(date)")
+            logSuccess("Applied \(knownOffsetYears) year correction to timestamp: \(date)")
             return date
         }
         

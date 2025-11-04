@@ -76,7 +76,7 @@ class WeatherStationService: ObservableObject {
     func fetchAllWeatherData(forceRefresh: Bool = false) async {
         // PHASE 1: Respect memory constraints
         guard memoryPressureLevel < 3 || forceRefresh else {
-            print(" Skipping data fetch due to critical memory pressure")
+            logMemory("Skipping data fetch due to critical memory pressure")
             return
         }
         
@@ -95,7 +95,7 @@ class WeatherStationService: ObservableObject {
             min(maxConcurrentRequests, 2) : maxConcurrentRequests
         let optimalConcurrency = min(adjustedConcurrency, max(1, activeStations.count))
         
-        print(" Fetching data for \(activeStations.count) active stations (concurrent: \(optimalConcurrency), memory level: \(memoryPressureLevel))")
+        logNetwork("Fetching data for \(activeStations.count) active stations (concurrent: \(optimalConcurrency), memory level: \(memoryPressureLevel))")
         
         // Filter stations that actually need fresh data
         let stationsToFetch: [WeatherStation]
@@ -112,12 +112,12 @@ class WeatherStationService: ObservableObject {
                 if shouldPerformUIUpdate() {
                     isLoading = false
                 }
-                print(" All station data is still fresh, no API calls needed")
+                logRefresh("All station data is still fresh, no API calls needed")
             }
             return
         }
         
-        print(" \(stationsToFetch.count) stations need fresh data")
+        logDebug(" \(stationsToFetch.count) stations need fresh data")
         
         // Use TaskGroup for concurrent requests with optimal concurrency
         await withTaskGroup(of: Void.self) { group in
@@ -156,7 +156,7 @@ class WeatherStationService: ObservableObject {
                 isLoading = false
                 lastRefreshTime = Date()
             }
-            print(" Concurrent fetch completed for \(stationsToFetch.count) stations")
+            logRefresh(" Concurrent fetch completed for \(stationsToFetch.count) stations")
         }
     }
     
@@ -166,13 +166,13 @@ class WeatherStationService: ObservableObject {
            let lastUpdated = station.lastUpdated,
            TimestampExtractor.isDataFresh(lastUpdated, freshnessDuration: dataFreshnessDuration) {
             let ageSeconds = Int(Date().timeIntervalSince(lastUpdated))
-            print(" Station \(station.name) has fresh data (age: \(ageSeconds)s)")
+            logData(" Station \(station.name) has fresh data (age: \(ageSeconds)s)")
             return false
         }
         
         // Check if we're already fetching this station
         if pendingRequests.contains(station.macAddress) {
-            print(" Station \(station.name) fetch already in progress")
+            logData(" Station \(station.name) fetch already in progress")
             return false
         }
         
@@ -200,7 +200,7 @@ class WeatherStationService: ObservableObject {
         
         // Use shared request deduplication
         guard let sharedTask = getOrCreateSharedRequest(for: station) else {
-            print(" [Station: \(station.name)] Failed to create request task")
+            logNetwork(" [Station: \(station.name)] Failed to create request task")
             return
         }
         
@@ -213,7 +213,7 @@ class WeatherStationService: ObservableObject {
                 await MainActor.run {
                     weatherData[station.macAddress] = response.data
                     updateStationLastUpdated(station, weatherData: response.data)
-                    print(" [Station: \(station.name)] Data updated successfully")
+                    logNetwork(" [Station: \(station.name)] Data updated successfully")
                     
                     // Clear any error for this station
                     if let currentError = errorMessage, currentError.contains(station.name) {
@@ -258,7 +258,7 @@ class WeatherStationService: ObservableObject {
         return sharedRequestQueue.sync {
             // Check if there's already a request in progress for this station
             if let existingTask = sharedRequestResults[requestKey] {
-                print(" [Station: \(station.name)] Reusing existing request task")
+                logNetwork(" [Station: \(station.name)] Reusing existing request task")
                 return existingTask
             }
             
@@ -275,7 +275,7 @@ class WeatherStationService: ObservableObject {
             }
             
             sharedRequestResults[requestKey] = newTask
-            print(" [Station: \(station.name)] Created new shared request task")
+            logNetwork(" [Station: \(station.name)] Created new shared request task")
             return newTask
         }
     }
@@ -284,7 +284,7 @@ class WeatherStationService: ObservableObject {
     private func performActualWeatherRequest(for station: WeatherStation) async -> WeatherStationResponse? {
         guard credentials.isValid else {
             await MainActor.run {
-                print(" Credentials invalid for \(station.name)")
+                logError(" Credentials invalid for \(station.name)")
                 errorMessage = "API credentials are not configured"
             }
             return nil
@@ -299,7 +299,7 @@ class WeatherStationService: ObservableObject {
             return nil
         }
         
-        print(" [Station: \(station.name)] Performing actual network request")
+        logNetwork(" [Station: \(station.name)] Performing actual network request")
         
         do {
             var request = URLRequest(url: url)
@@ -324,11 +324,11 @@ class WeatherStationService: ObservableObject {
                 self.lastRequestTimes[station.macAddress] = Date()
             }
             
-            print(" [Station: \(station.name)] Response: \(data.count) bytes in \(String(format: "%.2f", requestDuration))s")
+            logNetwork(" [Station: \(station.name)] Response: \(data.count) bytes in \(String(format: "%.2f", requestDuration))s")
             
             if let httpResponse = response as? HTTPURLResponse {
                 if httpResponse.statusCode == 429 {
-                    print(" Rate limited, reducing concurrent requests")
+                    logWarning(" Rate limited, reducing concurrent requests")
                     maxConcurrentRequests = max(1, maxConcurrentRequests - 1)
                     await MainActor.run {
                         errorMessage = "API rate limited, reducing request speed"
@@ -356,7 +356,7 @@ class WeatherStationService: ObservableObject {
         } catch let networkError {
             await MainActor.run {
                 let detailedError = "Network Error for \(station.name): \(networkError.localizedDescription)"
-                print(" [Station: \(station.name)] \(detailedError)")
+                logNetwork(" [Station: \(station.name)] \(detailedError)")
                 errorMessage = detailedError
             }
         }
@@ -390,7 +390,7 @@ class WeatherStationService: ObservableObject {
     
     /// Debug method to test timestamp parsing
     func testTimestampParsing(_ timestamp: String = "1761510950") {
-        print(" === TIMESTAMP PARSING TEST ===")
+        logDebug(" === TIMESTAMP PARSING TEST ===")
         let (parsed, analysis) = TimestampExtractor.testTimestampParsing(timestamp)
         print(analysis)
         
@@ -398,16 +398,16 @@ class WeatherStationService: ObservableObject {
             // Test with a sample station
             if let station = weatherStations.first {
                 let formatted = TimestampExtractor.formatTimestamp(parsedDate, for: station, style: .medium)
-                print("Formatted for station \(station.name): \(formatted)")
-                print("Station timezone: \(station.timeZone.identifier)")
+                logDebug("Formatted for station \(station.name): \(formatted)")
+                logDebug("Station timezone: \(station.timeZone.identifier)")
             }
         }
-        print(" === END TEST ===")
+        logDebug(" === END TEST ===")
     }
     
     func setDataFreshnessDuration(_ duration: TimeInterval) {
         dataFreshnessDuration = duration
-        print(" Data freshness duration set to \(Int(duration)) seconds")
+        logDebug(" Data freshness duration set to \(Int(duration)) seconds")
     }
     
     // MARK: - Background Refresh Management
@@ -418,11 +418,11 @@ class WeatherStationService: ObservableObject {
         }
         
         if staleStations.isEmpty {
-            print(" No stale data to refresh")
+            logRefresh(" No stale data to refresh")
             return
         }
         
-        print(" Refreshing \(staleStations.count) stations with stale data")
+        logRefresh(" Refreshing \(staleStations.count) stations with stale data")
         
         await withTaskGroup(of: Void.self) { group in
             let semaphore = AsyncSemaphore(value: 2) // More conservative for background refresh
@@ -488,10 +488,10 @@ class WeatherStationService: ObservableObject {
     
     // Fetch today's historical data for high/low temperature calculations
     private func fetchTodaysHistoricalData(for station: WeatherStation) async {
-        print(" Fetching today's historical data (from 00:00) for \(station.name)...")
+        logData(" Fetching today's historical data (from 00:00) for \(station.name)...")
         
         // First fetch extended lightning data (30 days) and store it
-        print(" Fetching extended lightning historical data for \(station.name)...")
+        logData(" Fetching extended lightning historical data for \(station.name)...")
         await fetchExtendedLightningData(for: station)
         
         // Store the lightning data before it gets overwritten
@@ -524,26 +524,26 @@ class WeatherStationService: ObservableObject {
                 tempAndHumidityCh3: existingData.tempAndHumidityCh3
             )
             historicalData[station.macAddress] = mergedData
-            print(" Lightning data preserved: \(savedLightningData.count?.list.count ?? 0) readings")
+            logLightning(" Lightning data preserved: \(savedLightningData.count?.list.count ?? 0) readings")
         }
         
         // DEBUG: Check final lightning data
         if let lightningData = historicalData[station.macAddress]?.lightning?.count {
-            print(" Final lightning data: \(lightningData.list.count) readings")
+            logDebug(" Final lightning data: \(lightningData.list.count) readings")
             
             // Show sample of recent data
             let recent = lightningData.list.prefix(5)
             for (timestamp, count) in recent {
                 if let ts = Double(timestamp) {
                     let date = Date(timeIntervalSince1970: ts)
-                    print("   - \(date): \(count)")
+                    logDebug("   - \(date): \(count)")
                 }
             }
         } else {
-            print(" No lightning data in final result")
+            logDebug(" No lightning data in final result")
         }
         
-        print(" Completed today's 5-minute resolution historical data fetch from 00:00 for: \(station.name)")
+        logData(" Completed today's 5-minute resolution historical data fetch from 00:00 for: \(station.name)")
     }
     
     private func fetchExtendedLightningData(for station: WeatherStation) async {
@@ -576,10 +576,10 @@ class WeatherStationService: ObservableObject {
             return
         }
         
-        print(" [Extended Lightning: \(station.name)] Requesting \(timeRange.rawValue)")
-        print(" Date range: \(startDateString) to \(endDateString)")
-        print(" Cycle type: \(timeRange.cycleType)")
-        print(" URL: \(url.absoluteString)")
+        logLightning(" [Extended Lightning: \(station.name)] Requesting \(timeRange.rawValue)")
+        logData(" Date range: \(startDateString) to \(endDateString)")
+        logData(" Cycle type: \(timeRange.cycleType)")
+        logDebug(" URL: \(url.absoluteString)")
         
         do {
             var request = URLRequest(url: url)
@@ -593,7 +593,7 @@ class WeatherStationService: ObservableObject {
             
             if let httpResponse = response as? HTTPURLResponse {
                 if httpResponse.statusCode == 429 {
-                    print(" Rate limited, reducing concurrent requests")
+                    logWarning(" Rate limited, reducing concurrent requests")
                     maxConcurrentRequests = max(1, maxConcurrentRequests - 1)
                     await MainActor.run {
                         errorMessage = "API rate limited, reducing request speed"
@@ -633,17 +633,17 @@ class WeatherStationService: ObservableObject {
                             tempAndHumidityCh3: existingData.tempAndHumidityCh3
                         )
                         historicalData[station.macAddress] = mergedData
-                        print(" Successfully merged 7-day high-resolution lightning data")
+                        logSuccess(" Successfully merged 7-day high-resolution lightning data")
                     } else {
                         // If no existing data, just store the lightning data
                         historicalData[station.macAddress] = historicalResponse.data
-                        print(" Successfully stored 7-day high-resolution lightning data")
+                        logSuccess(" Successfully stored 7-day high-resolution lightning data")
                     }
                 }
             }
             
         } catch {
-            print(" [Extended Lightning: \(station.name)] Error: \(error.localizedDescription)")
+            logLightning(" [Extended Lightning: \(station.name)] Error: \(error.localizedDescription)")
         }
     }
     
@@ -660,10 +660,10 @@ class WeatherStationService: ObservableObject {
             
             // Warn users about data limitations
             if timeRange == .last90Days || timeRange == .last365Days {
-                print("  Note: Requesting \(timeRange.rawValue) of data. API limitations:")
-                print("   • Daily data: Only 3 months available")
-                print("   • Weekly data: Up to 1 year available")
-                print("   • Using \(timeRange.cycleType) cycle for this request")
+                logDebug("  Note: Requesting \(timeRange.rawValue) of data. API limitations:")
+                logDebug("   • Daily data: Only 3 months available")
+                logDebug("   • Weekly data: Up to 1 year available")
+                logDebug("   • Using \(timeRange.cycleType) cycle for this request")
             }
         }
 
@@ -681,27 +681,27 @@ class WeatherStationService: ObservableObject {
             startDate = now.addingTimeInterval(-3600) // Exactly 1 hour ago
             
             let actualDuration = endDate.timeIntervalSince(startDate) / 3600
-            print(" 1-Hour range (5min resolution): \(startDate) to \(endDate)")
-            print(" Duration: \(String(format: "%.3f", actualDuration)) hours (well under 24hr limit)")
-            print(" Expected data points: ~12 (every 5 minutes for 1 hour)")
+            logDebug(" 1-Hour range (5min resolution): \(startDate) to \(endDate)")
+            logDebug(" Duration: \(String(format: "%.3f", actualDuration)) hours (well under 24hr limit)")
+            logDebug(" Expected data points: ~12 (every 5 minutes for 1 hour)")
         case .last6Hours:
             // Last 6 hours from current time  
             endDate = now
             startDate = now.addingTimeInterval(-6 * 3600) // Exactly 6 hours ago
-            print(" 6-Hour range: \(startDate) to \(endDate) (duration: \(endDate.timeIntervalSince(startDate)/3600) hours)")
+            logDebug(" 6-Hour range: \(startDate) to \(endDate) (duration: \(endDate.timeIntervalSince(startDate)/3600) hours)")
             
         case .last24Hours:
             // Last 24 hours from current time
             endDate = now
             startDate = now.addingTimeInterval(-24 * 3600) // Exactly 24 hours ago
-            print(" 24-Hour range: \(startDate) to \(endDate) (duration: \(endDate.timeIntervalSince(startDate)/3600) hours)")
+            logDebug(" 24-Hour range: \(startDate) to \(endDate) (duration: \(endDate.timeIntervalSince(startDate)/3600) hours)")
             
         case .todayFrom00:
             // NEW: From midnight (00:00:00) of current day to now
             // This gives us the actual daily high/low for today's calendar day
             startDate = calendar.startOfDay(for: now)
             endDate = now
-            print(" Today from 00:00 range: \(startDate) to \(endDate)")
+            logDebug(" Today from 00:00 range: \(startDate) to \(endDate)")
             
         case .last7Days:
             // Last 7 full calendar days
@@ -762,10 +762,10 @@ class WeatherStationService: ObservableObject {
             return
         }
         
-        print(" [Historical: \(station.name)] Requesting \(timeRange.rawValue)")
-        print(" Date range: \(startDateString) to \(endDateString)")
-        print(" Cycle type: \(timeRange.cycleType)")
-        print(" URL: \(url.absoluteString)")
+        logData(" [Historical: \(station.name)] Requesting \(timeRange.rawValue)")
+        logData(" Date range: \(startDateString) to \(endDateString)")
+        logData(" Cycle type: \(timeRange.cycleType)")
+        logDebug(" URL: \(url.absoluteString)")
         
         do {
             var request = URLRequest(url: url)
@@ -777,10 +777,10 @@ class WeatherStationService: ObservableObject {
             
             let (data, response) = try await session.data(for: request)
             
-            print(" [Historical: \(station.name)] Response received: \(data.count) bytes")
+            logData(" [Historical: \(station.name)] Response received: \(data.count) bytes")
             
             if let httpResponse = response as? HTTPURLResponse {
-                print(" [Historical: \(station.name)] HTTP Status: \(httpResponse.statusCode)")
+                logData(" [Historical: \(station.name)] HTTP Status: \(httpResponse.statusCode)")
                 
                 if httpResponse.statusCode != 200 {
                     await MainActor.run {
@@ -830,7 +830,7 @@ class WeatherStationService: ObservableObject {
             await MainActor.run {
                 errorMessage = "Historical data error for \(station.name): \(error.localizedDescription)"
                 isLoadingHistory = false
-                print(" Historical data error: \(error)")
+                logError(" Historical data error: \(error)")
             }
         }
     }
@@ -921,7 +921,7 @@ class WeatherStationService: ObservableObject {
         guard let new = new else { return existing }
         
         if preserveExisting {
-            print("   Temperature data merge: preserving existing \(existing.list.count) points, adding new \(new.list.count) points")
+            logDebug("   Temperature data merge: preserving existing \(existing.list.count) points, adding new \(new.list.count) points")
             
             // Merge the data: combine existing comprehensive data with new specific time range data
             var mergedList = existing.list
@@ -931,7 +931,7 @@ class WeatherStationService: ObservableObject {
             
             return HistoricalMeasurement(unit: existing.unit, list: mergedList)
         } else {
-            print("   Temperature data merge: using new data (\(new.list.count) points) for chart display")
+            logDebug("   Temperature data merge: using new data (\(new.list.count) points) for chart display")
             return new
         }
     }
@@ -941,7 +941,7 @@ class WeatherStationService: ObservableObject {
         guard let new = new else { return existing }
         
         if preserveExisting {
-            print("   Humidity data merge: preserving existing \(existing.list.count) points, adding new \(new.list.count) points")
+            logDebug("   Humidity data merge: preserving existing \(existing.list.count) points, adding new \(new.list.count) points")
             
             // Merge the data: combine existing comprehensive data with new specific time range data
             var mergedList = existing.list
@@ -951,7 +951,7 @@ class WeatherStationService: ObservableObject {
             
             return HistoricalMeasurement(unit: existing.unit, list: mergedList)
         } else {
-            print("   Humidity data merge: using new data (\(new.list.count) points) for chart display")
+            logDebug("   Humidity data merge: using new data (\(new.list.count) points) for chart display")
             return new
         }
     }
@@ -999,8 +999,8 @@ class WeatherStationService: ObservableObject {
             return (false, "Invalid device list URL")
         }
         
-        print(" Discovering weather stations...")
-        print(" URL: \(url.absoluteString)")
+        logNetwork(" Discovering weather stations...")
+        logDebug(" URL: \(url.absoluteString)")
         
         do {
             var request = URLRequest(url: url)
@@ -1012,10 +1012,10 @@ class WeatherStationService: ObservableObject {
             
             let (data, response) = try await session.data(for: request)
             
-            print(" Device list response received: \(data.count) bytes")
+            logNetwork(" Device list response received: \(data.count) bytes")
             
             if let httpResponse = response as? HTTPURLResponse {
-                print(" HTTP Status: \(httpResponse.statusCode)")
+                logNetwork(" HTTP Status: \(httpResponse.statusCode)")
                 
                 if httpResponse.statusCode != 200 {
                     await MainActor.run {
@@ -1027,19 +1027,19 @@ class WeatherStationService: ObservableObject {
             
             // Let's see the raw response first
             let responseString = String(data: data, encoding: .utf8) ?? "Unable to decode response"
-            print(" Raw device list response:")
-            print("--- START RESPONSE ---")
+            logDebug(" Raw device list response:")
+            logDebug("--- START RESPONSE ---")
             print(responseString)
-            print("--- END RESPONSE ---")
+            logDebug("--- END RESPONSE ---")
             
             // Try to parse as basic JSON first to see the structure
             do {
                 if let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                    print(" Device list JSON structure:")
-                    print(" Root keys: \(Array(jsonObject.keys))")
+                    logNetwork(" Device list JSON structure:")
+                    logDebug(" Root keys: \(Array(jsonObject.keys))")
                     
                     if let code = jsonObject["code"] as? Int {
-                        print(" API code: \(code)")
+                        logDebug(" API code: \(code)")
                         
                         if code != 0 {
                             let msg = jsonObject["msg"] as? String ?? "Unknown error"
@@ -1052,15 +1052,15 @@ class WeatherStationService: ObservableObject {
                     
                     // Check what's in the data field
                     if let dataField = jsonObject["data"] as? [Any] {
-                        print(" Data field is an array with \(dataField.count) items")
+                        logDebug(" Data field is an array with \(dataField.count) items")
                         
                         // Log the first device structure if available
                         if let firstDevice = dataField.first as? [String: Any] {
-                            print(" First device keys: \(Array(firstDevice.keys))")
+                            logDebug(" First device keys: \(Array(firstDevice.keys))")
                         }
                     } else {
-                        print(" Data field structure: \(type(of: jsonObject["data"]))")
-                        print(" Data field value: \(jsonObject["data"] ?? "nil")")
+                        logDebug(" Data field structure: \(type(of: jsonObject["data"]))")
+                        logDebug(" Data field value: \(jsonObject["data"] ?? "nil")")
                     }
                 } else {
                     await MainActor.run {
@@ -1070,7 +1070,7 @@ class WeatherStationService: ObservableObject {
                 }
                 
                 // Now try our strict model parsing
-                print(" Attempting to parse with DeviceListResponse model...")
+                logDebug(" Attempting to parse with DeviceListResponse model...")
                 
                 let decoder = JSONDecoder()
                 let deviceListResponse = try decoder.decode(DeviceListResponse.self, from: data)
@@ -1080,22 +1080,22 @@ class WeatherStationService: ObservableObject {
                     
                     if deviceListResponse.code == 0 {
                         discoveredStations = deviceListResponse.data.list
-                        print(" Successfully discovered \(discoveredStations.count) weather stations")
+                        logSuccess(" Successfully discovered \(discoveredStations.count) weather stations")
 
                         
                         // Log discovered stations
                         for device in discoveredStations {
-                            print(" Found device: \(device.name) (\(device.mac))")
-                            print("   Device Type: \(device.type) (\(self.deviceTypeDescription(device.type)))")
+                            logInfo(" Found device: \(device.name) (\(device.mac))")
+                            logDebug("   Device Type: \(device.type) (\(self.deviceTypeDescription(device.type)))")
                             if let stationType = device.stationtype {
-                                print("   Station Type: \(stationType)")
+                                logDebug("   Station Type: \(stationType)")
                             }
                             if let createtime = device.createtime {
                                 let date = Date(timeIntervalSince1970: TimeInterval(createtime))
-                                print("   Created: \(date)")
+                                logDebug("   Created: \(date)")
                             }
                             if let longitude = device.longitude, let latitude = device.latitude {
-                                print("   Location: \(latitude), \(longitude)")
+                                logDebug("   Location: \(latitude), \(longitude)")
                             }
                         }
                     }
@@ -1119,7 +1119,7 @@ class WeatherStationService: ObservableObject {
                 }
                 
             } catch let jsonError {
-                print(" JSON parsing failed: \(jsonError)")
+                logError(" JSON parsing failed: \(jsonError)")
                 
                 await MainActor.run {
                     isDiscoveringStations = false
@@ -1132,7 +1132,7 @@ class WeatherStationService: ObservableObject {
             await MainActor.run {
                 isDiscoveringStations = false
             }
-            print(" Device discovery error: \(error)")
+            logDebug(" Device discovery error: \(error)")
             return (false, "Discovery failed: \(error.localizedDescription)")
         }
     }
@@ -1153,11 +1153,11 @@ class WeatherStationService: ObservableObject {
             
             weatherStations[existingIndex] = updatedStation
             saveWeatherStations()
-            print(" Updated existing station with discovery data: \(updatedStation.name) (\(updatedStation.macAddress))")
+            logSuccess(" Updated existing station with discovery data: \(updatedStation.name) (\(updatedStation.macAddress))")
         } else {
             weatherStations.append(newStation)
             saveWeatherStations()
-            print(" Added new station: \(newStation.name) (\(newStation.macAddress))")
+            logSuccess(" Added new station: \(newStation.name) (\(newStation.macAddress))")
         }
     }
     
@@ -1174,7 +1174,7 @@ class WeatherStationService: ObservableObject {
         
         if addedCount > 0 {
             saveWeatherStations()
-            print(" Added \(addedCount) new weather station\(addedCount == 1 ? "" : "s")")
+            logSuccess(" Added \(addedCount) new weather station\(addedCount == 1 ? "" : "s")")
         }
     }
     
@@ -1270,8 +1270,8 @@ class WeatherStationService: ObservableObject {
             objectWillChange.send()
             weatherStations[index].cardOrder = newOrder
             saveWeatherStations()
-            print("✅ Updated card order for: \(station.name)")
-            print("   New order: \(newOrder.map { $0.displayName })")
+            logSuccess(" Updated card order for: \(station.name)")
+            logDebug("   New order: \(newOrder.map { $0.displayName })")
         }
     }
     func updateStation(_ station: WeatherStation) {
@@ -1284,7 +1284,7 @@ class WeatherStationService: ObservableObject {
             objectWillChange.send()
             weatherStations[index] = station
             saveWeatherStations()
-            print("✅ Updated station: \(station.name)")
+            logSuccess(" Updated station: \(station.name)")
         }
     }
     
@@ -1298,26 +1298,26 @@ class WeatherStationService: ObservableObject {
                 weatherStations[index].lastUpdated = mostRecentTimestamp
                 saveWeatherStations()
                 
-                print(" Updated \(station.name) timestamp (from all sensors):")
-                print("   Old: \(oldTimestamp?.description ?? "never")")
-                print("   New: \(mostRecentTimestamp.description)")
-                print("   Station timezone: \(station.timeZone.identifier)")
-                print("   Data age: \(TimestampExtractor.formatDataAge(from: mostRecentTimestamp))")
+                logSuccess(" Updated \(station.name) timestamp (from all sensors):")
+                logDebug("   Old: \(oldTimestamp?.description ?? "never")")
+                logDebug("   New: \(mostRecentTimestamp.description)")
+                logDebug("   Station timezone: \(station.timeZone.identifier)")
+                logDebug("   Data age: \(TimestampExtractor.formatDataAge(from: mostRecentTimestamp))")
                 
                 // Warn if timestamp seems problematic
                 let currentTime = Date()
                 let timeDifference = abs(currentTime.timeIntervalSince(mostRecentTimestamp))
                 if timeDifference > 86400 { // More than 1 day difference
-                    print(" WARNING: Weather data timestamp is \(Int(timeDifference/3600)) hours off from current time")
+                    logWarning(" Weather data timestamp is \(Int(timeDifference/3600)) hours off from current time")
                 }
             } else {
-                print(" Could not find station \(station.name) to update timestamp")
+                logWarning(" Could not find station \(station.name) to update timestamp")
             }
             return
         }
         
         // Fallback to original method using outdoor temperature timestamp if TimestampExtractor fails
-        print(" TimestampExtractor failed, falling back to outdoor temperature timestamp")
+        logDebug(" TimestampExtractor failed, falling back to outdoor temperature timestamp")
         let timestampString = weatherData.outdoor.temperature.time
         
         // Parse the timestamp - it could be Unix timestamp or formatted date string
@@ -1336,7 +1336,7 @@ class WeatherStationService: ObservableObject {
                 actualDataTime = parsedDate
             } else {
                 // If we can't parse the timestamp, fall back to current time
-                print(" Could not parse timestamp '\(timestampString)' for \(station.name), using current time")
+                logWarning(" Could not parse timestamp '\(timestampString)' for \(station.name), using current time")
                 actualDataTime = Date()
             }
         }
@@ -1346,12 +1346,12 @@ class WeatherStationService: ObservableObject {
             weatherStations[index].lastUpdated = actualDataTime
             saveWeatherStations()
             
-            print(" Updated \(station.name) timestamp (fallback method):")
-            print("   Old: \(oldTimestamp?.description ?? "never")")
-            print("   New: \(actualDataTime.description) (from weather data)")
-            print("   Raw timestamp: \(timestampString)")
+            logSuccess(" Updated \(station.name) timestamp (fallback method):")
+            logDebug("   Old: \(oldTimestamp?.description ?? "never")")
+            logDebug("   New: \(actualDataTime.description) (from weather data)")
+            logDebug("   Raw timestamp: \(timestampString)")
         } else {
-            print(" Could not find station \(station.name) to update timestamp")
+            logWarning(" Could not find station \(station.name) to update timestamp")
         }
     }
     
@@ -1405,8 +1405,8 @@ class WeatherStationService: ObservableObject {
             return (false, "Invalid device info URL")
         }
         
-        print(" Fetching station info for \(station.name)...")
-        print(" URL: \(url.absoluteString)")
+        logData(" Fetching station info for \(station.name)...")
+        logDebug(" URL: \(url.absoluteString)")
         
         do {
             var request = URLRequest(url: url)
@@ -1419,7 +1419,7 @@ class WeatherStationService: ObservableObject {
             let (data, response) = try await session.data(for: request)
             
             if let httpResponse = response as? HTTPURLResponse {
-                print(" Station info HTTP Status: \(httpResponse.statusCode)")
+                logData(" Station info HTTP Status: \(httpResponse.statusCode)")
                 
                 if httpResponse.statusCode != 200 {
                     return (false, "HTTP \(httpResponse.statusCode)")
@@ -1430,7 +1430,7 @@ class WeatherStationService: ObservableObject {
             if let jsonObject = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                let code = jsonObject["code"] as? Int {
                 
-                print(" Device info JSON response: \(jsonObject)")
+                logDebug(" Device info JSON response: \(jsonObject)")
                 
                 if code == 0,
                    let dataField = jsonObject["data"] as? [String: Any] {
@@ -1443,13 +1443,13 @@ class WeatherStationService: ObservableObject {
                     let createtime = dataField["createtime"] as? Int
                     
                     // Look for camera-related fields
-                    print(" Checking for camera fields in device info...")
+                    logDebug(" Checking for camera fields in device info...")
                     for (key, value) in dataField {
                         if key.lowercased().contains("camera") || 
                            key.lowercased().contains("image") || 
                            key.lowercased().contains("photo") || 
                            key.lowercased().contains("picture") {
-                            print(" Found potential camera field: \(key) = \(value)")
+                            logDebug(" Found potential camera field: \(key) = \(value)")
                         }
                     }
                     
@@ -1469,12 +1469,12 @@ class WeatherStationService: ObservableObject {
                             weatherStations[index] = updatedStation
                             saveWeatherStations()
                             
-                            print(" Updated station info for \(station.name):")
+                            logSuccess(" Updated station info for \(station.name):")
                             if let tzId = timeZoneId {
-                                print("   Timezone: \(tzId)")
+                                logDebug("   Timezone: \(tzId)")
                             }
                             if let lat = latitude, let lon = longitude {
-                                print("   Location: \(lat), \(lon)")
+                                logDebug("   Location: \(lat), \(lon)")
                             }
                         }
                     }
@@ -1489,25 +1489,25 @@ class WeatherStationService: ObservableObject {
             return (false, "Invalid response format")
             
         } catch {
-            print(" Station info fetch error: \(error)")
+            logData(" Station info fetch error: \(error)")
             return (false, "Failed to fetch station info: \(error.localizedDescription)")
         }
     }
     
     func fetchCameraImage(for station: WeatherStation) async -> String? {
         guard credentials.isValid else {
-            print(" Credentials invalid for camera image fetch")
+            logError(" Credentials invalid for camera image fetch")
             return nil
         }
         
         // Only proceed if station has an associated camera
         guard let cameraMAC = station.associatedCameraMAC else {
-            print(" No associated camera for station: \(station.name)")
+            logDebug(" No associated camera for station: \(station.name)")
             return nil
         }
         
-        print(" Starting camera image search for station: \(station.name)")
-        print(" Using associated camera MAC: \(cameraMAC)")
+        logDebug(" Starting camera image search for station: \(station.name)")
+        logDebug(" Using associated camera MAC: \(cameraMAC)")
         
         // Construct the camera endpoint URL carefully
         let baseURL = "https://cdnapi.ecowitt.net/api/v3/device/real_time"
@@ -1515,11 +1515,11 @@ class WeatherStationService: ObservableObject {
         let apiKey = credentials.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         
         guard let url = URL(string: "\(baseURL)?application_key=\(applicationKey)&api_key=\(apiKey)&mac=\(cameraMAC)&call_back=camera") else {
-            print(" Invalid camera URL construction")
+            logDebug(" Invalid camera URL construction")
             return nil
         }
         
-        print(" Camera endpoint URL: \(url.absoluteString)")
+        logCamera(" Camera endpoint URL: \(url.absoluteString)")
         
         do {
             var request = URLRequest(url: url)
@@ -1531,21 +1531,21 @@ class WeatherStationService: ObservableObject {
             let (data, response) = try await session.data(for: request)
             
             if let httpResponse = response as? HTTPURLResponse {
-                print(" Camera HTTP Status: \(httpResponse.statusCode)")
+                logCamera(" Camera HTTP Status: \(httpResponse.statusCode)")
                 
                 if httpResponse.statusCode == 200 {
-                    print(" Response size: \(data.count) bytes")
+                    logDebug(" Response size: \(data.count) bytes")
                     
                     // Log the raw response for debugging
                     if let responseString = String(data: data, encoding: .utf8) {
-                        print(" Camera raw response: \(responseString)")
+                        logCamera(" Camera raw response: \(responseString)")
                     }
                     
                     // Check if data field is an empty array (no camera data available)
                     if let jsonObject = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                        let dataField = jsonObject["data"] as? [Any],
                        dataField.isEmpty {
-                        print(" Camera API returned empty data array - no camera data available for this device")
+                        logCamera(" Camera API returned empty data array - no camera data available for this device")
                         return nil
                     }
                     
@@ -1558,34 +1558,34 @@ class WeatherStationService: ObservableObject {
                             let imageUrl = cameraResponse.data.camera.photo.url
                             let imageTime = cameraResponse.data.camera.photo.time
                             
-                            print(" Found camera image URL: \(imageUrl)")
-                            print(" Image timestamp: \(imageTime)")
+                            logDebug(" Found camera image URL: \(imageUrl)")
+                            logDebug(" Image timestamp: \(imageTime)")
                             
                             return imageUrl
                         } else {
-                            print(" Camera API error: \(cameraResponse.msg) (Code: \(cameraResponse.code))")
+                            logCamera(" Camera API error: \(cameraResponse.msg) (Code: \(cameraResponse.code))")
                         }
                     } catch {
-                        print(" Failed to parse camera response: \(error)")
-                        print(" This likely means the device is not a camera or has no camera data available")
+                        logDebug(" Failed to parse camera response: \(error)")
+                        logDebug(" This likely means the device is not a camera or has no camera data available")
                         
                         return nil
                     }
                 } else {
-                    print(" HTTP Error: \(httpResponse.statusCode)")
+                    logDebug(" HTTP Error: \(httpResponse.statusCode)")
                     
                     // Log error response body
                     if let responseString = String(data: data, encoding: .utf8) {
-                        print(" Error response: \(responseString)")
+                        logDebug(" Error response: \(responseString)")
                     }
                 }
             }
             
         } catch {
-            print(" Camera request error: \(error.localizedDescription)")
+            logCamera(" Camera request error: \(error.localizedDescription)")
         }
         
-        print(" No camera image URL found for station: \(station.name)")
+        logDebug(" No camera image URL found for station: \(station.name)")
         return nil
     }
     
@@ -1634,8 +1634,8 @@ class WeatherStationService: ObservableObject {
     }
     
     func associateCamerasWithStations(distanceThresholdKm: Double = 2.0) {
-        print(" Starting automatic camera-station association...")
-        print(" Distance threshold: \(distanceThresholdKm) km")
+        logDebug(" Starting automatic camera-station association...")
+        logDebug(" Distance threshold: \(distanceThresholdKm) km")
         
         // Get all camera devices (type 2)
         let cameraDevices = discoveredStations.filter { $0.type == 2 }
@@ -1646,28 +1646,28 @@ class WeatherStationService: ObservableObject {
             station.deviceType == nil || station.deviceType == 1
         }
         
-        print(" Found \(cameraDevices.count) camera devices")
-        print(" Found \(stationDevices.count) weather stations")
+        logDebug(" Found \(cameraDevices.count) camera devices")
+        logDebug(" Found \(stationDevices.count) weather stations")
         
         // Debug: show all stations
         for station in weatherStations {
-            print(" Station: \(station.name), deviceType: \(station.deviceType?.description ?? "nil"), location: \(station.latitude?.description ?? "nil"), \(station.longitude?.description ?? "nil")")
+            logData(" Station: \(station.name), deviceType: \(station.deviceType?.description ?? "nil"), location: \(station.latitude?.description ?? "nil"), \(station.longitude?.description ?? "nil")")
         }
         
         for camera in cameraDevices {
             guard let cameraLat = camera.latitude, let cameraLon = camera.longitude else {
-                print(" Camera \(camera.name) has no location data, skipping")
+                logCamera(" Camera \(camera.name) has no location data, skipping")
                 continue
             }
             
-            print(" Processing camera: \(camera.name) at (\(cameraLat), \(cameraLon))")
+            logDebug(" Processing camera: \(camera.name) at (\(cameraLat), \(cameraLon))")
             
             var associatedStations: [WeatherStation] = []
             
             // Find ALL stations within the threshold distance
             for station in stationDevices {
                 guard let stationLat = station.latitude, let stationLon = station.longitude else {
-                    print(" Station \(station.name) has no location data, skipping")
+                    logData(" Station \(station.name) has no location data, skipping")
                     continue
                 }
                 
@@ -1676,11 +1676,11 @@ class WeatherStationService: ObservableObject {
                     lat2: stationLat, lon2: stationLon
                 )
                 
-                print(" Distance to \(station.name): \(String(format: "%.3f", distance)) km")
+                logDebug(" Distance to \(station.name): \(String(format: "%.3f", distance)) km")
                 
                 if distance <= distanceThresholdKm {
                     associatedStations.append(station)
-                    print(" Station \(station.name) is within threshold (\(String(format: "%.3f", distance)) km)")
+                    logData(" Station \(station.name) is within threshold (\(String(format: "%.3f", distance)) km)")
                 }
             }
             
@@ -1689,17 +1689,17 @@ class WeatherStationService: ObservableObject {
                 for station in associatedStations {
                     if let index = weatherStations.firstIndex(where: { $0.id == station.id }) {
                         weatherStations[index].associatedCameraMAC = camera.mac
-                        print(" Associated camera \(camera.name) with station \(station.name)")
+                        logDebug(" Associated camera \(camera.name) with station \(station.name)")
                     }
                 }
                 saveWeatherStations()
-                print(" Camera \(camera.name) associated with \(associatedStations.count) station(s)")
+                logCamera(" Camera \(camera.name) associated with \(associatedStations.count) station(s)")
             } else {
-                print(" No weather stations found within \(distanceThresholdKm) km for camera \(camera.name)")
+                logDebug(" No weather stations found within \(distanceThresholdKm) km for camera \(camera.name)")
             }
         }
         
-        print(" Camera-station association complete")
+        logCamera(" Camera-station association complete")
     }
     
     private func calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double) -> Double {
@@ -1733,7 +1733,7 @@ class WeatherStationService: ObservableObject {
         do {
             return try decoder.decode(WeatherStationResponse.self, from: data)
         } catch {
-            print(" Standard parsing failed for \(station.name): \(error)")
+            logDebug(" Standard parsing failed for \(station.name): \(error)")
         }
         
         // If standard parsing fails, try to parse as generic JSON and extract what we can
@@ -1742,7 +1742,7 @@ class WeatherStationService: ObservableObject {
                let code = jsonObject["code"] as? Int,
                let msg = jsonObject["msg"] as? String {
                 
-                print(" [Station: \(station.name)] API Response - Code: \(code), Message: \(msg)")
+                logNetwork(" [Station: \(station.name)] API Response - Code: \(code), Message: \(msg)")
                 
                 if code != 0 {
                     return WeatherStationResponse(code: code, msg: msg, data: WeatherStationData.empty())
@@ -1755,34 +1755,34 @@ class WeatherStationService: ObservableObject {
                 }
             }
         } catch {
-            print(" Even generic JSON parsing failed for \(station.name): \(error)")
+            logDebug(" Even generic JSON parsing failed for \(station.name): \(error)")
         }
         
         return nil
     }
     
     private func extractWeatherDataSafely(from dataDict: [String: Any], for station: WeatherStation) -> WeatherStationData {
-        print(" [Station: \(station.name)] Attempting safe data extraction from available fields")
+        logNetwork(" [Station: \(station.name)] Attempting safe data extraction from available fields")
         
         // Create empty data structure and fill what we can
         let extractedData = WeatherStationData.empty()
         
         // Extract outdoor data if available
         if dataDict["outdoor"] != nil {
-            print(" [Station: \(station.name)] Found outdoor data")
+            logNetwork(" [Station: \(station.name)] Found outdoor data")
             // Try to extract basic outdoor measurements
             // This would need implementation based on your WeatherStationData model
         }
         
         // Extract indoor data if available
         if dataDict["indoor"] != nil {
-            print(" [Station: \(station.name)] Found indoor data")
+            logNetwork(" [Station: \(station.name)] Found indoor data")
             // Try to extract basic indoor measurements
         }
         
         // Extract other sensor data
         for (key, value) in dataDict {
-            print(" [Station: \(station.name)] Available data field: \(key) (\(type(of: value)))")
+            logNetwork(" [Station: \(station.name)] Available data field: \(key) (\(type(of: value)))")
         }
         
         return extractedData
@@ -1813,7 +1813,7 @@ class WeatherStationService: ObservableObject {
         // Start maintenance timer for cleanup
         startMaintenanceTimer()
         
-        print(" Memory management initialized")
+        logDebug(" Memory management initialized")
     }
     
     private func setupMemoryPressureMonitoring() {
@@ -1838,7 +1838,7 @@ class WeatherStationService: ObservableObject {
     }
     
     private func handleMemoryWarning() {
-        print(" Memory warning received - implementing aggressive cleanup")
+        logDebug(" Memory warning received - implementing aggressive cleanup")
         
         isMemoryConstrained = true
         memoryPressureLevel = 3 // Critical
@@ -1853,7 +1853,7 @@ class WeatherStationService: ObservableObject {
         // Reduce concurrent requests
         maxConcurrentRequests = 1
         
-        print(" Memory warning handled - reduced operations to minimum")
+        logDebug(" Memory warning handled - reduced operations to minimum")
     }
     
     private func checkMemoryPressure() {
@@ -1901,7 +1901,7 @@ class WeatherStationService: ObservableObject {
                 shouldReduceUIUpdates = memoryPressureLevel > 2
                 
                 if memoryPressureLevel > previousLevel && memoryPressureLevel > 1 {
-                    print(" Memory pressure increased to level \(memoryPressureLevel) (\(String(format: "%.1f", memoryUsageMB)) MB)")
+                    logDebug(" Memory pressure increased to level \(memoryPressureLevel) (\(String(format: "%.1f", memoryUsageMB)) MB)")
                     performMemoryOptimizations()
                 }
             }
@@ -1922,7 +1922,7 @@ class WeatherStationService: ObservableObject {
     }
     
     private func performLightMemoryCleanup() {
-        print(" Performing light memory cleanup")
+        logDebug(" Performing light memory cleanup")
         
         // Clean old chart data (keep only last 7 days)
         cleanOldChartData(maxAge: 7 * 24 * 60 * 60)
@@ -1932,7 +1932,7 @@ class WeatherStationService: ObservableObject {
     }
     
     private func performModerateMemoryCleanup() {
-        print(" Performing moderate memory cleanup")
+        logDebug(" Performing moderate memory cleanup")
         
         performLightMemoryCleanup()
         
@@ -1947,7 +1947,7 @@ class WeatherStationService: ObservableObject {
     }
     
     private func performAggressiveMemoryCleanup() {
-        print(" Performing aggressive memory cleanup")
+        logDebug(" Performing aggressive memory cleanup")
         
         performModerateMemoryCleanup()
         
@@ -1999,7 +1999,7 @@ class WeatherStationService: ObservableObject {
         }
         
         if removedCount > 0 {
-            print(" Cleaned \(removedCount) old chart data entries")
+            logDebug(" Cleaned \(removedCount) old chart data entries")
         }
     }
     
@@ -2013,7 +2013,7 @@ class WeatherStationService: ObservableObject {
         }
         
         if lastRequestTimes.count < oldCount {
-            print(" Cleaned \(oldCount - lastRequestTimes.count) old request time entries")
+            logDebug(" Cleaned \(oldCount - lastRequestTimes.count) old request time entries")
         }
     }
     
@@ -2040,7 +2040,7 @@ class WeatherStationService: ObservableObject {
         let removedChart = oldChartDataCount - chartHistoricalData.count
         
         if removedWeather > 0 || removedHistorical > 0 || removedChart > 0 {
-            print(" Cleaned inactive station data: \(removedWeather) weather, \(removedHistorical) historical, \(removedChart) chart")
+            logDebug(" Cleaned inactive station data: \(removedWeather) weather, \(removedHistorical) historical, \(removedChart) chart")
         }
     }
     
@@ -2105,7 +2105,7 @@ class WeatherStationService: ObservableObject {
     }
     
     private func cleanup() {
-        print(" Cleaning up WeatherStationService")
+        logDebug(" Cleaning up WeatherStationService")
         
         // Cancel all timers and observers
         memoryWarningCancellable?.cancel()
