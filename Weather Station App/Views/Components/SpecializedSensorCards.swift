@@ -192,130 +192,104 @@ struct SunStrengthIndicator: View {
                     lineWidth: 8
                 )
                 
-                // Choose your preferred icon style (uncomment one):
-                
-                // OPTION 1: Simple static SF Symbol
-                // SimpleSunIcon(intensity: intensityLevel, solarRadiation: solarRadiation)
-                //     .position(x: centerX, y: centerY - 5)
-                
-                // OPTION 2: Static custom sun with rays (no animation)
-                // StaticCustomSunIcon(intensity: intensityLevel, solarRadiation: solarRadiation)
-                //     .position(x: centerX, y: centerY - 5)
-                
-                // OPTION 3: Subtle pulsing glow only (no rotation)
-                PulsingSunIcon(intensity: intensityLevel, solarRadiation: solarRadiation)
+                // Circular gauge in the center
+                CircularSolarGauge(intensity: intensityLevel, solarRadiation: solarRadiation)
+                    .frame(width: 80, height: 80)
                     .position(x: centerX, y: centerY - 5)
-                
-                // OPTION 4: Original animated version (rotating rays + pulse)
-                // AnimatedSunIcon(intensity: intensityLevel, solarRadiation: solarRadiation)
-                //     .position(x: centerX, y: centerY - 5)
             }
         }
     }
 }
 
-// OPTION 1: Simple SF Symbol Icon
-struct SimpleSunIcon: View {
-    let intensity: SunStrengthIndicator.SolarIntensityLevel
-    let solarRadiation: Double
-    
-    var body: some View {
-        Image(systemName: "sun.max.fill")
-            .font(.system(size: intensity.sunSize))
-            .foregroundStyle(intensity.color)
-            .shadow(color: intensity.color.opacity(0.4), radius: intensity.glowRadius)
-    }
-}
-
-// OPTION 2: Static Custom Sun with Rays (no animation)
-struct StaticCustomSunIcon: View {
-    let intensity: SunStrengthIndicator.SolarIntensityLevel
-    let solarRadiation: Double
-    
-    var body: some View {
-        ZStack {
-            // Static sun rays
-            ForEach(0..<8, id: \.self) { index in
-                Rectangle()
-                    .fill(intensity.color)
-                    .frame(width: 2, height: intensity.rayLength)
-                    .offset(y: -(intensity.sunSize / 2 + intensity.rayLength / 2 + 2))
-                    .rotationEffect(.degrees(Double(index) * 45))
-                    .opacity(solarRadiation > 100 ? 0.8 : 0.3)
-            }
-            
-            // Central sun circle
-            Circle()
-                .fill(
-                    RadialGradient(
-                        gradient: Gradient(colors: [
-                            intensity.color.opacity(0.9),
-                            intensity.color
-                        ]),
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: intensity.sunSize / 2
-                    )
-                )
-                .frame(width: intensity.sunSize, height: intensity.sunSize)
-                .shadow(
-                    color: intensity.color.opacity(0.6),
-                    radius: intensity.glowRadius
-                )
-        }
-    }
-}
-
-// OPTION 3: Pulsing Glow Only (no rotation)
-struct PulsingSunIcon: View {
+// New Circular Gauge Design
+struct CircularSolarGauge: View {
     let intensity: SunStrengthIndicator.SolarIntensityLevel
     let solarRadiation: Double
     
     @State private var pulseScale: CGFloat = 1.0
     
+    private var progress: Double {
+        min(solarRadiation / 1200.0, 1.0)
+    }
+    
+    private var isNighttime: Bool {
+        solarRadiation == 0
+    }
+    
     var body: some View {
         ZStack {
-            // Static sun rays
-            ForEach(0..<8, id: \.self) { index in
-                Rectangle()
-                    .fill(intensity.color)
-                    .frame(width: 2, height: intensity.rayLength)
-                    .offset(y: -(intensity.sunSize / 2 + intensity.rayLength / 2 + 2))
-                    .rotationEffect(.degrees(Double(index) * 45))
-                    .opacity(solarRadiation > 100 ? 0.8 : 0.3)
+            // Background circle
+            Circle()
+                .stroke(
+                    isNighttime ? Color.blue.opacity(0.2) : intensity.color.opacity(0.2),
+                    lineWidth: 8
+                )
+            
+            // Progress circle (only show during daytime)
+            if !isNighttime {
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(
+                        AngularGradient(
+                            gradient: Gradient(colors: [
+                                intensity.color.opacity(0.6),
+                                intensity.color,
+                                intensity.color.opacity(0.6)
+                            ]),
+                            center: .center
+                        ),
+                        style: StrokeStyle(lineWidth: 8, lineCap: .round)
+                    )
+                    .rotationEffect(.degrees(-90))
+                    .shadow(color: intensity.color.opacity(0.4), radius: 4)
             }
             
-            // Central sun circle with pulse
-            Circle()
-                .fill(
-                    RadialGradient(
-                        gradient: Gradient(colors: [
-                            intensity.color.opacity(0.9),
-                            intensity.color
-                        ]),
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: intensity.sunSize / 2
-                    )
-                )
-                .frame(width: intensity.sunSize, height: intensity.sunSize)
-                .scaleEffect(pulseScale)
-                .shadow(
-                    color: intensity.color.opacity(0.6),
-                    radius: intensity.glowRadius
-                )
+            // Center content
+            VStack(spacing: 2) {
+                if isNighttime {
+                    // Moon icon for nighttime
+                    Image(systemName: "moon.fill")
+                        .font(.system(size: 24))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.blue.opacity(0.8), .blue],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .shadow(color: .blue.opacity(0.4), radius: 2)
+                } else {
+                    // Sun icon for daytime
+                    Image(systemName: "sun.max.fill")
+                        .font(.system(size: 24))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [intensity.color.opacity(0.8), intensity.color],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .scaleEffect(pulseScale)
+                        .shadow(color: intensity.color.opacity(0.6), radius: intensity.glowRadius)
+                }
+                
+                Text(String(format: "%.0f", solarRadiation))
+                    .font(.caption2)
+                    .fontWeight(.bold)
+                    .foregroundColor(isNighttime ? .blue : intensity.color)
+            }
         }
         .onAppear {
-            if intensity.glowRadius > 0 {
+            if !isNighttime && intensity.glowRadius > 0 {
                 withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
-                    pulseScale = 1.15
+                    pulseScale = 1.2
                 }
             }
         }
         .onChange(of: intensity) { _, newIntensity in
-            if newIntensity.glowRadius > 0 {
+            if !isNighttime && newIntensity.glowRadius > 0 {
                 withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
-                    pulseScale = 1.15
+                    pulseScale = 1.2
                 }
             } else {
                 withAnimation(.easeOut(duration: 0.3)) {
@@ -323,111 +297,16 @@ struct PulsingSunIcon: View {
                 }
             }
         }
-    }
-}
-
-// OPTION 4: Original Animated Version (kept for reference)
-struct AnimatedSunIcon: View {
-    let intensity: SunStrengthIndicator.SolarIntensityLevel
-    let solarRadiation: Double
-    
-    @State private var rotationAngle: Double = 0
-    @State private var pulseScale: CGFloat = 1.0
-    
-    private var animationSpeed: Double {
-        switch intensity {
-        case .veryLow: return 10.0
-        case .low: return 8.0
-        case .moderate: return 6.0
-        case .high: return 4.0
-        case .veryHigh: return 2.0
-        case .extreme: return 1.0
-        }
-    }
-    
-    var body: some View {
-        ZStack {
-            // Sun rays (rotating)
-            ForEach(0..<8, id: \.self) { index in
-                Rectangle()
-                    .fill(intensity.color)
-                    .frame(width: 2, height: intensity.rayLength)
-                    .offset(y: -(intensity.sunSize / 2 + intensity.rayLength / 2 + 2))
-                    .rotationEffect(.degrees(Double(index) * 45 + rotationAngle))
-                    .opacity(solarRadiation > 100 ? 0.8 : 0.3)
-            }
-            
-            // Central sun circle
-            Circle()
-                .fill(
-                    RadialGradient(
-                        gradient: Gradient(colors: [
-                            intensity.color.opacity(0.9),
-                            intensity.color
-                        ]),
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: intensity.sunSize / 2
-                    )
-                )
-                .frame(width: intensity.sunSize, height: intensity.sunSize)
-                .scaleEffect(pulseScale)
-                .shadow(
-                    color: intensity.color.opacity(0.6),
-                    radius: intensity.glowRadius
-                )
-            
-            // Sun face (optional cute detail)
-            if intensity != .veryLow {
-                VStack(spacing: 1) {
-                    HStack(spacing: 3) {
-                        Circle()
-                            .fill(.white)
-                            .frame(width: 3, height: 3)
-                        Circle()
-                            .fill(.white)
-                            .frame(width: 3, height: 3)
-                    }
-                    
-                    Capsule()
-                        .fill(.white)
-                        .frame(width: 6, height: 2)
+        .onChange(of: solarRadiation) { _, _ in
+            // Reset animation when transitioning between day/night
+            if isNighttime {
+                withAnimation(.easeOut(duration: 0.3)) {
+                    pulseScale = 1.0
                 }
-                .opacity(0.8)
-            }
-        }
-        .onAppear {
-            startAnimations()
-        }
-        .onChange(of: intensity) { _, newIntensity in
-            // Restart animations when intensity level changes
-            startAnimations()
-        }
-        .onChange(of: solarRadiation) { _, newValue in
-            // Update animations when solar radiation value changes significantly
-            startAnimations()
-        }
-    }
-    
-    private func startAnimations() {
-        // Stop any existing animations by resetting to initial values
-        rotationAngle = 0
-        pulseScale = 1.0
-        
-        // Rotation animation for sun rays with updated speed
-        withAnimation(.linear(duration: animationSpeed).repeatForever(autoreverses: false)) {
-            rotationAngle = 360
-        }
-        
-        // Pulse animation for intense sun with updated conditions
-        if intensity.glowRadius > 0 {
-            withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
-                pulseScale = 1.1
-            }
-        } else {
-            // Reset pulse scale for low intensity levels
-            withAnimation(.easeOut(duration: 0.3)) {
-                pulseScale = 1.0
+            } else if intensity.glowRadius > 0 {
+                withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+                    pulseScale = 1.2
+                }
             }
         }
     }
@@ -1203,7 +1082,6 @@ struct SunTimesView: View {
                     HStack {
                         Image(systemName: "sunrise.fill")
                             .foregroundColor(.orange)
-                            .font(.caption) 
                         Text("Sunrise")
                             .font(.caption) 
                             .foregroundColor(.secondary)
@@ -1406,18 +1284,6 @@ struct SunPositionArc: View {
                     Color.secondary.opacity(0.3),
                     style: StrokeStyle(lineWidth: 2, dash: [5, 5])
                 )
-                
-                // Noon marker
-                let noonX = width * 0.5
-                let noonY = height - (arcHeight * sin(.pi * 0.5))
-                Circle()
-                    .fill(Color.secondary.opacity(0.4))
-                    .frame(width: 4, height: 4)
-                    .position(x: noonX, y: noonY)
-                Text("Noon")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-                    .position(x: noonX, y: noonY - 12)
                 
                 // Daylight portion of the arc (if currently daylight) - enhanced with gradient
                 if isDaytime {
