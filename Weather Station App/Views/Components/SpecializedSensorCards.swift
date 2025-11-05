@@ -488,25 +488,29 @@ struct LightningCard: View {
             onTitleChange: onTitleChange
         ) {
             VStack(alignment: .leading, spacing: 12) {
-                // Current Lightning Distance - Main Display
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Current Distance")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Text(MeasurementConverter.formatDistance(data.lightning.distance.value, originalUnit: data.lightning.distance.unit))
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
-                        .foregroundColor(.orange)
-                }
-                
-                // Current Lightning Count
-                HStack {
-                    Text("Current Count:")
-                        .font(.subheadline)
+                // Lightning Activity Display with Animation
+                HStack(alignment: .center, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Distance")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text(MeasurementConverter.formatDistance(data.lightning.distance.value, originalUnit: data.lightning.distance.unit))
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                            .foregroundColor(.orange)
+                        Text("Count: \(data.lightning.count.value)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
                     Spacer()
-                    Text(data.lightning.count.value)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.secondary)
+                    
+                    // Animated Lightning Bolt
+                    LightningBoltAnimation(
+                        isActive: Int(data.lightning.count.value) ?? 0 > 0 && Double(data.lightning.distance.value) ?? 0 > 0,
+                        distance: Double(data.lightning.distance.value) ?? 0,
+                        count: Int(data.lightning.count.value) ?? 0
+                    )
+                    .frame(width: 100, height: 100)
                 }
                 
                 Divider()
@@ -518,171 +522,179 @@ struct LightningCard: View {
     }
 }
 
-struct LightningDistanceRings: View {
-    let currentDistance: Double
-    let distanceUnit: String
-    let lightningCount: Int
+struct LightningBoltAnimation: View {
+    let isActive: Bool
+    let distance: Double
+    let count: Int
     
-    // Define safety zones for lightning (in miles/km)
-    private let safetyZones: [(distance: Double, color: Color, label: String)] = [
-        (5, .red, "Danger"),      // 0-5 miles - immediate danger
-        (10, .orange, "Warning"),  // 5-10 miles - warning zone  
-        (20, .yellow, "Caution"),  // 10-20 miles - caution zone
-        (40, .green, "Safe")       // 20+ miles - generally safe
-    ]
+    @State private var flashOpacity: Double = 0.0
+    @State private var pulseScale: CGFloat = 1.0
+    @State private var rotationAngle: Double = 0
     
-    private var maxDisplayDistance: Double {
-        40.0 // Show up to 40 miles/km range
-    }
-    
-    private var currentDistanceInDisplayUnits: Double {
-        // Convert current distance to miles for consistent display
-        if distanceUnit.lowercased().contains("km") {
-            return currentDistance * 0.621371 // Convert km to miles
+    private var safetyColor: Color {
+        switch distance {
+        case 0...5: return .red
+        case 5...10: return .orange
+        case 10...20: return .yellow
+        default: return .green
         }
-        return currentDistance
     }
     
-    private var isLightningActive: Bool {
-        lightningCount > 0 && currentDistance > 0
-    }
-    
-    private var currentSafetyZone: (distance: Double, color: Color, label: String) {
-        let distance = currentDistanceInDisplayUnits
-        
-        for zone in safetyZones {
-            if distance <= zone.distance {
-                return zone
-            }
+    private var safetyLevel: String {
+        switch distance {
+        case 0...5: return "Danger"
+        case 5...10: return "Warning"
+        case 10...20: return "Caution"
+        default: return "Safe"
         }
-        return safetyZones.last ?? (40, .green, "Safe")
     }
-    
-    @State private var lightningPulseScale: CGFloat = 1.0
     
     var body: some View {
-        GeometryReader { geometry in
-            let centerX = geometry.size.width / 2
-            let centerY = geometry.size.height / 2
-            let maxRadius = min(centerX, centerY) - 5
-            
-            ZStack {
-                // Background concentric circles (safety zones)
-                ForEach(Array(safetyZones.enumerated()), id: \.offset) { index, zone in
-                    let radius = (zone.distance / maxDisplayDistance) * maxRadius
-                    
-                    Circle()
-                        .stroke(zone.color.opacity(0.2), lineWidth: 1)
-                        .frame(width: radius * 2, height: radius * 2)
-                        .position(x: centerX, y: centerY)
-                    
-                    // Zone labels
-                    Text(zone.label)
-                        .font(.caption2)
-                        .foregroundColor(zone.color.opacity(0.7))
-                        .position(
-                            x: centerX + radius * cos(.pi / 4) * 0.7,
-                            y: centerY - radius * sin(.pi / 4) * 0.7
-                        )
-                }
-                
-                // Weather station at center
+        ZStack {
+            // Background circle with safety rings
+            ForEach([40.0, 30.0, 20.0, 10.0], id: \.self) { ringDistance in
                 Circle()
-                    .fill(.blue)
-                    .frame(width: 8, height: 8)
-                    .position(x: centerX, y: centerY)
-                    .overlay(
-                        Circle()
-                            .stroke(.blue.opacity(0.3), lineWidth: 2)
-                            .frame(width: 12, height: 12)
-                            .position(x: centerX, y: centerY)
-                    )
+                    .stroke(getRingColor(for: ringDistance).opacity(0.2), lineWidth: 1)
+                    .frame(width: getRingSize(for: ringDistance), height: getRingSize(for: ringDistance))
+            }
+            
+            // Center station indicator
+            Circle()
+                .fill(.blue)
+                .frame(width: 8, height: 8)
+                .overlay(
+                    Circle()
+                        .stroke(.blue.opacity(0.3), lineWidth: 2)
+                        .frame(width: 12, height: 12)
+                )
+            
+            if isActive {
+                // Lightning strike indicator at distance
+                let boltSize = min(distance / 40.0 * 80, 80.0)
                 
-                // Current lightning position indicator
-                if isLightningActive {
-                    let lightningRadius = min(
-                        (currentDistanceInDisplayUnits / maxDisplayDistance) * maxRadius,
-                        maxRadius
-                    )
+                ZStack {
+                    // Glow effect
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                gradient: Gradient(colors: [
+                                    safetyColor.opacity(0.4),
+                                    safetyColor.opacity(0.1),
+                                    .clear
+                                ]),
+                                center: .center,
+                                startRadius: 0,
+                                endRadius: 20
+                            )
+                        )
+                        .frame(width: 40, height: 40)
+                        .scaleEffect(pulseScale)
                     
-                    // Lightning strike indicator
-                    Group {
-                        // Strike position (at the distance)
-                        Image(systemName: "bolt.fill")
-                            .foregroundColor(currentSafetyZone.color)
-                            .font(.system(size: 12))
-                            .position(
-                                x: centerX + lightningRadius * cos(.pi / 6),
-                                y: centerY - lightningRadius * sin(.pi / 6)
+                    // Lightning bolt icon
+                    Image(systemName: "bolt.fill")
+                        .font(.system(size: 24))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.yellow, safetyColor],
+                                startPoint: .top,
+                                endPoint: .bottom
                             )
-                            .shadow(color: currentSafetyZone.color.opacity(0.6), radius: 2)
-                        
-                        // Distance ring highlighting current distance
-                        Circle()
-                            .stroke(currentSafetyZone.color, lineWidth: 2)
-                            .frame(width: lightningRadius * 2, height: lightningRadius * 2)
-                            .position(x: centerX, y: centerY)
-                            .opacity(0.8)
-                        
-                        // Pulsing effect for active lightning
-                        Circle()
-                            .stroke(currentSafetyZone.color.opacity(0.3), lineWidth: 1)
-                            .frame(width: lightningRadius * 2, height: lightningRadius * 2)
-                            .position(x: centerX, y: centerY)
-                            .scaleEffect(lightningPulseScale)
-                            .animation(
-                                .easeInOut(duration: 1.5).repeatForever(autoreverses: true),
-                                value: lightningPulseScale
-                            )
+                        )
+                        .shadow(color: .yellow.opacity(0.8), radius: 4)
+                        .opacity(flashOpacity)
+                    
+                    // Multiple bolt strikes for high count
+                    if count > 3 {
+                        ForEach(0..<min(count - 1, 3), id: \.self) { index in
+                            Image(systemName: "bolt.fill")
+                                .font(.system(size: 16))
+                                .foregroundColor(safetyColor.opacity(0.6))
+                                .offset(x: CGFloat(index - 1) * 15)
+                                .opacity(flashOpacity * 0.7)
+                        }
                     }
                 }
+                .offset(x: boltSize * 0.4, y: -boltSize * 0.4)
+            } else {
+                // No activity - show calm weather icon
+                VStack(spacing: 4) {
+                    Image(systemName: "cloud.fill")
+                        .font(.system(size: 30))
+                        .foregroundColor(.gray.opacity(0.5))
+                    
+                    Text("No Activity")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+            
+            // Safety status label at bottom
+            if isActive {
+                VStack {
+                    Spacer()
+                    Text(safetyLevel)
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                        .foregroundColor(safetyColor)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .background(
+                            Capsule()
+                                .fill(safetyColor.opacity(0.2))
+                        )
+                }
+                .frame(height: 100)
             }
         }
         .onAppear {
-            startLightningAnimation()
+            if isActive {
+                startAnimations()
+            }
         }
-        .onChange(of: isLightningActive) { _, newValue in
+        .onChange(of: isActive) { _, newValue in
             if newValue {
-                startLightningAnimation()
+                startAnimations()
             } else {
-                stopLightningAnimation()
+                stopAnimations()
             }
         }
-        .onChange(of: currentDistance) { _, newDistance in
-            // Restart animation when lightning distance changes
-            if isLightningActive {
-                startLightningAnimation()
-            }
-        }
-        .onChange(of: lightningCount) { _, newCount in
-            // Restart animation when lightning count changes
-            if isLightningActive {
-                startLightningAnimation()
-            } else {
-                stopLightningAnimation()
+        .onChange(of: count) { _, _ in
+            if isActive {
+                startAnimations()
             }
         }
     }
     
-    private func startLightningAnimation() {
-        guard isLightningActive else { return }
+    private func getRingColor(for distance: Double) -> Color {
+        switch distance {
+        case 0...5: return .red
+        case 5...10: return .orange
+        case 10...20: return .yellow
+        default: return .green
+        }
+    }
+    
+    private func getRingSize(for distance: Double) -> CGFloat {
+        return CGFloat(distance / 40.0 * 80)
+    }
+    
+    private func startAnimations() {
+        // Flash animation
+        withAnimation(.easeInOut(duration: 0.3).repeatForever(autoreverses: true)) {
+            flashOpacity = 1.0
+        }
         
-        withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
-            lightningPulseScale = 1.2
+        // Pulse animation
+        withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+            pulseScale = 1.3
         }
     }
     
-    private func stopLightningAnimation() {
+    private func stopAnimations() {
         withAnimation(.easeOut(duration: 0.3)) {
-            lightningPulseScale = 1.0
+            flashOpacity = 0.0
+            pulseScale = 1.0
         }
-    }
-    
-    init(currentDistance: Double, distanceUnit: String, lightningCount: Int) {
-        self.currentDistance = currentDistance
-        self.distanceUnit = distanceUnit
-        self.lightningCount = lightningCount
-        self._lightningPulseScale = State(initialValue: 1.0)
     }
 }
 

@@ -595,13 +595,27 @@ struct IndoorTemperatureCard: View {
             onTitleChange: onTitleChange
         ) {
             VStack(alignment: .leading, spacing: 12) {
-                // Current Temperature - Main Display
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(TemperatureConverter.formatTemperature(data.indoor.temperature.value, originalUnit: data.indoor.temperature.unit))
-                        .font(.system(size: 32, weight: .bold, design: .rounded))
-                    Text("Humidity \(data.indoor.humidity.value)\(data.indoor.humidity.unit)")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                // Current Temperature - Main Display with comfort gauge
+                HStack(alignment: .center, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Temperature")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text(TemperatureConverter.formatTemperature(data.indoor.temperature.value, originalUnit: data.indoor.temperature.unit))
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                        Text("Humidity \(data.indoor.humidity.value)\(data.indoor.humidity.unit)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    // Indoor Comfort Gauge
+                    IndoorComfortGauge(
+                        currentTemp: Double(data.indoor.temperature.value) ?? 70.0,
+                        unit: data.indoor.temperature.unit
+                    )
+                    .frame(width: 90, height: 90)
                 }
                 
                 Divider()
@@ -625,6 +639,312 @@ struct IndoorTemperatureCard: View {
                     }
                 }
             }
+        }
+    }
+}
+
+struct IndoorComfortGauge: View {
+    let currentTemp: Double
+    let unit: String
+    
+    @State private var needleRotation: Double = 0
+    @State private var iconScale: Double = 1.0
+    
+    // Comfort zones (in Fahrenheit, will adjust for Celsius)
+    private var comfortZones: [(range: ClosedRange<Double>, color: Color, label: String)] {
+        if unit.lowercased().contains("c") {
+            return [
+                (10.0...16.0, .blue, "Cold"),
+                (16.1...20.0, .cyan, "Cool"),
+                (20.1...24.0, .green, "Ideal"),
+                (24.1...27.0, .yellow, "Warm"),
+                (27.1...35.0, .orange, "Hot")
+            ]
+        } else {
+            return [
+                (50.0...60.0, .blue, "Cold"),
+                (60.1...68.0, .cyan, "Cool"),
+                (68.1...75.0, .green, "Ideal"),
+                (75.1...80.0, .yellow, "Warm"),
+                (80.1...95.0, .orange, "Hot")
+            ]
+        }
+    }
+    
+    private var currentZone: (range: ClosedRange<Double>, color: Color, label: String) {
+        for zone in comfortZones {
+            if zone.range.contains(currentTemp) {
+                return zone
+            }
+        }
+        // Default to last zone if temp is outside ranges
+        if currentTemp < comfortZones.first!.range.lowerBound {
+            return comfortZones.first!
+        }
+        return comfortZones.last!
+    }
+    
+    private var tempRange: (min: Double, max: Double) {
+        if unit.lowercased().contains("c") {
+            return (10.0, 35.0)
+        } else {
+            return (50.0, 95.0)
+        }
+    }
+    
+    private var normalizedTemp: Double {
+        let range = tempRange
+        let normalized = (currentTemp - range.min) / (range.max - range.min)
+        return max(0, min(1, normalized))
+    }
+    
+    private var needleAngle: Double {
+        -90 + (normalizedTemp * 180)
+    }
+    
+    var body: some View {
+        ZStack {
+            // Outer ring with comfort zone gradient
+            Circle()
+                .trim(from: 0.25, to: 0.75)
+                .stroke(
+                    AngularGradient(
+                        gradient: Gradient(colors: [
+                            .blue,
+                            .cyan,
+                            .green,
+                            .yellow,
+                            .orange
+                        ]),
+                        center: .center,
+                        startAngle: .degrees(180),
+                        endAngle: .degrees(360)
+                    ),
+                    style: StrokeStyle(lineWidth: 10, lineCap: .round)
+                )
+                .frame(width: 70, height: 70)
+                .rotationEffect(.degrees(90))
+            
+            // Inner background circle
+            Circle()
+                .fill(Color(.windowBackgroundColor))
+                .frame(width: 52, height: 52)
+            
+            // House icon with comfort color
+            Image(systemName: "house.fill")
+                .font(.system(size: 24))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [currentZone.color.opacity(0.8), currentZone.color],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .scaleEffect(iconScale)
+                .shadow(color: currentZone.color.opacity(0.3), radius: 2)
+            
+            // Comfort zone label
+            VStack {
+                Spacer()
+                Text(currentZone.label)
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .foregroundColor(currentZone.color)
+                    .padding(.bottom, 4)
+            }
+            .frame(height: 90)
+        }
+        .onAppear {
+            animateGauge()
+        }
+        .onChange(of: currentTemp) { _, _ in
+            animateGauge()
+        }
+    }
+    
+    private func animateGauge() {
+        withAnimation(.spring(response: 0.8, dampingFraction: 0.7)) {
+            needleRotation = needleAngle
+        }
+        
+        // Subtle pulse for icon
+        withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+            iconScale = 1.08
+        }
+    }
+}
+
+struct IndoorThermometerView: View {
+    let currentTemp: Double
+    let unit: String
+    let stats: DailyTemperatureStats?
+    
+    @State private var mercuryLevel: Double = 0.0
+    @State private var pulseScale: Double = 1.0
+    
+    // Temperature range for indoor (typically 50-90°F or equivalent)
+    private var tempRange: (min: Double, max: Double) {
+        if unit.lowercased().contains("c") {
+            return (10.0, 32.0) // Celsius range
+        } else {
+            return (50.0, 90.0) // Fahrenheit range
+        }
+    }
+    
+    private var normalizedTemp: Double {
+        let range = tempRange
+        let normalized = (currentTemp - range.min) / (range.max - range.min)
+        return max(0, min(1, normalized))
+    }
+    
+    private var tempColor: Color {
+        switch currentTemp {
+        case ..<60: return .blue     // Cold (if in Fahrenheit)
+        case 60..<68: return .cyan   // Cool
+        case 68..<76: return .green  // Comfortable
+        case 76..<82: return .yellow // Warm
+        default: return .orange      // Hot
+        }
+    }
+    
+    private var comfortIcon: String {
+        switch currentTemp {
+        case ..<60: return "snowflake"
+        case 60..<68: return "wind"
+        case 68..<76: return "house.fill"
+        case 76..<82: return "flame"
+        default: return "flame.fill"
+        }
+    }
+    
+    var body: some View {
+        GeometryReader { geometry in
+            let width = geometry.size.width
+            let height = geometry.size.height
+            
+            ZStack {
+                // Thermometer background outline
+                RoundedRectangle(cornerRadius: 15)
+                    .stroke(Color.secondary.opacity(0.3), lineWidth: 2)
+                    .frame(width: 30, height: height - 20)
+                    .position(x: width / 2, y: height / 2)
+                
+                // Thermometer fill background
+                RoundedRectangle(cornerRadius: 15)
+                    .fill(Color(.windowBackgroundColor))
+                    .frame(width: 26, height: height - 24)
+                    .position(x: width / 2, y: height / 2)
+                
+                // Temperature scale markers
+                VStack {
+                    ForEach([0.75, 0.5, 0.25], id: \.self) { position in
+                        HStack(spacing: 2) {
+                            Rectangle()
+                                .fill(Color.secondary.opacity(0.4))
+                                .frame(width: 6, height: 1)
+                            Spacer()
+                            Rectangle()
+                                .fill(Color.secondary.opacity(0.4))
+                                .frame(width: 6, height: 1)
+                        }
+                        .frame(width: 30)
+                        if position != 0.25 {
+                            Spacer()
+                        }
+                    }
+                }
+                .frame(height: height - 40)
+                .position(x: width / 2, y: (height - 20) / 2)
+                
+                // Mercury column (temperature fill)
+                VStack {
+                    Spacer()
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(
+                            LinearGradient(
+                                colors: [tempColor.opacity(0.8), tempColor],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .frame(width: 22, height: (height - 40) * mercuryLevel)
+                        .shadow(color: tempColor.opacity(0.4), radius: 2)
+                }
+                .frame(height: height - 40)
+                .position(x: width / 2, y: (height - 20) / 2 + 5)
+                
+                // Bulb at bottom
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [tempColor.opacity(0.9), tempColor],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: 15
+                        )
+                    )
+                    .frame(width: 30, height: 30)
+                    .position(x: width / 2, y: height - 10)
+                    .shadow(color: tempColor.opacity(0.5), radius: 3)
+                
+                // Comfort icon inside bulb
+                Image(systemName: comfortIcon)
+                    .font(.system(size: 12))
+                    .foregroundColor(.white)
+                    .scaleEffect(pulseScale)
+                    .position(x: width / 2, y: height - 10)
+                
+                // High/Low markers if available
+                if let stats = stats {
+                    let highPosition = calculatePosition(for: stats.highTemp)
+                    let lowPosition = calculatePosition(for: stats.lowTemp)
+                    
+                    // High marker
+                    HStack(spacing: 2) {
+                        Image(systemName: "triangle.fill")
+                            .font(.system(size: 6))
+                            .foregroundColor(.orange)
+                            .rotationEffect(.degrees(90))
+                        Spacer()
+                    }
+                    .frame(width: 40)
+                    .position(x: width / 2 + 10, y: (height - 40) * (1 - highPosition) + 20)
+                    
+                    // Low marker
+                    HStack(spacing: 2) {
+                        Spacer()
+                        Image(systemName: "triangle.fill")
+                            .font(.system(size: 6))
+                            .foregroundColor(.blue)
+                            .rotationEffect(.degrees(-90))
+                    }
+                    .frame(width: 40)
+                    .position(x: width / 2 - 10, y: (height - 40) * (1 - lowPosition) + 20)
+                }
+            }
+        }
+        .onAppear {
+            animateMercury()
+        }
+        .onChange(of: currentTemp) { _, _ in
+            animateMercury()
+        }
+    }
+    
+    private func calculatePosition(for temp: Double) -> Double {
+        let range = tempRange
+        let normalized = (temp - range.min) / (range.max - range.min)
+        return max(0, min(1, normalized))
+    }
+    
+    private func animateMercury() {
+        withAnimation(.spring(response: 1.2, dampingFraction: 0.7)) {
+            mercuryLevel = normalizedTemp
+        }
+        
+        // Subtle pulse for the comfort icon
+        withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+            pulseScale = 1.1
         }
     }
 }
