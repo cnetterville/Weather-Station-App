@@ -131,6 +131,7 @@ struct ForecastContent: View {
     @StateObject private var forecastService = WeatherForecastService.shared
     @State private var locationName: String = "5-Day Forecast"
     @State private var countryFlag: String = ""
+    @State private var expandedDayIndex: Int? = nil
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -157,14 +158,61 @@ struct ForecastContent: View {
                 }
             }
             
+            // Show info if no hourly data and prompt to refresh
+            if forecast.hourlyForecasts.isEmpty {
+                HStack {
+                    Image(systemName: "info.circle.fill")
+                        .font(.caption2)
+                        .foregroundColor(.blue)
+                    Text("Hourly data unavailable. Tap refresh to load.")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Button("Refresh") {
+                        Task {
+                            await forecastService.fetchForecast(for: station)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .font(.caption2)
+                    .foregroundColor(.blue)
+                }
+                .padding(8)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.blue.opacity(0.1))
+                )
+            }
+            
             // Daily forecast items
             LazyVStack(spacing: 8) {
                 ForEach(Array(forecast.dailyForecasts.enumerated()), id: \.offset) { index, dailyForecast in
-                    ForecastDayRow(
-                        forecast: dailyForecast,
-                        station: station,
-                        isFirst: index == 0
-                    )
+                    VStack(spacing: 0) {
+                        ForecastDayRow(
+                            forecast: dailyForecast,
+                            station: station,
+                            isFirst: index == 0,
+                            isExpanded: expandedDayIndex == index
+                        )
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                if expandedDayIndex == index {
+                                    expandedDayIndex = nil
+                                } else {
+                                    expandedDayIndex = index
+                                }
+                            }
+                        }
+                        
+                        if expandedDayIndex == index {
+                            ExpandedForecastDetails(forecast: dailyForecast, station: station)
+                                .transition(.asymmetric(
+                                    insertion: .opacity.combined(with: .move(edge: .top)),
+                                    removal: .opacity.combined(with: .move(edge: .top))
+                                ))
+                        }
+                    }
                     
                     if index < forecast.dailyForecasts.count - 1 {
                         Divider()
@@ -190,6 +238,12 @@ struct ForecastContent: View {
         }
         .onAppear {
             loadLocationName()
+            // Check if we need to refresh for hourly data
+            if forecast.hourlyForecasts.isEmpty {
+                Task {
+                    await forecastService.fetchForecast(for: station)
+                }
+            }
         }
     }
     
@@ -280,10 +334,202 @@ struct ForecastContent: View {
     }
 }
 
+// New expanded details view with hourly data
+struct ExpandedForecastDetails: View {
+    let forecast: DailyWeatherForecast
+    let station: WeatherStation
+    @StateObject private var forecastService = WeatherForecastService.shared
+    
+    private var hourlyForecasts: [HourlyWeatherForecast] {
+        guard let weatherForecast = forecastService.getForecast(for: station) else {
+            return []
+        }
+        return weatherForecast.hourlyForecasts(for: forecast.date, timezone: forecast.timezone)
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if hourlyForecasts.isEmpty {
+                // Fallback if no hourly data
+                Text("Hourly data unavailable")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 8)
+            } else {
+                // Hourly forecast header
+                HStack {
+                    Image(systemName: "clock.fill")
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                    Text("Hourly Forecast")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.top, 4)
+                
+                // Hourly forecast scroll view
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(Array(hourlyForecasts.enumerated()), id: \.offset) { index, hourly in
+                            HourlyForecastItem(hourly: hourly)
+                        }
+                    }
+                    .padding(.horizontal, 4)
+                }
+                
+                Divider()
+                
+                // Daily summary
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Image(systemName: "sun.max.fill")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                        Text("Daily Summary")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    HStack(spacing: 16) {
+                        // Temperature range
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("High/Low")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                            HStack(spacing: 4) {
+                                Text(forecast.formattedMaxTemp)
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.orange)
+                                Text("/")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Text(forecast.formattedMinTemp)
+                                    .font(.subheadline)
+                                    .foregroundColor(.blue)
+                            }
+                        }
+                        
+                        // Precipitation
+                        if forecast.precipitation > 0.1 || forecast.precipitationProbability > 20 {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Rain")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                HStack(spacing: 2) {
+                                    if forecast.precipitation > 0.1 {
+                                        Text(forecast.formattedPrecipitation)
+                                            .font(.subheadline)
+                                            .fontWeight(.semibold)
+                                    }
+                                    if forecast.precipitationProbability > 0 {
+                                        Text("(\(forecast.precipitationProbability)%)")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                        
+                        Spacer()
+                        
+                        // Wind
+                        VStack(alignment: .trailing, spacing: 4) {
+                            Text("Wind")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                            HStack(spacing: 4) {
+                                Text(forecast.formattedWindSpeed)
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                Text(forecast.windDirectionText)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.secondary.opacity(0.05))
+        )
+        .padding(.horizontal, 4)
+        .padding(.top, 4)
+    }
+}
+
+// Hourly forecast item component
+struct HourlyForecastItem: View {
+    let hourly: HourlyWeatherForecast
+    
+    var body: some View {
+        VStack(spacing: 6) {
+            // Time
+            Text(hourly.shortFormattedTime)
+                .font(.caption2)
+                .fontWeight(.medium)
+                .foregroundColor(.secondary)
+            
+            // Weather icon
+            Image(systemName: hourly.weatherIcon)
+                .font(.system(size: 20))
+                .foregroundColor(.blue)
+                .frame(height: 24)
+            
+            // Temperature
+            Text(hourly.formattedTemperature)
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundColor(.primary)
+            
+            // Precipitation probability
+            if hourly.precipitationProbability > 20 {
+                HStack(spacing: 2) {
+                    Image(systemName: "drop.fill")
+                        .font(.system(size: 6))
+                        .foregroundColor(.blue)
+                    Text("\(hourly.precipitationProbability)%")
+                        .font(.system(size: 8))
+                        .foregroundColor(.blue)
+                }
+            } else {
+                // Spacer to maintain consistent height
+                Text(" ")
+                    .font(.system(size: 8))
+            }
+            
+            // Wind with directional arrow
+            HStack(spacing: 2) {
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 7, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .rotationEffect(.degrees(Double(hourly.windDirection)))
+                
+                Text(hourly.formattedWindSpeed)
+                    .font(.system(size: 8))
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Color.secondary.opacity(0.08))
+        )
+    }
+}
+
 struct ForecastDayRow: View {
     let forecast: DailyWeatherForecast
     let station: WeatherStation
     let isFirst: Bool
+    let isExpanded: Bool
     
     private var displayIcon: String {
         // Only apply night icon conversion for today's forecast
@@ -299,42 +545,51 @@ struct ForecastDayRow: View {
             HStack(spacing: 8) {
                 // Day
                 Text(forecast.displayDay)
-                    .font(.system(size: isFirst ? 14 : 13, weight: isFirst ? .semibold : .medium))
+                    .font(.system(size: isFirst ? 15 : 13, weight: isFirst ? .bold : .medium))
                     .foregroundColor(isFirst ? .primary : .secondary)
                     .frame(width: 45, alignment: .leading)
                 
                 // Weather icon
                 Image(systemName: displayIcon)
-                    .font(.system(size: 16))
-                    .foregroundColor(.blue)
+                    .font(.system(size: isFirst ? 18 : 16))
+                    .foregroundColor(isFirst ? .blue : .blue.opacity(0.8))
                     .frame(width: 18)
                 
                 // Weather description
                 Text(forecast.weatherDescription)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(isFirst ? .primary : .secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
                 
-                Spacer()
+                Spacer(minLength: 4)
+                
+                // Expand indicator
+                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .padding(.trailing, 4)
                 
                 // Temperature range
                 HStack(spacing: 1) {
                     Text(forecast.formattedMaxTemp)
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .font(.system(size: isFirst ? 13 : 12, weight: .semibold, design: .rounded))
                         .foregroundColor(.primary)
-                        .minimumScaleFactor(0.8)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                     
                     Text("/")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                        .fixedSize()
                     
                     Text(forecast.formattedMinTemp)
-                        .font(.system(size: 12, design: .rounded))
+                        .font(.system(size: isFirst ? 13 : 12, design: .rounded))
                         .foregroundColor(.secondary)
-                        .minimumScaleFactor(0.8)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                 }
-                .frame(width: 65, alignment: .trailing)
+                .fixedSize(horizontal: true, vertical: false)
             }
             
             // Bottom row: Date, Precipitation/Probability, Wind
@@ -381,22 +636,55 @@ struct ForecastDayRow: View {
                     Spacer()
                 }
                 
-                Spacer()
+                Spacer(minLength: 4)
                 
-                // Wind info
-                HStack(spacing: 2) {
-                    Image(systemName: "wind")
-                        .font(.system(size: 8))
+                // Wind info with directional arrow
+                HStack(spacing: 3) {
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 9, weight: .semibold))
                         .foregroundColor(.secondary)
+                        .rotationEffect(.degrees(Double(forecast.windDirection)))
                     
-                    Text("\(forecast.formattedWindSpeed) \(forecast.windDirectionText)")
+                    Text(forecast.formattedWindSpeed)
                         .font(.system(size: 9))
                         .foregroundColor(.secondary)
+                        .lineLimit(1)
                 }
-                .frame(width: 65, alignment: .trailing)
+                .fixedSize(horizontal: true, vertical: false)
             }
         }
-        .padding(.vertical, isFirst ? 4 : 2)
+        .padding(.vertical, isFirst ? 6 : 2)
+        .padding(.horizontal, isFirst ? 8 : 0)
+        .background(
+            Group {
+                if isFirst {
+                    // Today's row background
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    Color.blue.opacity(0.08),
+                                    Color.blue.opacity(0.05)
+                                ]),
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.blue.opacity(0.15), lineWidth: 1)
+                        )
+                } else if isExpanded {
+                    // Expanded row background
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.secondary.opacity(0.05))
+                } else {
+                    // No background
+                    Color.clear
+                }
+            }
+        )
+        .cornerRadius(isFirst ? 8 : 6)
     }
 }
 

@@ -62,12 +62,13 @@ class WeatherForecastService: ObservableObject {
             isLoading = true
         }
         
-        // Build Open-Meteo API URL
+        // Build Open-Meteo API URL with both daily and hourly data
         var urlComponents = URLComponents(string: baseURL)
         urlComponents?.queryItems = [
             URLQueryItem(name: "latitude", value: String(latitude)),
             URLQueryItem(name: "longitude", value: String(longitude)),
             URLQueryItem(name: "daily", value: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_direction_10m_dominant"),
+            URLQueryItem(name: "hourly", value: "temperature_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_direction_10m,relative_humidity_2m"),
             URLQueryItem(name: "timezone", value: "auto"),
             URLQueryItem(name: "forecast_days", value: "5")
         ]
@@ -80,7 +81,7 @@ class WeatherForecastService: ObservableObject {
             return
         }
         
-        logWeather("Fetching 5-day forecast for \(station.name) at (\(latitude), \(longitude))")
+        logWeather("Fetching 5-day forecast with hourly data for \(station.name) at (\(latitude), \(longitude))")
         logLocation("URL: \(url.absoluteString)")
         
         do {
@@ -112,7 +113,7 @@ class WeatherForecastService: ObservableObject {
                 isLoading = false
                 errorMessage = nil
                 
-                logSuccess("5-day forecast updated for \(station.name): \(processedForecast.dailyForecasts.count) days")
+                logSuccess("5-day forecast updated for \(station.name): \(processedForecast.dailyForecasts.count) days, \(processedForecast.hourlyForecasts.count) hours")
             }
             
         } catch {
@@ -135,10 +136,10 @@ class WeatherForecastService: ObservableObject {
             elevation: response.elevation
         )
         
-        var dailyForecasts: [DailyWeatherForecast] = []
-        
         // Get the timezone for this forecast location
         let forecastTimeZone = TimeZone(identifier: response.timezone) ?? TimeZone.current
+        
+        var dailyForecasts: [DailyWeatherForecast] = []
         
         // Process each day
         for i in 0..<response.daily.time.count {
@@ -162,9 +163,44 @@ class WeatherForecastService: ObservableObject {
             }
         }
         
+        var hourlyForecasts: [HourlyWeatherForecast] = []
+        
+        // Process hourly data if available
+        if let hourly = response.hourly {
+            logData("Processing \(hourly.time.count) hourly forecasts")
+            
+            // Use DateFormatter for the format returned by Open-Meteo: "2025-11-04T00:00"
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm"
+            dateFormatter.timeZone = forecastTimeZone
+            
+            for i in 0..<hourly.time.count {
+                if let time = dateFormatter.date(from: hourly.time[i]) {
+                    let forecast = HourlyWeatherForecast(
+                        time: time,
+                        temperature: hourly.temperature2m[i],
+                        precipitationProbability: hourly.precipitationProbability[i],
+                        precipitation: hourly.precipitation[i],
+                        weatherCode: hourly.weatherCode[i],
+                        windSpeed: hourly.windSpeed10m[i],
+                        windDirection: hourly.windDirection10m[i],
+                        humidity: hourly.relativeHumidity2m[i],
+                        timezone: forecastTimeZone
+                    )
+                    hourlyForecasts.append(forecast)
+                } else {
+                    logWarning("Failed to parse hourly time: \(hourly.time[i])")
+                }
+            }
+            logSuccess("Parsed \(hourlyForecasts.count) hourly forecasts")
+        } else {
+            logWarning("No hourly data in API response")
+        }
+        
         return WeatherForecast(
             location: location,
             dailyForecasts: dailyForecasts,
+            hourlyForecasts: hourlyForecasts,
             lastUpdated: Date()
         )
     }

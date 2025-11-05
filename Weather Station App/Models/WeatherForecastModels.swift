@@ -17,9 +17,10 @@ struct ForecastResponse: Codable {
     let timezoneAbbreviation: String
     let elevation: Double
     let daily: DailyForecast
+    let hourly: HourlyForecast?
     
     enum CodingKeys: String, CodingKey {
-        case latitude, longitude, timezone, elevation, daily
+        case latitude, longitude, timezone, elevation, daily, hourly
         case timezoneAbbreviation = "timezone_abbreviation"
     }
 }
@@ -46,11 +47,34 @@ struct DailyForecast: Codable {
     }
 }
 
+struct HourlyForecast: Codable {
+    let time: [String]
+    let temperature2m: [Double]
+    let precipitationProbability: [Int]
+    let precipitation: [Double]
+    let weatherCode: [Int]
+    let windSpeed10m: [Double]
+    let windDirection10m: [Int]
+    let relativeHumidity2m: [Int]
+    
+    enum CodingKeys: String, CodingKey {
+        case time
+        case temperature2m = "temperature_2m"
+        case precipitationProbability = "precipitation_probability"
+        case precipitation
+        case weatherCode = "weather_code"
+        case windSpeed10m = "wind_speed_10m"
+        case windDirection10m = "wind_direction_10m"
+        case relativeHumidity2m = "relative_humidity_2m"
+    }
+}
+
 // MARK: - Processed Forecast Data Models
 
 struct WeatherForecast {
     let location: ForecastLocation
     let dailyForecasts: [DailyWeatherForecast]
+    let hourlyForecasts: [HourlyWeatherForecast]
     let lastUpdated: Date
     
     var isExpired: Bool {
@@ -66,6 +90,17 @@ struct WeatherForecast {
             timeZone: forecast.timezone
         )
     }
+    
+    // Get hourly forecasts for a specific day
+    func hourlyForecasts(for date: Date, timezone: TimeZone) -> [HourlyWeatherForecast] {
+        let calendar = Calendar.current
+        var calendarCopy = calendar
+        calendarCopy.timeZone = timezone
+        
+        return hourlyForecasts.filter { hourly in
+            calendarCopy.isDate(hourly.time, inSameDayAs: date)
+        }
+    }
 }
 
 struct ForecastLocation {
@@ -73,6 +108,69 @@ struct ForecastLocation {
     let longitude: Double
     let timezone: String
     let elevation: Double
+}
+
+struct HourlyWeatherForecast {
+    let time: Date
+    let temperature: Double
+    let precipitationProbability: Int
+    let precipitation: Double
+    let weatherCode: Int
+    let windSpeed: Double
+    let windDirection: Int
+    let humidity: Int
+    let timezone: TimeZone
+    
+    var formattedTime: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h a" // e.g., "3 PM"
+        formatter.timeZone = timezone
+        return formatter.string(from: time)
+    }
+    
+    var shortFormattedTime: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "ha" // e.g., "3PM"
+        formatter.timeZone = timezone
+        return formatter.string(from: time)
+    }
+    
+    var formattedTemperature: String {
+        let temp = Int(temperature.rounded())
+        let converted = MeasurementConverter.convertTemperature(String(temp), from: "°C")
+        let displayMode = UserDefaults.standard.unitSystemDisplayMode
+        
+        switch displayMode {
+        case .imperial:
+            return "\(Int(Double(converted.fahrenheit) ?? 0))°"
+        case .metric:
+            return "\(temp)°"
+        case .both:
+            return "\(Int(Double(converted.fahrenheit) ?? 0))°/\(temp)°"
+        }
+    }
+    
+    var formattedWindSpeed: String {
+        let displayMode = UserDefaults.standard.unitSystemDisplayMode
+        let converted = MeasurementConverter.convertWindSpeed(String(format: "%.0f", windSpeed), from: "km/h")
+        
+        switch displayMode {
+        case .imperial:
+            return "\(Int(Double(converted.mph) ?? 0))mph"
+        case .metric:
+            return "\(Int(windSpeed))km/h"
+        case .both:
+            return "\(Int(Double(converted.mph) ?? 0))/\(Int(windSpeed))"
+        }
+    }
+    
+    var weatherIcon: String {
+        WeatherCodeInterpreter.systemIcon(for: weatherCode)
+    }
+    
+    var windDirectionText: String {
+        WindDirectionConverter.directionText(for: windDirection)
+    }
 }
 
 struct DailyWeatherForecast {
