@@ -357,17 +357,32 @@ struct PressureCard: View {
     var body: some View {
         EditableWeatherCard(
             title: .constant(station.customLabels.pressure),
-            systemImage: "barometer",
+            systemImage: "gauge.with.dots.needle.67percent",
             onTitleChange: onTitleChange
         ) {
             VStack(alignment: .leading, spacing: 12) {
-                // Current Pressure - Main Display
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("\(data.pressure.relative.value) \(data.pressure.relative.unit)")
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
-                    Text("Absolute: \(data.pressure.absolute.value) \(data.pressure.absolute.unit)")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                // Current Pressure - Main Display with visual gauge
+                HStack(alignment: .center, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Pressure")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text("\(data.pressure.relative.value) \(data.pressure.relative.unit)")
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                        Text("Absolute: \(data.pressure.absolute.value) \(data.pressure.absolute.unit)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    // Animated Barometer Gauge
+                    PressureGaugeView(
+                        currentPressure: Double(data.pressure.relative.value) ?? 29.92,
+                        unit: data.pressure.relative.unit,
+                        stats: getDailyPressureStats()
+                    )
+                    .frame(width: 100, height: 100)
                 }
                 
                 Divider()
@@ -391,6 +406,143 @@ struct PressureCard: View {
                     }
                 }
             }
+        }
+    }
+}
+
+struct PressureGaugeView: View {
+    let currentPressure: Double
+    let unit: String
+    let stats: DailyPressureStats?
+    
+    @State private var needleRotation: Double = 0
+    @State private var pulseScale: Double = 1.0
+    
+    // Pressure ranges (in inHg, will convert if needed)
+    private var pressureRange: (min: Double, max: Double) {
+        if unit.lowercased().contains("hpa") || unit.lowercased().contains("mb") {
+            return (980, 1040) // hPa/mbar range
+        } else {
+            return (28.5, 31.0) // inHg range
+        }
+    }
+    
+    private var normalizedPressure: Double {
+        let range = pressureRange
+        let normalized = (currentPressure - range.min) / (range.max - range.min)
+        return max(0, min(1, normalized))
+    }
+    
+    private var needleAngle: Double {
+        // Map pressure to gauge angle (-90 to +90 degrees)
+        -90 + (normalizedPressure * 180)
+    }
+    
+    private var pressureColor: Color {
+        switch normalizedPressure {
+        case 0..<0.3: return .blue     // Low pressure (storm)
+        case 0.3..<0.45: return .cyan   // Below normal
+        case 0.45..<0.55: return .green // Normal
+        case 0.55..<0.7: return .yellow // Above normal
+        default: return .orange         // High pressure
+        }
+    }
+    
+    private var weatherIcon: String {
+        switch normalizedPressure {
+        case 0..<0.3: return "cloud.bolt.rain.fill"  // Storm
+        case 0.3..<0.45: return "cloud.rain.fill"     // Rainy
+        case 0.45..<0.55: return "cloud.sun.fill"     // Partly cloudy
+        case 0.55..<0.7: return "sun.max.fill"        // Sunny
+        default: return "sun.and.horizon.fill"        // Clear
+        }
+    }
+    
+    var body: some View {
+        ZStack {
+            // Outer gauge ring with gradient
+            Circle()
+                .stroke(
+                    AngularGradient(
+                        gradient: Gradient(colors: [
+                            .blue,
+                            .cyan,
+                            .green,
+                            .yellow,
+                            .orange
+                        ]),
+                        center: .center,
+                        startAngle: .degrees(180),
+                        endAngle: .degrees(360)
+                    ),
+                    lineWidth: 8
+                )
+                .frame(width: 80, height: 80)
+            
+            // Pressure range markers
+            ForEach([0.0, 0.25, 0.5, 0.75, 1.0], id: \.self) { position in
+                let angle = -90 + (position * 180)
+                Rectangle()
+                    .fill(Color.secondary.opacity(0.5))
+                    .frame(width: 1.5, height: position == 0.5 ? 10 : 6)
+                    .offset(y: -35)
+                    .rotationEffect(.degrees(angle))
+            }
+            
+            // Center circle background
+            Circle()
+                .fill(Color(nsColor: .windowBackgroundColor))
+                .frame(width: 60, height: 60)
+            
+            Circle()
+                .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                .frame(width: 60, height: 60)
+            
+            // Weather condition icon
+            Image(systemName: weatherIcon)
+                .font(.system(size: 20))
+                .foregroundColor(pressureColor)
+                .scaleEffect(pulseScale)
+            
+            // Animated needle
+            Rectangle()
+                .fill(
+                    LinearGradient(
+                        colors: [pressureColor, pressureColor.opacity(0.5)],
+                        startPoint: .bottom,
+                        endPoint: .top
+                    )
+                )
+                .frame(width: 3, height: 30)
+                .offset(y: -15)
+                .rotationEffect(.degrees(needleRotation))
+                .shadow(color: pressureColor.opacity(0.5), radius: 2)
+            
+            // Needle pivot point
+            Circle()
+                .fill(pressureColor)
+                .frame(width: 6, height: 6)
+            
+            Circle()
+                .stroke(Color(nsColor: .windowBackgroundColor), lineWidth: 1)
+                .frame(width: 6, height: 6)
+        }
+        .onAppear {
+            animateNeedle()
+        }
+        .onChange(of: currentPressure) { _, _ in
+            animateNeedle()
+        }
+    }
+    
+    private func animateNeedle() {
+        withAnimation(.spring(response: 1.0, dampingFraction: 0.6)) {
+            needleRotation = needleAngle
+        }
+        
+        // Pulse animation for weather icon
+        withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+            pulseScale = 1.1
         }
     }
 }

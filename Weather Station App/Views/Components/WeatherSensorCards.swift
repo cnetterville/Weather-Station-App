@@ -651,7 +651,7 @@ struct DailyHighLowView: View {
                         .font(.system(size: 14, weight: .semibold, design: .rounded))
                         .foregroundColor(.orange)
                     
-                    // Show timestamp if available, regardless of reliability status
+                    // Show timestamp if available
                     if tempStats.highTempTime != nil {
                         Text("at \(tempStats.formattedHighTime)")
                             .font(.caption2)
@@ -679,7 +679,7 @@ struct DailyHighLowView: View {
                         .font(.system(size: 14, weight: .semibold, design: .rounded))
                         .foregroundColor(.blue)
                     
-                    // Show timestamp if available, regardless of reliability status
+                    // Show timestamp if available
                     if tempStats.lowTempTime != nil {
                         Text("at \(tempStats.formattedLowTime)")
                             .font(.caption2)
@@ -692,20 +692,20 @@ struct DailyHighLowView: View {
                 }
             }
             
-            // Data confidence indicator
-            HStack {
+            // Data confidence indicator with clearer context
+            HStack(spacing: 4) {
                 Image(systemName: tempStats.isReliable ? "checkmark.circle.fill" : "clock.fill")
                     .foregroundColor(tempStats.isReliable ? .green : .orange)
                     .font(.caption2)
                 
-                Spacer()
-                
-                // Last update time
+                // Show when the high/low was last recorded
                 if tempStats.isFromHistoricalData {
-                    Text("Updated \(formatLastUpdateTime())")
+                    Text(getLastRecordedTimeString())
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }
+                
+                Spacer()
             }
             .padding(.top, 4)
             
@@ -770,12 +770,13 @@ struct DailyHighLowView: View {
         }
     }
     
-    private func formatLastUpdateTime() -> String {
-        // Show the most recent timestamp from high or low
+    /// Returns a clearer description of when the high/low was last recorded
+    private func getLastRecordedTimeString() -> String {
+        // Find the most recent timestamp from high or low
         let times = [tempStats.highTempTime, tempStats.lowTempTime].compactMap { $0 }
         
         guard let mostRecent = times.max() else {
-            return "recently"
+            return "High/low recorded today"
         }
         
         let now = Date()
@@ -783,16 +784,16 @@ struct DailyHighLowView: View {
         let minutes = Int(timeInterval / 60)
         
         if minutes < 1 {
-            return "just now"
+            return "High/low just recorded"
         } else if minutes < 60 {
-            return "\(minutes)m ago"
+            return "Last high/low \(minutes)m ago"
         } else {
             let hours = Int(timeInterval / 3600)
             if hours < 24 {
-                return "\(hours)h ago"
+                return "Last high/low \(hours)h ago"
             } else {
                 let days = Int(timeInterval / 86400)
-                return "\(days)d ago"
+                return "Last high/low \(days)d ago"
             }
         }
     }
