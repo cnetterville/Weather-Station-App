@@ -223,6 +223,18 @@ struct OutdoorTemperatureCard: View {
                         .foregroundColor(.blue)
                 }
                 
+                // Dew Point display
+                HStack {
+                    Text("Dew Point:")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text(TemperatureConverter.formatTemperature(data.outdoor.dewPoint.value, originalUnit: data.outdoor.dewPoint.unit))
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.cyan)
+                }
+                
                 Divider()
                 
                 // Daily High/Low Section - Temperature
