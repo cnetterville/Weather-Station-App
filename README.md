@@ -49,3 +49,29 @@ A modern macOS application for monitoring multiple Ecowitt weather stations with
 - **Hardware**: Intel or Apple Silicon Mac
 - **Internet**: Required for API access and radar data
 - **Ecowitt Account**: Weather station registered with Ecowitt
+
+## Weather Forecasts
+
+This app uses Apple's **WeatherKit** to provide accurate weather forecasts. 
+
+### Quick Setup
+
+1. **Add WeatherKit Capability**:
+   - Open your project in Xcode
+   - Select your target
+   - Go to "Signing & Capabilities"
+   - Click "+ Capability"
+   - Add "WeatherKit"
+
+2. **Requirements**:
+   - Active Apple Developer Program membership
+   - WeatherKit requires location coordinates from your weather stations
+   - The app uses the coordinates provided by your Ecowitt API
+   - No additional user location permissions are required
+
+3. **API Usage**:
+   - WeatherKit is free for up to 500,000 API calls per month
+   - This app caches forecasts for 3 hours to minimize API usage
+   - Typical usage: ~5-10 calls per day per station
+
+📖 **For detailed setup instructions and troubleshooting, see [WEATHERKIT_SETUP.md](WEATHERKIT_SETUP.md)**

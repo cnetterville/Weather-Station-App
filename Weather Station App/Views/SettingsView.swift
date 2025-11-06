@@ -381,9 +381,14 @@ struct SettingsView: View {
                                 HStack {
                                     Image(systemName: "info.circle")
                                         .foregroundColor(.blue)
-                                    Text("Choose how measurements are displayed: temperature, wind speed, rainfall, lightning distance, etc.")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Choose how measurements are displayed: temperature, wind speed, rainfall, lightning distance, etc.")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                        Text("Weather forecasts provided by Apple WeatherKit")
+                                            .font(.caption)
+                                            .foregroundColor(.green)
+                                    }
                                 }
                             }
                         }

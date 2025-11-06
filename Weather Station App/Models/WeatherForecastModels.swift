@@ -8,67 +8,6 @@
 import Foundation
 import SwiftUI
 
-// MARK: - Open-Meteo API Response Models
-
-struct ForecastResponse: Codable {
-    let latitude: Double
-    let longitude: Double
-    let timezone: String
-    let timezoneAbbreviation: String
-    let elevation: Double
-    let daily: DailyForecast
-    let hourly: HourlyForecast?
-    
-    enum CodingKeys: String, CodingKey {
-        case latitude, longitude, timezone, elevation, daily, hourly
-        case timezoneAbbreviation = "timezone_abbreviation"
-    }
-}
-
-struct DailyForecast: Codable {
-    let time: [String]
-    let weatherCode: [Int]
-    let temperature2mMax: [Double]
-    let temperature2mMin: [Double]
-    let precipitationSum: [Double]
-    let precipitationProbabilityMax: [Int]
-    let windSpeed10mMax: [Double]
-    let windDirection10mDominant: [Int]
-    
-    enum CodingKeys: String, CodingKey {
-        case time
-        case weatherCode = "weather_code"
-        case temperature2mMax = "temperature_2m_max"
-        case temperature2mMin = "temperature_2m_min"
-        case precipitationSum = "precipitation_sum"
-        case precipitationProbabilityMax = "precipitation_probability_max"
-        case windSpeed10mMax = "wind_speed_10m_max"
-        case windDirection10mDominant = "wind_direction_10m_dominant"
-    }
-}
-
-struct HourlyForecast: Codable {
-    let time: [String]
-    let temperature2m: [Double]
-    let precipitationProbability: [Int]
-    let precipitation: [Double]
-    let weatherCode: [Int]
-    let windSpeed10m: [Double]
-    let windDirection10m: [Int]
-    let relativeHumidity2m: [Int]
-    
-    enum CodingKeys: String, CodingKey {
-        case time
-        case temperature2m = "temperature_2m"
-        case precipitationProbability = "precipitation_probability"
-        case precipitation
-        case weatherCode = "weather_code"
-        case windSpeed10m = "wind_speed_10m"
-        case windDirection10m = "wind_direction_10m"
-        case relativeHumidity2m = "relative_humidity_2m"
-    }
-}
-
 // MARK: - Processed Forecast Data Models
 
 struct WeatherForecast {
@@ -182,27 +121,27 @@ struct DailyWeatherForecast {
     let precipitationProbability: Int
     let maxWindSpeed: Double
     let windDirection: Int
-    let timezone: TimeZone // Add timezone property
+    let timezone: TimeZone
     
     // Computed properties for UI
     var dayOfWeek: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEEE"
-        formatter.timeZone = timezone // Use forecast location's timezone
+        formatter.timeZone = timezone
         return formatter.string(from: date)
     }
     
     var shortDayOfWeek: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEE"
-        formatter.timeZone = timezone // Use forecast location's timezone
+        formatter.timeZone = timezone
         return formatter.string(from: date)
     }
     
     var monthDay: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMM d"
-        formatter.timeZone = timezone // Use forecast location's timezone
+        formatter.timeZone = timezone
         return formatter.string(from: date)
     }
     

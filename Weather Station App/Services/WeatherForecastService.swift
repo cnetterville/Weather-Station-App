@@ -7,27 +7,21 @@
 
 import Foundation
 import Combine
+import WeatherKit
+import CoreLocation
 
 class WeatherForecastService: ObservableObject {
     static let shared = WeatherForecastService()
     
-    // Open-Meteo API endpoint
-    private let baseURL = "https://api.open-meteo.com/v1/forecast"
+    private let weatherService = WeatherService.shared
     
     @Published var forecasts: [String: WeatherForecast] = [:] // Key: station MAC address
     @Published var isLoading = false
     @Published var errorMessage: String?
     
-    private let session: URLSession
     private var loadingTasks: [String: Task<Void, Never>] = [:]
     
-    private init() {
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 30.0
-        config.timeoutIntervalForResource = 60.0
-        config.requestCachePolicy = .useProtocolCachePolicy
-        self.session = URLSession(configuration: config)
-    }
+    private init() {}
     
     /// Fetch 5-day forecast for a weather station using its coordinates
     func fetchForecast(for station: WeatherStation) async {
@@ -62,51 +56,27 @@ class WeatherForecastService: ObservableObject {
             isLoading = true
         }
         
-        // Build Open-Meteo API URL with both daily and hourly data
-        var urlComponents = URLComponents(string: baseURL)
-        urlComponents?.queryItems = [
-            URLQueryItem(name: "latitude", value: String(latitude)),
-            URLQueryItem(name: "longitude", value: String(longitude)),
-            URLQueryItem(name: "daily", value: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_direction_10m_dominant"),
-            URLQueryItem(name: "hourly", value: "temperature_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_direction_10m,relative_humidity_2m"),
-            URLQueryItem(name: "timezone", value: "auto"),
-            URLQueryItem(name: "forecast_days", value: "5")
-        ]
-        
-        guard let url = urlComponents?.url else {
-            await MainActor.run {
-                errorMessage = "Invalid forecast URL for \(station.name)"
-                isLoading = false
-            }
-            return
-        }
-        
         logWeather("Fetching 5-day forecast with hourly data for \(station.name) at (\(latitude), \(longitude))")
-        logLocation("URL: \(url.absoluteString)")
+        
+        let location = CLLocation(latitude: latitude, longitude: longitude)
         
         do {
-            let (data, response) = try await session.data(from: url)
+            // Request daily and hourly forecast from WeatherKit
+            let weather = try await weatherService.weather(for: location)
             
-            if let httpResponse = response as? HTTPURLResponse {
-                logNetwork("Forecast HTTP Status: \(httpResponse.statusCode)")
-                
-                guard httpResponse.statusCode == 200 else {
-                    await MainActor.run {
-                        errorMessage = "Forecast API returned HTTP \(httpResponse.statusCode)"
-                        isLoading = false
-                    }
-                    return
-                }
-            }
+            logData("WeatherKit response received for \(station.name)")
             
-            logData("Forecast response: \(data.count) bytes")
-            
-            // Parse the response
-            let decoder = JSONDecoder()
-            let forecastResponse = try decoder.decode(ForecastResponse.self, from: data)
+            // Get timezone for the location
+            let timeZone = station.timeZoneId != nil ? TimeZone(identifier: station.timeZoneId!) ?? TimeZone.current : TimeZone.current
             
             // Convert to our processed model
-            let processedForecast = processForecastResponse(forecastResponse, for: station)
+            let processedForecast = processWeatherKitResponse(
+                weather: weather,
+                latitude: latitude,
+                longitude: longitude,
+                timeZone: timeZone,
+                for: station
+            )
             
             await MainActor.run {
                 forecasts[station.macAddress] = processedForecast
@@ -128,74 +98,100 @@ class WeatherForecastService: ObservableObject {
         loadingTasks.removeValue(forKey: station.macAddress)
     }
     
-    private func processForecastResponse(_ response: ForecastResponse, for station: WeatherStation) -> WeatherForecast {
-        let location = ForecastLocation(
-            latitude: response.latitude,
-            longitude: response.longitude,
-            timezone: response.timezone,
-            elevation: response.elevation
-        )
+    private func processWeatherKitResponse(
+        weather: Weather,
+        latitude: Double,
+        longitude: Double,
+        timeZone: TimeZone,
+        for station: WeatherStation
+    ) -> WeatherForecast {
         
-        // Get the timezone for this forecast location
-        let forecastTimeZone = TimeZone(identifier: response.timezone) ?? TimeZone.current
+        let location = ForecastLocation(
+            latitude: latitude,
+            longitude: longitude,
+            timezone: timeZone.identifier,
+            elevation: 0 // WeatherKit doesn't provide elevation in the same way
+        )
         
         var dailyForecasts: [DailyWeatherForecast] = []
         
-        // Process each day
-        for i in 0..<response.daily.time.count {
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateFormat = "yyyy-MM-dd"
-            dateFormatter.timeZone = forecastTimeZone
+        // Process daily forecasts (limit to 5 days)
+        let dailyForecastArray = Array(weather.dailyForecast.forecast.prefix(5))
+        
+        for dayWeather in dailyForecastArray {
+            let weatherCode = WeatherConditionMapper.mapToWeatherCode(dayWeather.condition)
             
-            if let date = dateFormatter.date(from: response.daily.time[i]) {
-                let forecast = DailyWeatherForecast(
-                    date: date,
-                    weatherCode: response.daily.weatherCode[i],
-                    maxTemperature: response.daily.temperature2mMax[i],
-                    minTemperature: response.daily.temperature2mMin[i],
-                    precipitation: response.daily.precipitationSum[i],
-                    precipitationProbability: response.daily.precipitationProbabilityMax[i],
-                    maxWindSpeed: response.daily.windSpeed10mMax[i],
-                    windDirection: response.daily.windDirection10mDominant[i],
-                    timezone: forecastTimeZone
-                )
-                dailyForecasts.append(forecast)
-            }
+            // Convert temperatures from Celsius to our format
+            let maxTempC = dayWeather.highTemperature.value
+            let minTempC = dayWeather.lowTemperature.value
+            
+            // Convert precipitation from meters to millimeters
+            let precipitationMM = (dayWeather.precipitationAmount.value * 1000.0)
+            
+            // Get precipitation probability (0-100)
+            let precipProb = Int((dayWeather.precipitationChance * 100.0).rounded())
+            
+            // Convert wind speed from m/s to km/h
+            let windSpeedKmh = dayWeather.wind.speed.value * 3.6
+            
+            // Get wind direction in degrees
+            let windDirection = Int(dayWeather.wind.direction.value.rounded())
+            
+            let forecast = DailyWeatherForecast(
+                date: dayWeather.date,
+                weatherCode: weatherCode,
+                maxTemperature: maxTempC,
+                minTemperature: minTempC,
+                precipitation: precipitationMM,
+                precipitationProbability: precipProb,
+                maxWindSpeed: windSpeedKmh,
+                windDirection: windDirection,
+                timezone: timeZone
+            )
+            dailyForecasts.append(forecast)
         }
         
         var hourlyForecasts: [HourlyWeatherForecast] = []
         
-        // Process hourly data if available
-        if let hourly = response.hourly {
-            logData("Processing \(hourly.time.count) hourly forecasts")
+        // Process hourly forecasts (next 24-48 hours typically available)
+        let hourlyForecastArray = Array(weather.hourlyForecast.forecast.prefix(48))
+        
+        for hourWeather in hourlyForecastArray {
+            let weatherCode = WeatherConditionMapper.mapToWeatherCode(hourWeather.condition)
             
-            // Use DateFormatter for the format returned by Open-Meteo: "2025-11-04T00:00"
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm"
-            dateFormatter.timeZone = forecastTimeZone
+            // Convert temperature from Celsius
+            let tempC = hourWeather.temperature.value
             
-            for i in 0..<hourly.time.count {
-                if let time = dateFormatter.date(from: hourly.time[i]) {
-                    let forecast = HourlyWeatherForecast(
-                        time: time,
-                        temperature: hourly.temperature2m[i],
-                        precipitationProbability: hourly.precipitationProbability[i],
-                        precipitation: hourly.precipitation[i],
-                        weatherCode: hourly.weatherCode[i],
-                        windSpeed: hourly.windSpeed10m[i],
-                        windDirection: hourly.windDirection10m[i],
-                        humidity: hourly.relativeHumidity2m[i],
-                        timezone: forecastTimeZone
-                    )
-                    hourlyForecasts.append(forecast)
-                } else {
-                    logWarning("Failed to parse hourly time: \(hourly.time[i])")
-                }
-            }
-            logSuccess("Parsed \(hourlyForecasts.count) hourly forecasts")
-        } else {
-            logWarning("No hourly data in API response")
+            // Get precipitation probability (0-100)
+            let precipProb = Int((hourWeather.precipitationChance * 100.0).rounded())
+            
+            // Convert precipitation from meters to millimeters
+            let precipitationMM = (hourWeather.precipitationAmount.value * 1000.0)
+            
+            // Convert wind speed from m/s to km/h
+            let windSpeedKmh = hourWeather.wind.speed.value * 3.6
+            
+            // Get wind direction in degrees
+            let windDirection = Int(hourWeather.wind.direction.value.rounded())
+            
+            // Get humidity as percentage
+            let humidity = Int((hourWeather.humidity * 100.0).rounded())
+            
+            let forecast = HourlyWeatherForecast(
+                time: hourWeather.date,
+                temperature: tempC,
+                precipitationProbability: precipProb,
+                precipitation: precipitationMM,
+                weatherCode: weatherCode,
+                windSpeed: windSpeedKmh,
+                windDirection: windDirection,
+                humidity: humidity,
+                timezone: timeZone
+            )
+            hourlyForecasts.append(forecast)
         }
+        
+        logSuccess("Processed \(dailyForecasts.count) daily and \(hourlyForecasts.count) hourly forecasts")
         
         return WeatherForecast(
             location: location,
@@ -218,13 +214,13 @@ class WeatherForecastService: ObservableObject {
         
         logWeather("Fetching forecasts for \(stationsWithCoordinates.count) stations")
         
-        // Fetch forecasts concurrently with a limit to avoid overwhelming the API
+        // Fetch forecasts concurrently
         await withTaskGroup(of: Void.self) { group in
-            for station in stationsWithCoordinates.prefix(5) { // Limit to 5 concurrent requests
+            for station in stationsWithCoordinates {
                 group.addTask {
                     await self.fetchForecast(for: station)
                     
-                    // Small delay between requests to be respectful to the free API
+                    // Small delay between requests to avoid overwhelming the service
                     try? await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
                 }
             }
@@ -271,6 +267,69 @@ class WeatherForecastService: ObservableObject {
         
         DispatchQueue.main.async {
             self.isLoading = false
+        }
+    }
+}
+
+// MARK: - Weather Condition Mapper
+
+/// Maps WeatherKit's WeatherCondition enum to Open-Meteo style weather codes
+/// This maintains compatibility with existing UI code
+struct WeatherConditionMapper {
+    static func mapToWeatherCode(_ condition: WeatherCondition) -> Int {
+        switch condition {
+        case .clear:
+            return 0 // Clear sky
+        case .mostlyClear:
+            return 1 // Mainly clear
+        case .partlyCloudy:
+            return 2 // Partly cloudy
+        case .cloudy, .mostlyCloudy:
+            return 3 // Overcast
+        case .foggy, .haze:
+            return 45 // Fog
+        case .drizzle:
+            return 53 // Moderate drizzle
+        case .rain:
+            return 63 // Moderate rain
+        case .heavyRain:
+            return 65 // Heavy rain
+        case .freezingDrizzle:
+            return 56 // Light freezing drizzle
+        case .freezingRain:
+            return 67 // Heavy freezing rain
+        case .sleet:
+            return 66 // Light freezing rain
+        case .snow:
+            return 73 // Moderate snow fall
+        case .heavySnow:
+            return 75 // Heavy snow fall
+        case .flurries:
+            return 71 // Slight snow fall
+        case .blowingSnow:
+            return 77 // Snow grains
+        case .tropicalStorm:
+            return 95 // Thunderstorm
+        case .hurricane:
+            return 99 // Thunderstorm with heavy hail
+        case .thunderstorms:
+            return 95 // Thunderstorm
+        case .scatteredThunderstorms:
+            return 95 // Thunderstorm
+        case .strongStorms:
+            return 96 // Thunderstorm with slight hail
+        case .blizzard:
+            return 86 // Heavy snow showers
+        case .blowingDust, .smoky:
+            return 45 // Fog (closest match)
+        case .breezy, .windy:
+            return 2 // Partly cloudy with wind
+        case .wintryMix:
+            return 77 // Snow grains
+        case .frigid, .hot:
+            return 0 // Clear (temperature doesn't affect weather code)
+        @unknown default:
+            return 0 // Default to clear
         }
     }
 }
