@@ -132,9 +132,29 @@ struct ForecastContent: View {
     @State private var locationName: String = "5-Day Forecast"
     @State private var countryFlag: String = ""
     @State private var expandedDayIndex: Int? = nil
+    @State private var expandedAlertId: String? = nil
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            // Weather Alerts - shown at the top if present
+            if forecast.hasActiveAlerts {
+                VStack(spacing: 8) {
+                    ForEach(forecast.weatherAlerts.filter { $0.isActive }) { alert in
+                        WeatherAlertBanner(alert: alert, isExpanded: expandedAlertId == alert.id)
+                            .onTapGesture {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    if expandedAlertId == alert.id {
+                                        expandedAlertId = nil
+                                    } else {
+                                        expandedAlertId = alert.id
+                                    }
+                                }
+                            }
+                    }
+                }
+                .padding(.bottom, 4)
+            }
+            
             // Forecast header with location name and last updated time
             HStack {
                 HStack(spacing: 6) {
@@ -685,6 +705,85 @@ struct ForecastDayRow: View {
             }
         )
         .cornerRadius(isFirst ? 8 : 6)
+    }
+}
+
+// MARK: - Weather Alert Banner
+
+struct WeatherAlertBanner: View {
+    let alert: WeatherAlert
+    let isExpanded: Bool
+    @Environment(\.openURL) var openURL
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Alert header
+            HStack(spacing: 8) {
+                Image(systemName: alert.severityIcon)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(alert.severityColor)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(alert.eventName)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+                        .lineLimit(isExpanded ? nil : 1)
+                    
+                    Text(alert.region)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            // Expanded details
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 8) {
+                    Divider()
+                    
+                    Text(alert.summary)
+                        .font(.caption)
+                        .foregroundColor(.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    
+                    Text(alert.formattedTimeRange)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    
+                    if let detailsURL = alert.detailsURL {
+                        Button {
+                            openURL(detailsURL)
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text("More Details")
+                                    .font(.caption)
+                                    .fontWeight(.medium)
+                                Image(systemName: "arrow.up.right.square")
+                                    .font(.caption2)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundColor(.blue)
+                    }
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(alert.severityColor.opacity(0.1))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(alert.severityColor.opacity(0.3), lineWidth: 1.5)
+                )
+        )
     }
 }
 

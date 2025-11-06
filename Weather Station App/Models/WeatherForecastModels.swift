@@ -14,11 +14,16 @@ struct WeatherForecast {
     let location: ForecastLocation
     let dailyForecasts: [DailyWeatherForecast]
     let hourlyForecasts: [HourlyWeatherForecast]
+    let weatherAlerts: [WeatherAlert]
     let lastUpdated: Date
     
     var isExpired: Bool {
         // Refresh forecast every 3 hours
         Date().timeIntervalSince(lastUpdated) > 10800
+    }
+    
+    var hasActiveAlerts: Bool {
+        return !weatherAlerts.isEmpty
     }
     
     func weatherIcon(for forecast: DailyWeatherForecast) -> String {
@@ -477,5 +482,84 @@ struct WindDirectionConverter {
         case 293...337: return "NW"
         default: return "—"
         }
+    }
+}
+
+// MARK: - Weather Alert Model
+
+struct WeatherAlert: Identifiable {
+    let id: String
+    let severity: AlertSeverity
+    let source: String
+    let eventName: String
+    let region: String
+    let summary: String
+    let detailsURL: URL?
+    let effectiveTime: Date
+    let expiresTime: Date?
+    
+    var isActive: Bool {
+        let now = Date()
+        if let expires = expiresTime {
+            return now >= effectiveTime && now < expires
+        }
+        return now >= effectiveTime
+    }
+    
+    var severityColor: Color {
+        switch severity {
+        case .extreme:
+            return .red
+        case .severe:
+            return .orange
+        case .moderate:
+            return .yellow
+        case .minor:
+            return .blue
+        case .unknown:
+            return .gray
+        }
+    }
+    
+    var severityIcon: String {
+        switch severity {
+        case .extreme:
+            return "exclamationmark.triangle.fill"
+        case .severe:
+            return "exclamationmark.triangle.fill"
+        case .moderate:
+            return "exclamationmark.circle.fill"
+        case .minor:
+            return "info.circle.fill"
+        case .unknown:
+            return "info.circle"
+        }
+    }
+    
+    var formattedTimeRange: String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        
+        let start = formatter.string(from: effectiveTime)
+        
+        if let expires = expiresTime {
+            let end = formatter.string(from: expires)
+            return "\(start) - \(end)"
+        } else {
+            return "Effective: \(start)"
+        }
+    }
+}
+
+enum AlertSeverity: String {
+    case extreme = "extreme"
+    case severe = "severe"
+    case moderate = "moderate"
+    case minor = "minor"
+    case unknown = "unknown"
+    
+    init(fromString value: String) {
+        self = AlertSeverity(rawValue: value.lowercased()) ?? .unknown
     }
 }

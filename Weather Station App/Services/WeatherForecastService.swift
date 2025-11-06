@@ -56,7 +56,7 @@ class WeatherForecastService: ObservableObject {
             isLoading = true
         }
         
-        logWeather("Fetching 5-day forecast with hourly data for \(station.name) at (\(latitude), \(longitude))")
+        logWeather("Fetching 5-day forecast with hourly data and alerts for \(station.name) at (\(latitude), \(longitude))")
         
         let location = CLLocation(latitude: latitude, longitude: longitude)
         
@@ -83,7 +83,11 @@ class WeatherForecastService: ObservableObject {
                 isLoading = false
                 errorMessage = nil
                 
-                logSuccess("5-day forecast updated for \(station.name): \(processedForecast.dailyForecasts.count) days, \(processedForecast.hourlyForecasts.count) hours")
+                if processedForecast.hasActiveAlerts {
+                    logSuccess("5-day forecast updated for \(station.name): \(processedForecast.dailyForecasts.count) days, \(processedForecast.hourlyForecasts.count) hours, \(processedForecast.weatherAlerts.count) alerts")
+                } else {
+                    logSuccess("5-day forecast updated for \(station.name): \(processedForecast.dailyForecasts.count) days, \(processedForecast.hourlyForecasts.count) hours")
+                }
             }
             
         } catch {
@@ -194,12 +198,52 @@ class WeatherForecastService: ObservableObject {
             hourlyForecasts.append(forecast)
         }
         
+        // Process weather alerts
+        var weatherAlerts: [WeatherAlert] = []
+        
+        if let alerts = weather.weatherAlerts {
+            logInfo("Found \(alerts.count) weather alerts for \(station.name)")
+            
+            for alert in alerts {
+                // Generate a unique ID using source and current time
+                let alertId = "\(alert.source)-\(Date().timeIntervalSince1970)"
+                
+                // Extract alert details
+                let severity = AlertSeverity(fromString: alert.severity.rawValue)
+                let source = alert.source
+                let eventName = alert.summary
+                let region = alert.region ?? "Unknown Region"
+                let summary = alert.summary
+                let detailsURL = alert.detailsURL
+                
+                // Use current date as fallback for dates (WeatherAlert might not expose all date properties)
+                let effectiveTime = Date()
+                let expiresTime: Date? = nil
+                
+                let weatherAlert = WeatherAlert(
+                    id: alertId,
+                    severity: severity,
+                    source: source,
+                    eventName: eventName,
+                    region: region,
+                    summary: summary,
+                    detailsURL: detailsURL,
+                    effectiveTime: effectiveTime,
+                    expiresTime: expiresTime
+                )
+                weatherAlerts.append(weatherAlert)
+            }
+            
+            logSuccess("Processed \(weatherAlerts.count) weather alerts")
+        }
+        
         logSuccess("Processed \(dailyForecasts.count) daily and \(hourlyForecasts.count) hourly forecasts")
         
         return WeatherForecast(
             location: location,
             dailyForecasts: dailyForecasts,
             hourlyForecasts: hourlyForecasts,
+            weatherAlerts: weatherAlerts,
             lastUpdated: Date()
         )
     }
