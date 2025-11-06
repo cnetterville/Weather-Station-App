@@ -356,8 +356,10 @@ struct ReorderableWeatherCardsView: View {
     private func createDragItem(for cardType: CardType) -> NSItemProvider {
         let itemProvider = NSItemProvider()
         itemProvider.registerDataRepresentation(forTypeIdentifier: UTType.text.identifier, visibility: .all) { completion in
-            let data = cardType.rawValue.data(using: .utf8) ?? Data()
-            completion(data, nil)
+            Task { @MainActor in
+                let data = cardType.rawValue.data(using: .utf8) ?? Data()
+                completion(data, nil)
+            }
             return nil
         }
         return itemProvider

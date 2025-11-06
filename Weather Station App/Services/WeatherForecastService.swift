@@ -126,7 +126,10 @@ class WeatherForecastService: ObservableObject {
             let minTempC = dayWeather.lowTemperature.value
             
             // Convert precipitation from meters to millimeters
-            let precipitationMM = (dayWeather.precipitationAmount.value * 1000.0)
+            // Use precipitationAmountByType - sum sleet and hail
+            let sleetMM = dayWeather.precipitationAmountByType.sleet.value * 1000.0
+            let hailMM = dayWeather.precipitationAmountByType.hail.value * 1000.0
+            let precipitationMM = sleetMM + hailMM
             
             // Get precipitation probability (0-100)
             let precipProb = Int((dayWeather.precipitationChance * 100.0).rounded())
@@ -328,6 +331,14 @@ struct WeatherConditionMapper {
             return 77 // Snow grains
         case .frigid, .hot:
             return 0 // Clear (temperature doesn't affect weather code)
+        case .isolatedThunderstorms:
+            return 95 // Thunderstorm
+        case .hail:
+            return 96 // Thunderstorm with hail
+        case .sunFlurries:
+            return 71 // Slight snow fall with sun
+        case .sunShowers:
+            return 61 // Slight rain showers with sun
         @unknown default:
             return 0 // Default to clear
         }
