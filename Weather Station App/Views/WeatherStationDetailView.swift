@@ -49,7 +49,6 @@ struct WeatherStationDetailView: View {
                         .padding()
                     }
                     .id(refreshTrigger)
-                    .focusable()
                     .clipped()
                 }
             } else {
