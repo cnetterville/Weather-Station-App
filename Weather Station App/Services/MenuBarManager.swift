@@ -356,6 +356,9 @@ class MenuBarManager: ObservableObject {
         // Add context menu for right-click
         setupContextMenu()
         
+        // Enable tooltip
+        statusItem?.button?.toolTip = "Loading weather data..."
+        
         updateMenuBarTitle()
         
         // Load forecast data for better weather icons
@@ -488,6 +491,9 @@ class MenuBarManager: ObservableObject {
         
         let title = getMenuBarTitle()
         statusItem.button?.title = title
+        
+        // Update tooltip with detailed information
+        statusItem.button?.toolTip = getMenuBarTooltip()
     }
     
     private func getMenuBarTitle() -> String {
@@ -1059,6 +1065,278 @@ class MenuBarManager: ObservableObject {
     
     // MARK: - Dock Visibility
     
+    private func getMenuBarTooltip() -> String {
+        switch displayMode {
+        case .singleStation:
+            return getSingleStationTooltip()
+        case .allStations:
+            return getAllStationsTooltip()
+        case .cycleThrough:
+            return getCycleStationTooltip()
+        }
+    }
+    
+    private func getSingleStationTooltip() -> String {
+        guard let station = getSelectedStation() else {
+            return "No active weather station"
+        }
+        
+        guard let weatherData = weatherService.weatherData[station.macAddress],
+              let temp = Double(weatherData.outdoor.temperature.value) else {
+            return "\(station.name)\nLoading weather data..."
+        }
+        
+        var tooltipLines: [String] = []
+        
+        // Station name
+        tooltipLines.append("📍 \(station.name)")
+        tooltipLines.append("")
+        
+        // Temperature
+        let tempString = formatTemperature(temp)
+        tooltipLines.append("🌡️ Temperature: \(tempString)")
+        
+        // Feels like temperature
+        if let feelsLike = Double(weatherData.outdoor.feelsLike.value) {
+            let feelsLikeString = formatTemperature(feelsLike)
+            tooltipLines.append("🤚 Feels Like: \(feelsLikeString)")
+        }
+        
+        // Humidity
+        if let humidity = Double(weatherData.outdoor.humidity.value) {
+            tooltipLines.append("💧 Humidity: \(Int(humidity))%")
+        }
+        
+        // Wind
+        if let windSpeed = Double(weatherData.wind.windSpeed.value) {
+            let unitSystem = UserDefaults.standard.unitSystemDisplayMode
+            let windString = formatWindSpeed(windSpeed, unitSystem: unitSystem)
+            
+            if let windDir = Double(weatherData.wind.windDirection.value) {
+                let direction = getWindDirection(windDir)
+                tooltipLines.append("💨 Wind: \(windString) \(direction)")
+            } else {
+                tooltipLines.append("💨 Wind: \(windString)")
+            }
+        }
+        
+        // Pressure
+        if let pressure = Double(weatherData.pressure.relative.value) {
+            let unitSystem = UserDefaults.standard.unitSystemDisplayMode
+            let pressureString = formatPressure(pressure, unitSystem: unitSystem)
+            tooltipLines.append("📊 Pressure: \(pressureString)")
+        }
+        
+        // Rainfall
+        let rainRateString = weatherData.rainfallPiezo.rainRate.value
+        if let rainRate = Double(rainRateString), rainRate > 0 {
+            let unitSystem = UserDefaults.standard.unitSystemDisplayMode
+            let rainString = formatRainRate(rainRate, unitSystem: unitSystem)
+            tooltipLines.append("🌧️ Rain Rate: \(rainString)")
+        }
+        
+        // UV Index
+        if let uvi = Double(weatherData.solarAndUvi.uvi.value) {
+            tooltipLines.append("☀️ UV Index: \(String(format: "%.1f", uvi))")
+        }
+        
+        tooltipLines.append("")
+        
+        // Last update time
+        if let lastUpdated = station.lastUpdated {
+            let timeAgo = getTimeAgoString(from: lastUpdated)
+            tooltipLines.append("🕐 Updated: \(timeAgo)")
+        }
+        
+        return tooltipLines.joined(separator: "\n")
+    }
+    
+    private func getAllStationsTooltip() -> String {
+        let stations = availableStations
+        
+        if stations.isEmpty {
+            return "No active weather stations"
+        }
+        
+        var tooltipLines: [String] = []
+        tooltipLines.append("All Active Stations")
+        tooltipLines.append("")
+        
+        for station in stations {
+            if let weatherData = weatherService.weatherData[station.macAddress],
+               let temp = Double(weatherData.outdoor.temperature.value) {
+                let tempString = formatTemperature(temp)
+                let weatherIcon = getWeatherIconForStation(weatherData, station: station)
+                
+                var stationLine = "\(weatherIcon) \(station.name): \(tempString)"
+                
+                // Add last update time for this station
+                if let lastUpdated = station.lastUpdated {
+                    let timeAgo = getTimeAgoString(from: lastUpdated)
+                    stationLine += " (\(timeAgo))"
+                }
+                
+                tooltipLines.append(stationLine)
+            } else {
+                tooltipLines.append("⏳ \(station.name): Loading...")
+            }
+        }
+        
+        tooltipLines.append("")
+        tooltipLines.append("Click to open app • Right-click for options")
+        
+        return tooltipLines.joined(separator: "\n")
+    }
+    
+    private func getCycleStationTooltip() -> String {
+        let stations = availableStations
+        
+        if stations.isEmpty {
+            return "No active weather stations"
+        }
+        
+        // Ensure current index is valid
+        if currentCycleIndex >= stations.count {
+            currentCycleIndex = 0
+        }
+        
+        let station = stations[currentCycleIndex]
+        
+        guard let weatherData = weatherService.weatherData[station.macAddress],
+              let temp = Double(weatherData.outdoor.temperature.value) else {
+            return "\(station.name)\nLoading weather data..."
+        }
+        
+        var tooltipLines: [String] = []
+        
+        // Current station indicator
+        tooltipLines.append("🔄 Cycling Mode (Station \(currentCycleIndex + 1) of \(stations.count))")
+        tooltipLines.append("")
+        
+        // Station name
+        tooltipLines.append("📍 \(station.name)")
+        tooltipLines.append("")
+        
+        // Temperature
+        let tempString = formatTemperature(temp)
+        tooltipLines.append("🌡️ Temperature: \(tempString)")
+        
+        // Humidity
+        if let humidity = Double(weatherData.outdoor.humidity.value) {
+            tooltipLines.append("💧 Humidity: \(Int(humidity))%")
+        }
+        
+        // Wind
+        if let windSpeed = Double(weatherData.wind.windSpeed.value) {
+            let unitSystem = UserDefaults.standard.unitSystemDisplayMode
+            let windString = formatWindSpeed(windSpeed, unitSystem: unitSystem)
+            tooltipLines.append("💨 Wind: \(windString)")
+        }
+        
+        tooltipLines.append("")
+        
+        // Show all stations in cycle
+        tooltipLines.append("Other Stations:")
+        for (index, otherStation) in stations.enumerated() {
+            if index != currentCycleIndex {
+                if let otherData = weatherService.weatherData[otherStation.macAddress],
+                   let otherTemp = Double(otherData.outdoor.temperature.value) {
+                    let otherTempString = formatTemperature(otherTemp)
+                    tooltipLines.append("  • \(otherStation.name): \(otherTempString)")
+                }
+            }
+        }
+        
+        tooltipLines.append("")
+        
+        // Last update time
+        if let lastUpdated = station.lastUpdated {
+            let timeAgo = getTimeAgoString(from: lastUpdated)
+            tooltipLines.append("🕐 Updated: \(timeAgo)")
+        }
+        
+        // Cycling info
+        let intervalString = formatCycleInterval(cycleInterval)
+        tooltipLines.append("⏱️ Changes every \(intervalString)")
+        
+        return tooltipLines.joined(separator: "\n")
+    }
+    
+    // MARK: - Tooltip Helper Methods
+    
+    private func formatWindSpeed(_ windSpeedMPH: Double, unitSystem: UnitSystemDisplayMode) -> String {
+        switch unitSystem {
+        case .imperial, .both:
+            return String(format: "%.1f mph", windSpeedMPH)
+        case .metric:
+            let windSpeedKMH = windSpeedMPH * 1.60934
+            return String(format: "%.1f km/h", windSpeedKMH)
+        }
+    }
+    
+    private func formatPressure(_ pressureInHg: Double, unitSystem: UnitSystemDisplayMode) -> String {
+        switch unitSystem {
+        case .imperial:
+            return String(format: "%.2f inHg", pressureInHg)
+        case .metric:
+            let pressureHPa = pressureInHg * 33.8639
+            return String(format: "%.1f hPa", pressureHPa)
+        case .both:
+            let pressureHPa = pressureInHg * 33.8639
+            return String(format: "%.2f inHg / %.1f hPa", pressureInHg, pressureHPa)
+        }
+    }
+    
+    private func formatRainRate(_ rainRateInPerHour: Double, unitSystem: UnitSystemDisplayMode) -> String {
+        switch unitSystem {
+        case .imperial:
+            return String(format: "%.2f in/hr", rainRateInPerHour)
+        case .metric:
+            let rainRateMM = rainRateInPerHour * 25.4
+            return String(format: "%.1f mm/hr", rainRateMM)
+        case .both:
+            let rainRateMM = rainRateInPerHour * 25.4
+            return String(format: "%.2f in/hr / %.1f mm/hr", rainRateInPerHour, rainRateMM)
+        }
+    }
+    
+    private func getWindDirection(_ degrees: Double) -> String {
+        let directions = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", 
+                          "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
+        let index = Int((degrees + 11.25) / 22.5) % 16
+        return directions[index]
+    }
+    
+    private func getTimeAgoString(from date: Date) -> String {
+        let seconds = Int(Date().timeIntervalSince(date))
+        
+        if seconds < 60 {
+            return "just now"
+        } else if seconds < 120 {
+            return "1 minute ago"
+        } else if seconds < 3600 {
+            return "\(seconds / 60) minutes ago"
+        } else if seconds < 7200 {
+            return "1 hour ago"
+        } else {
+            return "\(seconds / 3600) hours ago"
+        }
+    }
+    
+    private func formatCycleInterval(_ interval: TimeInterval) -> String {
+        let seconds = Int(interval)
+        
+        if seconds < 60 {
+            return "\(seconds) second\(seconds == 1 ? "" : "s")"
+        } else if seconds < 3600 {
+            let minutes = seconds / 60
+            return "\(minutes) minute\(minutes == 1 ? "" : "s")"
+        } else {
+            let hours = seconds / 3600
+            return "\(hours) hour\(hours == 1 ? "" : "s")"
+        }
+    }
+    
     private func updateDockVisibility() {
         if hideDockIcon {
             // Hide the dock icon
@@ -1084,7 +1362,7 @@ enum MenuBarDisplayMode: String, CaseIterable, Codable {
         case .allStations:
             return "All Stations"
         case .cycleThrough:
-            return "Cycle Through Stations"
+            return "CycleThrough Stations"
         }
     }
     
