@@ -11,6 +11,7 @@ struct SettingsView: View {
     @StateObject private var weatherService = WeatherStationService.shared
     @StateObject private var menuBarManager = MenuBarManager.shared
     @StateObject private var appStateManager = AppStateManager.shared
+    @StateObject private var launchAtLoginHelper = LaunchAtLoginHelper.shared
     @Environment(\.dismiss) private var dismiss
     
     @State private var applicationKey: String = ""
@@ -97,6 +98,10 @@ struct SettingsView: View {
                                         .toggleStyle(.checkbox)
                                         .disabled(!menuBarManager.isMenuBarEnabled)
                                         .opacity(menuBarManager.isMenuBarEnabled ? 1.0 : 0.6)
+                                    
+                                    Toggle("Launch at login", isOn: $launchAtLoginHelper.isEnabled)
+                                        .toggleStyle(.checkbox)
+                                        .help("Automatically start Weather Station App when you log in to macOS")
                                     
                                     if !menuBarManager.isMenuBarEnabled && menuBarManager.hideDockIcon {
                                         HStack {
