@@ -353,6 +353,9 @@ class MenuBarManager: ObservableObject {
         statusItem?.button?.action = #selector(statusItemClicked)
         statusItem?.button?.target = self
         
+        // Set send action on left mouse down only
+        statusItem?.button?.sendAction(on: [.leftMouseDown, .rightMouseDown])
+        
         // Add context menu for right-click
         setupContextMenu()
         
@@ -389,7 +392,8 @@ class MenuBarManager: ObservableObject {
         quitItem.target = self
         menu.addItem(quitItem)
         
-        statusItem?.menu = menu
+        // Don't set the menu directly - we'll show it manually on right-click
+        // statusItem?.menu = menu
     }
     
     @objc private func refreshWeatherData() {
@@ -427,6 +431,56 @@ class MenuBarManager: ObservableObject {
     }
     
     @objc private func statusItemClicked() {
+        // Check which mouse button was clicked
+        let event = NSApp.currentEvent
+        
+        if event?.type == .rightMouseDown {
+            // Right-click: show context menu
+            showContextMenu()
+        } else {
+            // Left-click: open the app
+            openMainApp()
+        }
+    }
+    
+    private func showContextMenu() {
+        guard let statusItem = statusItem else { return }
+        
+        // Create the menu
+        let menu = NSMenu()
+        
+        // Open App menu item
+        let openAppItem = NSMenuItem(title: "Open Weather Station App", action: #selector(openMainApp), keyEquivalent: "")
+        openAppItem.target = self
+        menu.addItem(openAppItem)
+        
+        // Separator
+        menu.addItem(NSMenuItem.separator())
+        
+        // Refresh Data menu item
+        let refreshItem = NSMenuItem(title: "Refresh Data", action: #selector(refreshWeatherData), keyEquivalent: "")
+        refreshItem.target = self
+        menu.addItem(refreshItem)
+        
+        // Separator
+        menu.addItem(NSMenuItem.separator())
+        
+        // Quit menu item
+        let quitItem = NSMenuItem(title: "Quit Weather Station App", action: #selector(quitApplication), keyEquivalent: "q")
+        quitItem.target = self
+        menu.addItem(quitItem)
+        
+        // Show the menu
+        statusItem.menu = menu
+        statusItem.button?.performClick(nil)
+        
+        // Clear the menu after showing (so it doesn't interfere with left-click)
+        DispatchQueue.main.async {
+            statusItem.menu = nil
+        }
+    }
+    
+    @objc private func openMainApp() {
         logUI("MenuBar clicked - attempting to show app")
         
         // Activate the app first
