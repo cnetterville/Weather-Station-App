@@ -212,7 +212,37 @@ class WeatherForecastService: ObservableObject {
                 let severity = AlertSeverity(fromString: alert.severity.rawValue)
                 let source = alert.source
                 let eventName = alert.summary
-                let region = alert.region ?? "Unknown Region"
+                
+                // DEBUG: Use reflection to see all available properties
+                logDebug("=== WeatherAlert Properties Debug ===")
+                let mirror = Mirror(reflecting: alert)
+                for child in mirror.children {
+                    if let label = child.label {
+                        logDebug("  \(label): \(child.value)")
+                    }
+                }
+                logDebug("=== End Properties Debug ===")
+                
+                // FIXED: WeatherKit doesn't always provide region data through the simple property
+                // Try multiple approaches to extract the affected area
+                let region: String
+                if let alertRegion = alert.region, !alertRegion.isEmpty {
+                    // Use the region property if available (best case)
+                    region = alertRegion
+                } else {
+                    // Fallback: Try to extract region from the summary text
+                    // Many NWS alerts include region info like "...for Inland Harris..."
+                    if let extractedRegion = extractRegionFromSummary(alert.summary) {
+                        region = extractedRegion
+                    } else {
+                        // Last resort: Use "Affected Area" as generic label
+                        region = "Affected Area"
+                    }
+                }
+                
+                // Debug logging to understand what we're getting
+                logDebug("Alert region info: region='\(alert.region ?? "nil")', extracted='\(region)', source='\(source)', summary='\(alert.summary)'")
+                
                 let summary = alert.summary
                 let detailsURL = alert.detailsURL
                 
@@ -246,6 +276,38 @@ class WeatherForecastService: ObservableObject {
             weatherAlerts: weatherAlerts,
             lastUpdated: Date()
         )
+    }
+    
+    /// Helper function to extract region information from alert summary text
+    /// Many NWS alerts include region info in patterns like "...for [Region]..."
+    private func extractRegionFromSummary(_ summary: String) -> String? {
+        // Common NWS patterns:
+        // "Fire Weather Watch for Inland Harris..."
+        // "Flood Warning for Harris County..."
+        // "...in Harris County..."
+        
+        let patterns = [
+            "for ([A-Z][A-Za-z\\s]+?)(?:\\.\\.\\.|\\s+in\\s+|\\s+until\\s+|$)",
+            "in ([A-Z][A-Za-z\\s]+?)(?:\\.\\.\\.|\\s+until\\s+|\\s+through\\s+|$)",
+            "affecting ([A-Z][A-Za-z\\s]+?)(?:\\.\\.\\.|\\s+until\\s+|$)"
+        ]
+        
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: []),
+               let match = regex.firstMatch(in: summary, options: [], range: NSRange(summary.startIndex..., in: summary)),
+               match.numberOfRanges > 1 {
+                let regionRange = match.range(at: 1)
+                if let range = Range(regionRange, in: summary) {
+                    let extractedRegion = String(summary[range]).trimmingCharacters(in: .whitespaces)
+                    // Validate it's not too long (likely not a region name if > 40 chars)
+                    if extractedRegion.count <= 40 {
+                        return extractedRegion
+                    }
+                }
+            }
+        }
+        
+        return nil
     }
     
     /// Fetch forecasts for all active weather stations that have coordinates
@@ -303,6 +365,14 @@ class WeatherForecastService: ObservableObject {
     func clearCachedForecasts() {
         forecasts.removeAll()
         logInfo("Cleared all cached forecasts")
+    }
+    
+    /// Force refresh forecast for a specific station (ignores cache)
+    func forceRefreshForecast(for station: WeatherStation) async {
+        // Remove cached forecast to force a new fetch
+        forecasts.removeValue(forKey: station.macAddress)
+        logInfo("Forcing forecast refresh for \(station.name)")
+        await fetchForecast(for: station)
     }
     
     /// Cancel all loading tasks

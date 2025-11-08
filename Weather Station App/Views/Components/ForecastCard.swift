@@ -168,6 +168,12 @@ struct ForecastContent: View {
                             .font(.system(size: 16))
                     }
                 }
+                .onLongPressGesture {
+                    logDebug("🔄 Force refreshing forecast (debug feature)")
+                    Task {
+                        await forecastService.forceRefreshForecast(for: station)
+                    }
+                }
                 
                 Spacer()
                 
