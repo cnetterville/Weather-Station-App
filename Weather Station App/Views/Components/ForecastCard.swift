@@ -375,6 +375,11 @@ struct ExpandedForecastDetails: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            if forecast.isToday, let restOfDay = forecast.restOfDayForecast {
+                RestOfDaySection(restOfDay: restOfDay)
+                Divider()
+            }
+            
             if hourlyForecasts.isEmpty {
                 // Fallback if no hourly data
                 Text("Hourly data unavailable")
@@ -547,6 +552,147 @@ struct HourlyForecastItem: View {
         .background(
             RoundedRectangle(cornerRadius: 6)
                 .fill(Color.secondary.opacity(0.08))
+        )
+    }
+}
+
+struct RestOfDaySection: View {
+    let restOfDay: DaypartForecast
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Header
+            HStack {
+                Image(systemName: "sun.horizon.fill")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+                Text("Rest of Day")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.secondary)
+            }
+            
+            // Three-column grid layout
+            VStack(spacing: 12) {
+                // Row 1: Condition, Temperature, Humidity
+                HStack(alignment: .top, spacing: 0) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Condition")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text(restOfDay.condition)
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.primary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    
+                    if let tempRange = restOfDay.formattedTempRange as String?, tempRange != "—" {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Temperature")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text(tempRange)
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.primary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    
+                    if let humidity = restOfDay.humidity {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Humidity")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text(restOfDay.formattedHumidity)
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.primary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                
+                // Row 2: Rain, Wind, Cloud Cover
+                HStack(alignment: .top, spacing: 0) {
+                    if restOfDay.precipitationChance > 0.2 {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Rain")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            HStack(spacing: 4) {
+                                Image(systemName: "drop.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.blue)
+                                Text(restOfDay.formattedPrecipChance)
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.blue)
+                                
+                                if let precip = restOfDay.precipitationAmount, precip > 0.1 {
+                                    Text("(\(restOfDay.formattedPrecipitation))")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        Spacer()
+                            .frame(maxWidth: .infinity)
+                    }
+                    
+                    if let wind = restOfDay.windSpeed {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Wind")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            HStack(spacing: 4) {
+                                if let direction = restOfDay.windDirection {
+                                    Image(systemName: "arrow.up")
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundColor(.secondary)
+                                        .rotationEffect(.degrees(Double(direction)))
+                                }
+                                Text(restOfDay.formattedWindSpeed)
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.primary)
+                                Text(restOfDay.windDirectionText)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        Spacer()
+                            .frame(maxWidth: .infinity)
+                    }
+                    
+                    if let cloudCover = restOfDay.cloudCover {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Cloud Cover")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text(restOfDay.formattedCloudCover)
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.primary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.orange.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.orange.opacity(0.2), lineWidth: 1)
+                )
         )
     }
 }

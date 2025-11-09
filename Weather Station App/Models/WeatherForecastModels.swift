@@ -15,6 +15,7 @@ struct WeatherForecast {
     let dailyForecasts: [DailyWeatherForecast]
     let hourlyForecasts: [HourlyWeatherForecast]
     let weatherAlerts: [WeatherAlert]
+    let restOfDayForecast: DaypartForecast?
     let lastUpdated: Date
     
     var isExpired: Bool {
@@ -127,6 +128,7 @@ struct DailyWeatherForecast {
     let maxWindSpeed: Double
     let windDirection: Int
     let timezone: TimeZone
+    let restOfDayForecast: DaypartForecast?
     
     // Computed properties for UI
     var dayOfWeek: String {
@@ -486,6 +488,118 @@ struct WindDirectionConverter {
 }
 
 // MARK: - Weather Alert Model
+
+struct DaypartForecast {
+    let forecastStart: Date
+    let forecastEnd: Date
+    let cloudCover: Double?
+    let condition: String
+    let humidity: Double?
+    let precipitationAmount: Double?
+    let precipitationChance: Double
+    let snowfallAmount: Double?
+    let temperature: Double?
+    let temperatureMax: Double?
+    let temperatureMin: Double?
+    let windDirection: Int?
+    let windSpeed: Double?
+    
+    var formattedPrecipChance: String {
+        return "\(Int((precipitationChance * 100).rounded()))%"
+    }
+    
+    var formattedTemperature: String {
+        guard let temp = temperature else { return "—" }
+        let tempInt = Int(temp.rounded())
+        let converted = MeasurementConverter.convertTemperature(String(tempInt), from: "°C")
+        let displayMode = UserDefaults.standard.unitSystemDisplayMode
+        
+        switch displayMode {
+        case .imperial:
+            return "\(Int(Double(converted.fahrenheit) ?? 0))°F"
+        case .metric:
+            return "\(tempInt)°C"
+        case .both:
+            return "\(Int(Double(converted.fahrenheit) ?? 0))°F/\(tempInt)°C"
+        }
+    }
+    
+    var formattedTempRange: String {
+        guard let tempMax = temperatureMax, let tempMin = temperatureMin else { return "—" }
+        let maxInt = Int(tempMax.rounded())
+        let minInt = Int(tempMin.rounded())
+        let convertedMax = MeasurementConverter.convertTemperature(String(maxInt), from: "°C")
+        let convertedMin = MeasurementConverter.convertTemperature(String(minInt), from: "°C")
+        let displayMode = UserDefaults.standard.unitSystemDisplayMode
+        
+        switch displayMode {
+        case .imperial:
+            return "\(Int(Double(convertedMax.fahrenheit) ?? 0))°F - \(Int(Double(convertedMin.fahrenheit) ?? 0))°F"
+        case .metric:
+            return "\(maxInt)°C - \(minInt)°C"
+        case .both:
+            return "\(Int(Double(convertedMax.fahrenheit) ?? 0))/\(maxInt)° - \(Int(Double(convertedMin.fahrenheit) ?? 0))/\(minInt)°"
+        }
+    }
+    
+    var formattedWindSpeed: String {
+        guard let wind = windSpeed else { return "—" }
+        let displayMode = UserDefaults.standard.unitSystemDisplayMode
+        let converted = MeasurementConverter.convertWindSpeed(String(format: "%.0f", wind), from: "km/h")
+        
+        switch displayMode {
+        case .imperial:
+            return "\(Int(Double(converted.mph) ?? 0))mph"
+        case .metric:
+            return "\(Int(wind))km/h"
+        case .both:
+            return "\(Int(Double(converted.mph) ?? 0))mph/\(Int(wind))km/h"
+        }
+    }
+    
+    var windDirectionText: String {
+        guard let direction = windDirection else { return "—" }
+        return WindDirectionConverter.directionText(for: direction)
+    }
+    
+    var formattedPrecipitation: String {
+        guard let precip = precipitationAmount else { return "—" }
+        let displayMode = UserDefaults.standard.unitSystemDisplayMode
+        
+        switch displayMode {
+        case .imperial:
+            let inches = precip * 0.0393701
+            if inches < 0.05 {
+                return "0.00in"
+            } else {
+                return String(format: "%.2fin", inches)
+            }
+        case .metric:
+            if precip < 0.5 {
+                return "0.0mm"
+            } else {
+                return String(format: "%.1fmm", precip)
+            }
+        case .both:
+            let inches = precip * 0.0393701
+            if precip < 0.5 && inches < 0.05 {
+                return "0.0mm/0.00in"
+            } else {
+                return String(format: "%.1fmm/%.2fin", precip, inches)
+            }
+        }
+    }
+    
+    var formattedHumidity: String {
+        guard let hum = humidity else { return "—" }
+        return "\(Int((hum * 100).rounded()))%"
+    }
+    
+    var formattedCloudCover: String {
+        guard let cloud = cloudCover else { return "—" }
+        return "\(Int((cloud * 100).rounded()))%"
+    }
+}
 
 struct WeatherAlert: Identifiable {
     let id: String

@@ -114,7 +114,7 @@ class WeatherForecastService: ObservableObject {
             latitude: latitude,
             longitude: longitude,
             timezone: timeZone.identifier,
-            elevation: 0 // WeatherKit doesn't provide elevation in the same way
+            elevation: 0
         )
         
         var dailyForecasts: [DailyWeatherForecast] = []
@@ -125,24 +125,24 @@ class WeatherForecastService: ObservableObject {
         for dayWeather in dailyForecastArray {
             let weatherCode = WeatherConditionMapper.mapToWeatherCode(dayWeather.condition)
             
-            // Convert temperatures from Celsius to our format
             let maxTempC = dayWeather.highTemperature.value
             let minTempC = dayWeather.lowTemperature.value
             
-            // Convert precipitation from meters to millimeters
-            // Use precipitationAmountByType - sum sleet and hail
             let sleetMM = dayWeather.precipitationAmountByType.sleet.value * 1000.0
             let hailMM = dayWeather.precipitationAmountByType.hail.value * 1000.0
             let precipitationMM = sleetMM + hailMM
             
-            // Get precipitation probability (0-100)
             let precipProb = Int((dayWeather.precipitationChance * 100.0).rounded())
             
-            // Convert wind speed from m/s to km/h
             let windSpeedKmh = dayWeather.wind.speed.value * 3.6
             
-            // Get wind direction in degrees
             let windDirection = Int(dayWeather.wind.direction.value.rounded())
+            
+            var restOfDay: DaypartForecast? = nil
+            let calendar = Calendar.current
+            if calendar.isDateInToday(dayWeather.date), let restOfDayData = dayWeather.restOfDayForecast {
+                restOfDay = processDaypartForecast(restOfDayData)
+            }
             
             let forecast = DailyWeatherForecast(
                 date: dayWeather.date,
@@ -153,7 +153,8 @@ class WeatherForecastService: ObservableObject {
                 precipitationProbability: precipProb,
                 maxWindSpeed: windSpeedKmh,
                 windDirection: windDirection,
-                timezone: timeZone
+                timezone: timeZone,
+                restOfDayForecast: restOfDay
             )
             dailyForecasts.append(forecast)
         }
@@ -269,12 +270,104 @@ class WeatherForecastService: ObservableObject {
         
         logSuccess("Processed \(dailyForecasts.count) daily and \(hourlyForecasts.count) hourly forecasts")
         
+        let overallRestOfDay = dailyForecasts.first?.restOfDayForecast
+        
         return WeatherForecast(
             location: location,
             dailyForecasts: dailyForecasts,
             hourlyForecasts: hourlyForecasts,
             weatherAlerts: weatherAlerts,
+            restOfDayForecast: overallRestOfDay,
             lastUpdated: Date()
+        )
+    }
+    
+    private func processDaypartForecast(_ daypart: Any) -> DaypartForecast? {
+        // Use reflection to extract daypart properties since the type is not publicly documented
+        let mirror = Mirror(reflecting: daypart)
+        
+        var forecastStart: Date?
+        var forecastEnd: Date?
+        var cloudCover: Double?
+        var condition: String = "Unknown"
+        var humidity: Double?
+        var precipitationAmount: Double?
+        var precipitationChance: Double = 0.0
+        var snowfallAmount: Double?
+        var temperature: Double?
+        var temperatureMax: Double?
+        var temperatureMin: Double?
+        var windDirection: Int?
+        var windSpeed: Double?
+        
+        for child in mirror.children {
+            guard let label = child.label else { continue }
+            
+            switch label {
+            case "forecastStart":
+                forecastStart = child.value as? Date
+            case "forecastEnd":
+                forecastEnd = child.value as? Date
+            case "cloudCover":
+                cloudCover = child.value as? Double
+            case "condition":
+                if let conditionValue = child.value as? WeatherCondition {
+                    condition = String(describing: conditionValue)
+                }
+            case "humidity":
+                humidity = child.value as? Double
+            case "precipitationAmount":
+                if let measurement = child.value as? Measurement<UnitLength> {
+                    precipitationAmount = measurement.converted(to: .millimeters).value
+                }
+            case "precipitationChance":
+                precipitationChance = child.value as? Double ?? 0.0
+            case "snowfallAmount":
+                if let measurement = child.value as? Measurement<UnitLength> {
+                    snowfallAmount = measurement.converted(to: .millimeters).value
+                }
+            case "temperature":
+                if let measurement = child.value as? Measurement<UnitTemperature> {
+                    temperature = measurement.converted(to: .celsius).value
+                }
+            case "highTemperature":
+                if let measurement = child.value as? Measurement<UnitTemperature> {
+                    temperatureMax = measurement.converted(to: .celsius).value
+                }
+            case "lowTemperature":
+                if let measurement = child.value as? Measurement<UnitTemperature> {
+                    temperatureMin = measurement.converted(to: .celsius).value
+                }
+            case "wind":
+                if let windMirror = Mirror(reflecting: child.value).children.first(where: { $0.label == "direction" })?.value as? Measurement<UnitAngle> {
+                    windDirection = Int(windMirror.value.rounded())
+                }
+                if let windSpeedMirror = Mirror(reflecting: child.value).children.first(where: { $0.label == "speed" })?.value as? Measurement<UnitSpeed> {
+                    windSpeed = windSpeedMirror.converted(to: .kilometersPerHour).value
+                }
+            default:
+                break
+            }
+        }
+        
+        guard let start = forecastStart, let end = forecastEnd else {
+            return nil
+        }
+        
+        return DaypartForecast(
+            forecastStart: start,
+            forecastEnd: end,
+            cloudCover: cloudCover,
+            condition: condition,
+            humidity: humidity,
+            precipitationAmount: precipitationAmount,
+            precipitationChance: precipitationChance,
+            snowfallAmount: snowfallAmount,
+            temperature: temperature,
+            temperatureMax: temperatureMax,
+            temperatureMin: temperatureMin,
+            windDirection: windDirection,
+            windSpeed: windSpeed
         )
     }
     
