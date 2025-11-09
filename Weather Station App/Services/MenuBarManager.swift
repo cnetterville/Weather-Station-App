@@ -545,24 +545,10 @@ class MenuBarManager: ObservableObject {
         
         let title = getMenuBarTitle()
         
-        // Check if title contains bullet points for alerts
-        if title.contains("●") {
-            // Create attributed string with red bullets
-            let attributedString = NSMutableAttributedString(string: title)
-            
-            // Find all bullet points and make them red (without changing font size)
-            var searchRange = NSRange(location: 0, length: title.count)
-            while searchRange.length > 0 {
-                let range = (title as NSString).range(of: "●", options: [], range: searchRange)
-                if range.location == NSNotFound {
-                    break
-                }
-                // Make bullet red only
-                attributedString.addAttribute(.foregroundColor, value: NSColor.red, range: range)
-                searchRange = NSRange(location: range.location + range.length, length: title.count - range.location - range.length)
-            }
-            
-            statusItem.button?.attributedTitle = attributedString
+        // Check if title contains warning signs for alerts
+        if title.contains("⚠") {
+            // Use regular title - warning sign will display naturally
+            statusItem.button?.attributedTitle = NSAttributedString(string: title)
         } else {
             // No alerts, use regular title
             statusItem.button?.attributedTitle = NSAttributedString(string: title)
@@ -1483,7 +1469,7 @@ class MenuBarManager: ObservableObject {
         
         // Check if there are any active alerts
         if forecast.hasActiveAlerts {
-            return "● " // Medium black circle (will be colored red and sized smaller)
+            return "⚠ " // Warning sign (smaller than emoji version)
         }
         
         return ""
