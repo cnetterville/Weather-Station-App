@@ -145,17 +145,17 @@ class APICredentialsSync: ObservableObject {
                 logSync("☁️ Cloud credentials are newer, downloading...")
                 saveLocalCredentials(cloudCredentials)
                 saveLocalModificationDate(cloudModified)
-                await updateSyncStatus(.success, date: cloudModified)
+                updateSyncStatus(.success, date: cloudModified)
             } else if localModified > cloudModified {
                 // Local is newer, upload
                 logSync("📱 Local credentials are newer, uploading...")
                 saveCloudCredentials(localCredentials)
                 saveCloudModificationDate(localModified)
-                await updateSyncStatus(.success, date: localModified)
+                updateSyncStatus(.success, date: localModified)
             } else {
                 // Same modification date, already in sync
                 logSync("✅ Credentials already in sync")
-                await updateSyncStatus(.success, date: localModified)
+                updateSyncStatus(.success, date: localModified)
             }
         } else if cloudModified != nil {
             // Only cloud has data, download
@@ -163,7 +163,7 @@ class APICredentialsSync: ObservableObject {
             saveLocalCredentials(cloudCredentials)
             if let date = cloudModified {
                 saveLocalModificationDate(date)
-                await updateSyncStatus(.success, date: date)
+                updateSyncStatus(.success, date: date)
             }
         } else if localModified != nil {
             // Only local has data, upload
@@ -171,11 +171,11 @@ class APICredentialsSync: ObservableObject {
             saveCloudCredentials(localCredentials)
             if let date = localModified {
                 saveCloudModificationDate(date)
-                await updateSyncStatus(.success, date: date)
+                updateSyncStatus(.success, date: date)
             }
         } else {
             // Neither has data
-            await updateSyncStatus(.idle, date: nil)
+            updateSyncStatus(.idle, date: nil)
         }
     }
     
@@ -198,13 +198,13 @@ class APICredentialsSync: ObservableObject {
             // Trigger sync
             cloudStore.synchronize()
             
-            Task {
-                await updateSyncStatus(.success, date: now)
+            Task { @MainActor in
+                updateSyncStatus(.success, date: now)
             }
         } else {
             logSync("🚫 iCloud sync disabled, skipping cloud save")
-            Task {
-                await updateSyncStatus(.disabled, date: nil)
+            Task { @MainActor in
+                updateSyncStatus(.disabled, date: nil)
             }
         }
     }
@@ -263,8 +263,8 @@ class APICredentialsSync: ObservableObject {
             
         case NSUbiquitousKeyValueStoreQuotaViolationChange:
             logSync("⚠️ iCloud quota violation")
-            Task {
-                await updateSyncStatus(.error("iCloud storage quota exceeded"), date: nil)
+            Task { @MainActor in
+                updateSyncStatus(.error("iCloud storage quota exceeded"), date: nil)
             }
             
         case NSUbiquitousKeyValueStoreAccountChange:
@@ -313,8 +313,8 @@ class APICredentialsSync: ObservableObject {
                 userInfo: ["credentials": cloudCredentials]
             )
             
-            Task {
-                await updateSyncStatus(.success, date: cloudModified)
+            Task { @MainActor in
+                updateSyncStatus(.success, date: cloudModified)
             }
         } else {
             logSync("📱 Local credentials are newer, keeping local version")

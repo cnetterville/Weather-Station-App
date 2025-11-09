@@ -718,10 +718,6 @@ struct SettingsView: View {
             apiKey = weatherService.credentials.apiKey
             unitSystemDisplayMode = UserDefaults.standard.unitSystemDisplayMode
             radarRefreshInterval = UserDefaults.standard.radarRefreshInterval
-            
-            // Debug: Verify credentialsSync is working
-            print("🔵 SettingsView appeared - credentialsSync.isSyncEnabled: \(credentialsSync.isSyncEnabled)")
-            print("🔵 SettingsView appeared - credentialsSync.syncStatus: \(credentialsSync.syncStatus)")
         }
         .sheet(isPresented: $showingAddStation) {
             AddWeatherStationView()
@@ -933,7 +929,7 @@ struct SettingsView: View {
                         .foregroundColor(.secondary)
                 }
                 
-            case .error(let message):
+            case .error(_):
                 Image(systemName: "icloud.slash")
                     .foregroundColor(.red)
                 Text("Error")
