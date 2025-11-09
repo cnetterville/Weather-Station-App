@@ -735,10 +735,6 @@ struct WeatherAlertBanner: View {
                         .fontWeight(.semibold)
                         .foregroundColor(.primary)
                         .lineLimit(isExpanded ? nil : 1)
-                    
-                    Text(alert.region)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
                 }
                 
                 Spacer()
