@@ -600,7 +600,7 @@ struct RestOfDaySection: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     
-                    if let humidity = restOfDay.humidity {
+                    if restOfDay.humidity != nil {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Humidity")
                                 .font(.caption)
@@ -643,7 +643,7 @@ struct RestOfDaySection: View {
                             .frame(maxWidth: .infinity)
                     }
                     
-                    if let wind = restOfDay.windSpeed {
+                    if restOfDay.windSpeed != nil {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Wind")
                                 .font(.caption)
@@ -670,7 +670,7 @@ struct RestOfDaySection: View {
                             .frame(maxWidth: .infinity)
                     }
                     
-                    if let cloudCover = restOfDay.cloudCover {
+                    if restOfDay.cloudCover != nil {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Cloud Cover")
                                 .font(.caption)
