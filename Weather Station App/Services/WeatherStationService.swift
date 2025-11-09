@@ -978,7 +978,7 @@ class WeatherStationService: ObservableObject {
         }
     }
     
-    // Helper function to convert historical measurement to chart data points
+    /// Helper function to convert historical measurement to chart data points
     func getChartData(from measurement: HistoricalMeasurement?) -> [ChartDataPoint] {
         guard let measurement = measurement else { return [] }
         
@@ -995,7 +995,7 @@ class WeatherStationService: ObservableObject {
         return dataPoints.sorted { $0.timestamp < $1.timestamp }
     }
     
-    // NEW: Get chart data from the separate chart historical data
+    /// Get chart data from the separate chart historical data
     func getChartHistoricalData(for station: WeatherStation) -> HistoricalWeatherData? {
         return chartHistoricalData[station.macAddress]
     }
@@ -1516,7 +1516,7 @@ class WeatherStationService: ObservableObject {
         }
     }
     
-    func fetchCameraImage(for station: WeatherStation) async -> String? {
+    func fetchCameraImage(for station: WeatherStation) async -> (imageURL: String?, photoTime: Date?, updatedTime: Date?)? {
         guard credentials.isValid else {
             logError(" Credentials invalid for camera image fetch")
             return nil
@@ -1578,12 +1578,26 @@ class WeatherStationService: ObservableObject {
                         
                         if cameraResponse.code == 0 {
                             let imageUrl = cameraResponse.data.camera.photo.url
-                            let imageTime = cameraResponse.data.camera.photo.time
+                            let imageTimeString = cameraResponse.data.camera.photo.time
+                            
+                            // Parse the photo timestamp
+                            let photoTime: Date?
+                            if let timestamp = Double(imageTimeString) {
+                                photoTime = Date(timeIntervalSince1970: timestamp)
+                            } else {
+                                photoTime = nil
+                            }
+                            
+                            // Updated time is now (when we fetched the data)
+                            let updatedTime = Date()
                             
                             logDebug(" Found camera image URL: \(imageUrl)")
-                            logDebug(" Image timestamp: \(imageTime)")
+                            logDebug(" Photo timestamp: \(imageTimeString)")
+                            if let photoTime = photoTime {
+                                logDebug(" Parsed photo time: \(photoTime)")
+                            }
                             
-                            return imageUrl
+                            return (imageURL: imageUrl, photoTime: photoTime, updatedTime: updatedTime)
                         } else {
                             logCamera(" Camera API error: \(cameraResponse.msg) (Code: \(cameraResponse.code))")
                         }

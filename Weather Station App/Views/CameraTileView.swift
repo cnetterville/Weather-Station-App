@@ -16,8 +16,8 @@ struct CameraTileView: View {
     @StateObject private var weatherService = WeatherStationService.shared
     @State private var cameraImageURL: String?
     @State private var isLoadingImage = false
+    @State private var photoTimestamp: Date?
     @State private var lastUpdated: Date?
-    @State private var imageTimestamp: String?
     @State private var refreshTimer: Timer?
     
     var body: some View {
@@ -65,21 +65,36 @@ struct CameraTileView: View {
                             )
                     }
                     
-                    // Compact info bar
-                    HStack(spacing: 8) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "clock")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                            if let lastUpdated = lastUpdated {
-                                Text(lastUpdated, style: .time)
+                    // Timestamp info
+                    VStack(alignment: .trailing, spacing: 4) {
+                        if let photoTime = photoTimestamp {
+                            HStack(spacing: 4) {
+                                Spacer()
+                                Text("Photo:")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                Text(formatTimestamp(photoTime))
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
                             }
                         }
                         
-                        Spacer()
-                        
+                        if let updated = lastUpdated {
+                            HStack(spacing: 4) {
+                                Spacer()
+                                Text("Updated:")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                Text(formatTimestamp(updated))
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    .padding(.top, 4)
+                    
+                    // Action buttons
+                    HStack(spacing: 8) {
                         Button("Refresh") {
                             refreshCameraImage()
                             resetRefreshTimer()
@@ -87,6 +102,8 @@ struct CameraTileView: View {
                         .buttonStyle(.bordered)
                         .controlSize(.mini)
                         .disabled(isLoadingImage)
+                        
+                        Spacer()
                         
                         Button("View Full") {
                             openFullScreenWindow(imageURL: imageURL)
@@ -132,7 +149,9 @@ struct CameraTileView: View {
     private func openFullScreenWindow(imageURL: String) {
         let hostingController = NSHostingController(rootView: FullScreenCameraView(
             imageURL: imageURL,
-            stationName: station.name
+            stationName: station.name,
+            photoTimestamp: photoTimestamp,
+            lastUpdated: lastUpdated
         ))
         
         let window = NSWindow(contentViewController: hostingController)
@@ -156,15 +175,18 @@ struct CameraTileView: View {
         isLoadingImage = true
         
         Task {
-            let imageURL = await weatherService.fetchCameraImage(for: station)
+            let result = await weatherService.fetchCameraImage(for: station)
             
             await MainActor.run {
                 isLoadingImage = false
-                cameraImageURL = imageURL
-                if imageURL != nil {
-                    lastUpdated = Date()
-                    // For now, use current timestamp. Could be enhanced to extract from camera API response
-                    imageTimestamp = formatCurrentTimestamp()
+                if let result = result {
+                    cameraImageURL = result.imageURL
+                    photoTimestamp = result.photoTime
+                    lastUpdated = result.updatedTime
+                } else {
+                    cameraImageURL = nil
+                    photoTimestamp = nil
+                    lastUpdated = nil
                 }
             }
         }
@@ -186,16 +208,19 @@ struct CameraTileView: View {
         startRefreshTimer() // This will stop the existing timer and start a new one
     }
     
-    private func formatCurrentTimestamp() -> String {
+    private func formatTimestamp(_ date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        return formatter.string(from: Date())
+        formatter.dateFormat = "MMM d, h:mm a"
+        formatter.timeZone = station.timeZone
+        return formatter.string(from: date)
     }
 }
 
 struct FullScreenCameraView: View {
     let imageURL: String
     let stationName: String
+    let photoTimestamp: Date?
+    let lastUpdated: Date?
     
     @Environment(\.dismiss) private var dismiss
     
@@ -256,13 +281,27 @@ struct FullScreenCameraView: View {
                     
                     Spacer()
                     
-                    Text("Camera - \(stationName)")
-                        .foregroundColor(.white)
-                        .font(.headline)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color.black.opacity(0.6))
-                        .cornerRadius(8)
+                    VStack(spacing: 4) {
+                        Text("Camera - \(stationName)")
+                            .foregroundColor(.white)
+                            .font(.headline)
+                        
+                        if let photoTime = photoTimestamp {
+                            Text("Photo: \(formatTimestamp(photoTime))")
+                                .foregroundColor(.white.opacity(0.8))
+                                .font(.caption)
+                        }
+                        
+                        if let updated = lastUpdated {
+                            Text("Updated: \(formatTimestamp(updated))")
+                                .foregroundColor(.white.opacity(0.8))
+                                .font(.caption)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.black.opacity(0.6))
+                    .cornerRadius(8)
                     
                     Spacer()
                     
@@ -305,6 +344,12 @@ struct FullScreenCameraView: View {
                 print("Failed to save image: \(error)")
             }
         }
+    }
+    
+    private func formatTimestamp(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d, h:mm a"
+        return formatter.string(from: date)
     }
 }
 
