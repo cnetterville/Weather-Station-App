@@ -1,4 +1,4 @@
-// 
+//
 //  SpecializedSensorCards.swift
 //  Weather Station App
 // 
@@ -1016,6 +1016,8 @@ struct SunTimesView: View {
     let sunTimes: SunTimes
     let station: WeatherStation
     
+    @State private var currentTime = Date()
+    
     // Computed property for day length difference calculation
     private var tomorrowDayLengthDifference: (changeText: String, changeColor: Color)? {
         guard let latitude = station.latitude, let longitude = station.longitude else { return nil }
@@ -1059,6 +1061,24 @@ struct SunTimesView: View {
         return (changeText, changeColor)
     }
     
+    // Computed property for live daylight countdown
+    private var liveDaylightLeft: String {
+        if currentTime >= sunTimes.sunrise && currentTime <= sunTimes.sunset {
+            let remaining = sunTimes.sunset.timeIntervalSince(currentTime)
+            let hours = Int(remaining / 3600)
+            let minutes = Int((remaining.truncatingRemainder(dividingBy: 3600)) / 60)
+            let seconds = Int(remaining.truncatingRemainder(dividingBy: 60))
+            
+            if hours > 0 {
+                return String(format: "%dh %02dm %02ds", hours, minutes, seconds)
+            } else {
+                return String(format: "%dm %02ds", minutes, seconds)
+            }
+        } else {
+            return "Nighttime"
+        }
+    }
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 6) { 
             // Current status
@@ -1072,9 +1092,9 @@ struct SunTimesView: View {
             }
             
             // Sun Position Arc - Enhanced version
-            SunPositionArc(sunTimes: sunTimes)
-                .frame(height: 50) 
-                .padding(.vertical, 4) 
+            SunPositionArc(sunTimes: sunTimes, currentTime: currentTime)
+                .frame(height: 120) 
+                .padding(.vertical, 8) 
             
             // Sunrise and sunset times
             HStack {
@@ -1133,10 +1153,11 @@ struct SunTimesView: View {
                         .font(.caption) 
                         .foregroundColor(.secondary)
                     Spacer()
-                    Text(sunTimes.formattedDaylightLeft)
+                    Text(liveDaylightLeft)
                         .font(.caption) 
                         .fontWeight(.semibold)
-                        .foregroundColor(sunTimes.daylightLeft != nil ? .orange : .secondary)
+                        .foregroundColor(currentTime >= sunTimes.sunrise && currentTime <= sunTimes.sunset ? .orange : .secondary)
+                        .monospacedDigit()
                 }
             }
             
@@ -1189,6 +1210,15 @@ struct SunTimesView: View {
                 }
             }
         }
+        .onAppear {
+            startTimer()
+        }
+    }
+    
+    private func startTimer() {
+        Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+            currentTime = Date()
+        }
     }
     
     // Helper function to format time in the correct timezone
@@ -1207,44 +1237,34 @@ struct SunTimesView: View {
 
 struct SunPositionArc: View {
     let sunTimes: SunTimes
+    let currentTime: Date
     
     private var sunPosition: CGFloat {
-        let now = Date()
-        
-        // If before sunrise or after sunset, show sun below horizon
-        if now < sunTimes.sunrise {
-            return 0 // Before sunrise - sun at left edge (below horizon)
-        } else if now > sunTimes.sunset {
-            return 1 // After sunset - sun at right edge (below horizon)
+        if currentTime < sunTimes.sunrise {
+            return 0 
+        } else if currentTime > sunTimes.sunset {
+            return 1 
         } else {
-            // During the day - calculate position along arc
             let totalDaylight = sunTimes.sunset.timeIntervalSince(sunTimes.sunrise)
-            let timeSinceSunrise = now.timeIntervalSince(sunTimes.sunrise)
+            let timeSinceSunrise = currentTime.timeIntervalSince(sunTimes.sunrise)
             return CGFloat(timeSinceSunrise / totalDaylight)
         }
     }
     
     private var isDaytime: Bool {
-        let now = Date()
-        return now >= sunTimes.sunrise && now <= sunTimes.sunset
+        return currentTime >= sunTimes.sunrise && currentTime <= sunTimes.sunset
     }
     
-    // Sky gradient colors based on time of day
     private var skyGradientColors: [Color] {
         if !isDaytime {
-            // Nighttime - dark blue to black
             return [Color.black.opacity(0.3), Color.blue.opacity(0.4), Color.black.opacity(0.3)]
         }
         
-        // Daytime gradient based on sun position
         if sunPosition < 0.2 {
-            // Sunrise colors (orange/pink)
             return [Color.orange.opacity(0.4), Color.pink.opacity(0.3), Color.blue.opacity(0.2)]
         } else if sunPosition > 0.8 {
-            // Sunset colors (red/orange)
             return [Color.blue.opacity(0.2), Color.orange.opacity(0.4), Color.red.opacity(0.3)]
         } else {
-            // Midday - bright blue sky
             return [Color.blue.opacity(0.3), Color.cyan.opacity(0.2), Color.blue.opacity(0.3)]
         }
     }
@@ -1253,68 +1273,86 @@ struct SunPositionArc: View {
         GeometryReader { geometry in
             let width = geometry.size.width
             let height = geometry.size.height
-            let arcHeight = height * 0.7
+            let arcHeight = height * 0.85 // More realistic arc curve
+            let horizonY = height * 0.75 // Position horizon line lower for better proportions
             
             ZStack {
                 // Sky gradient background
                 LinearGradient(
                     gradient: Gradient(colors: skyGradientColors),
-                    startPoint: .leading,
-                    endPoint: .trailing
+                    startPoint: .top,
+                    endPoint: .bottom
                 )
-                .frame(height: height)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-                .opacity(0.4)
+                .frame(height: horizonY)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .opacity(0.5)
                 
                 // Horizon line
                 Rectangle()
-                    .fill(Color.secondary.opacity(0.2))
-                    .frame(height: 1)
-                    .position(x: width / 2, y: height)
+                    .fill(Color.secondary.opacity(0.3))
+                    .frame(height: 2)
+                    .position(x: width / 2, y: horizonY)
                 
-                // Background arc representing the sun's path
+                // Ground/earth representation below horizon
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                Color.brown.opacity(0.2),
+                                Color.brown.opacity(0.3)
+                            ]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .frame(height: height - horizonY)
+                    .position(x: width / 2, y: horizonY + (height - horizonY) / 2)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .opacity(0.3)
+                
+                // Background arc representing the sun's path (dashed line)
                 Path { path in
-                    path.move(to: CGPoint(x: 0, y: height))
+                    path.move(to: CGPoint(x: 0, y: horizonY))
                     path.addQuadCurve(
-                        to: CGPoint(x: width, y: height),
-                        control: CGPoint(x: width / 2, y: height - arcHeight)
+                        to: CGPoint(x: width, y: horizonY),
+                        control: CGPoint(x: width / 2, y: horizonY - arcHeight)
                     )
                 }
                 .stroke(
-                    Color.secondary.opacity(0.3),
-                    style: StrokeStyle(lineWidth: 2, dash: [5, 5])
+                    Color.secondary.opacity(0.4),
+                    style: StrokeStyle(lineWidth: 2, dash: [6, 4])
                 )
                 
                 // Daylight portion of the arc (if currently daylight) - enhanced with gradient
                 if isDaytime {
                     Path { path in
-                        path.move(to: CGPoint(x: 0, y: height))
+                        path.move(to: CGPoint(x: 0, y: horizonY))
                         
                         let endX = width * sunPosition
                         let controlX = endX / 2
-                        let controlY = height - (arcHeight * sin(.pi * sunPosition))
+                        let controlY = horizonY - (arcHeight * sin(.pi * sunPosition))
                         
                         path.addQuadCurve(
-                            to: CGPoint(x: endX, y: height),
+                            to: CGPoint(x: endX, y: horizonY),
                             control: CGPoint(x: controlX, y: controlY)
                         )
                     }
                     .stroke(
                         LinearGradient(
                             gradient: Gradient(colors: [
-                                .orange.opacity(0.8),
-                                .yellow.opacity(0.9),
-                                .orange.opacity(0.8)
+                                .orange.opacity(0.7),
+                                .yellow,
+                                .orange.opacity(0.7)
                             ]),
                             startPoint: .leading,
                             endPoint: .trailing
                         ),
                         style: StrokeStyle(lineWidth: 4, lineCap: .round)
                     )
-                    .shadow(color: .orange.opacity(0.3), radius: 2)
+                    .shadow(color: .yellow.opacity(0.5), radius: 3)
                 }
                 
-                // Sunrise marker with label
+                // Sunrise marker with label and icon
                 VStack(spacing: 2) {
                     Circle()
                         .fill(
@@ -1322,19 +1360,19 @@ struct SunPositionArc: View {
                                 gradient: Gradient(colors: [.orange.opacity(0.8), .orange]),
                                 center: .center,
                                 startRadius: 0,
-                                endRadius: 4
+                                endRadius: 6
                             )
                         )
-                        .frame(width: 8, height: 8)
-                        .shadow(color: .orange.opacity(0.6), radius: 2)
+                        .frame(width: 12, height: 12)
+                        .shadow(color: .orange.opacity(0.6), radius: 3)
                     
-                    Text("↑")
-                        .font(.caption2)
-                        .foregroundColor(.orange)
+                    Image(systemName: "sunrise.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(.orange.opacity(0.8))
                 }
-                .position(x: 0, y: height - 10)
+                .position(x: 30, y: horizonY + 5)
                 
-                // Sunset marker with label
+                // Sunset marker with label and icon
                 VStack(spacing: 2) {
                     Circle()
                         .fill(
@@ -1342,23 +1380,23 @@ struct SunPositionArc: View {
                                 gradient: Gradient(colors: [.red.opacity(0.8), .red]),
                                 center: .center,
                                 startRadius: 0,
-                                endRadius: 4
+                                endRadius: 6
                             )
                         )
-                        .frame(width: 8, height: 8)
-                        .shadow(color: .red.opacity(0.6), radius: 2)
+                        .frame(width: 12, height: 12)
+                        .shadow(color: .red.opacity(0.6), radius: 3)
                     
-                    Text("↓")
-                        .font(.caption2)
-                        .foregroundColor(.red)
+                    Image(systemName: "sunset.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(.red.opacity(0.8))
                 }
-                .position(x: width, y: height - 10)
+                .position(x: width - 30, y: horizonY + 5)
                 
                 // Sun position indicator - enhanced with glow and rays
                 let sunX = width * sunPosition
                 let sunY = isDaytime ?
-                    height - (arcHeight * sin(.pi * sunPosition)) :
-                    height + 5 // Below horizon when not daylight
+                    horizonY - (arcHeight * sin(.pi * sunPosition)) :
+                    horizonY + 10 // Below horizon when not daylight
                 
                 ZStack {
                     // Sun glow effect (outer layer)
@@ -1367,65 +1405,78 @@ struct SunPositionArc: View {
                             .fill(
                                 RadialGradient(
                                     gradient: Gradient(colors: [
-                                        .yellow.opacity(0.3),
-                                        .orange.opacity(0.1),
+                                        .yellow.opacity(0.4),
+                                        .orange.opacity(0.2),
                                         .clear
                                     ]),
                                     center: .center,
                                     startRadius: 0,
-                                    endRadius: 12
+                                    endRadius: 18
                                 )
                             )
-                            .frame(width: 24, height: 24)
+                            .frame(width: 36, height: 36)
                         
-                        // Sun rays
-                        ForEach(0..<8) { index in
+                        // Sun rays (longer and more visible)
+                        ForEach(0..<12) { index in
                             Rectangle()
-                                .fill(.yellow.opacity(0.5))
-                                .frame(width: 1, height: 6)
-                                .offset(y: -10)
-                                .rotationEffect(.degrees(Double(index) * 45))
+                                .fill(.yellow.opacity(0.6))
+                                .frame(width: 2, height: 10)
+                                .offset(y: -14)
+                                .rotationEffect(.degrees(Double(index) * 30))
                         }
                     }
                     
-                    // Main sun circle
+                    // Main sun circle (larger)
                     Circle()
                         .fill(
                             RadialGradient(
                                 gradient: Gradient(colors: [
-                                    .yellow.opacity(0.9),
-                                    isDaytime ? .yellow : .gray
+                                    .yellow,
+                                    isDaytime ? .orange : .gray
                                 ]),
                                 center: .center,
                                 startRadius: 0,
-                                endRadius: 8
+                                endRadius: 10
                             )
                         )
-                        .frame(width: 16, height: 16)
-                        .shadow(color: isDaytime ? .yellow.opacity(0.8) : .clear, radius: 4)
+                        .frame(width: 20, height: 20)
+                        .shadow(color: isDaytime ? .yellow.opacity(0.8) : .clear, radius: 6)
                     
                     // Sun highlight
                     Circle()
-                        .fill(.white.opacity(0.6))
-                        .frame(width: 6, height: 6)
-                        .offset(x: -2, y: -2)
+                        .fill(.white.opacity(0.7))
+                        .frame(width: 8, height: 8)
+                        .offset(x: -3, y: -3)
                 }
                 .position(x: sunX, y: sunY)
                 
-                // Current time label (only during daytime)
+                // Current time label (only during daytime) - positioned above the sun
                 if isDaytime {
                     Text(currentTimeString)
-                        .font(.caption2)
-                        .fontWeight(.semibold)
+                        .font(.caption)
+                        .fontWeight(.bold)
                         .foregroundColor(.primary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
                         .background(
                             Capsule()
                                 .fill(.ultraThinMaterial)
-                                .shadow(color: .black.opacity(0.1), radius: 2)
+                                .shadow(color: .black.opacity(0.15), radius: 3)
                         )
-                        .position(x: sunX, y: sunY - 25)
+                        .position(x: sunX, y: sunY - 35)
+                }
+                
+                // Zenith marker (noon position) - subtle indicator
+                if isDaytime && sunPosition > 0.3 && sunPosition < 0.7 {
+                    VStack(spacing: 2) {
+                        Text("☀︎")
+                            .font(.caption2)
+                            .foregroundColor(.yellow.opacity(0.5))
+                        Text("Noon")
+                            .font(.caption2)
+                            .foregroundColor(.secondary.opacity(0.6))
+                    }
+                    .position(x: width / 2, y: horizonY - arcHeight - 15)
                 }
             }
         }
@@ -1435,7 +1486,7 @@ struct SunPositionArc: View {
         let formatter = DateFormatter()
         formatter.timeStyle = .short
         formatter.timeZone = sunTimes.timeZone
-        return formatter.string(from: Date())
+        return formatter.string(from: currentTime)
     }
 }
 
@@ -1499,9 +1550,7 @@ struct LunarInfoView: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Current Moon Phase Display
             HStack(spacing: 16) {
-                // Moon Phase Visual
                 MoonPhaseVisual(phase: moonPhase)
                     .frame(width: 50, height: 50)
                 
@@ -1524,7 +1573,6 @@ struct LunarInfoView: View {
             
             Divider()
             
-            // Moonrise and Moonset Times
             if let moonTimes = moonTimes {
                 MoonTimesView(moonTimes: moonTimes, timeZone: timeZone)
             } else {
@@ -1535,7 +1583,6 @@ struct LunarInfoView: View {
             
             Divider()
             
-            // Next Moon Phase Information
             NextMoonPhaseView(currentPhase: moonPhase)
         }
     }
@@ -1549,12 +1596,10 @@ struct MoonPhaseVisual: View {
             let size = min(geometry.size.width, geometry.size.height)
             
             ZStack {
-                // Background circle (full moon)
                 Circle()
                     .fill(.gray.opacity(0.2))
                     .frame(width: size, height: size)
                 
-                // Illuminated portion
                 Circle()
                     .fill(
                         LinearGradient(
@@ -1569,7 +1614,6 @@ struct MoonPhaseVisual: View {
                             .frame(width: size, height: size)
                     )
                 
-                // Subtle border
                 Circle()
                     .stroke(.secondary.opacity(0.3), lineWidth: 1)
                     .frame(width: size, height: size)
@@ -1589,15 +1633,10 @@ struct MoonPhaseMask: View {
             let center = CGPoint(x: size / 2, y: size / 2)
             
             Path { path in
-                // Create the moon phase shape
                 if illumination <= 0.01 {
-                    // New moon - no illumination - create empty path
-                    // Don't return early, just leave path empty
                 } else if illumination >= 0.99 {
-                    // Full moon - complete circle
                     path.addEllipse(in: CGRect(x: 0, y: 0, width: size, height: size))
                 } else if illumination == 0.5 {
-                    // Quarter moon - half circle
                     path.move(to: CGPoint(x: center.x, y: 0))
                     path.addArc(
                         center: center,
@@ -1608,70 +1647,32 @@ struct MoonPhaseMask: View {
                     )
                     path.closeSubpath()
                 } else {
-                    // Crescent or gibbous moon
-                    let phase = illumination
-                    
-                    // Calculate the shape of the terminator (day/night boundary)
                     path.move(to: CGPoint(x: center.x, y: 0))
                     
+                    let ellipseWidth = size * (1 - 2 * illumination)
                     if isWaxing {
-                        // Waxing phases (crescent to gibbous)
-                        if phase < 0.5 {
-                            // Waxing crescent
-                            let ellipseWidth = size * (1 - 2 * phase)
-                            path.addEllipse(in: CGRect(
-                                x: center.x - ellipseWidth / 2,
-                                y: 0,
-                                width: ellipseWidth,
-                                height: size
-                            ))
-                            path.addArc(
-                                center: center,
-                                radius: radius,
-                                startAngle: .degrees(-90),
-                                endAngle: .degrees(90),
-                                clockwise: true
-                            )
-                        } else {
-                            // Waxing gibbous
-                            path.addEllipse(in: CGRect(x: 0, y: 0, width: size, height: size))
-                            let ellipseWidth = size * (2 * (1 - phase))
-                            path.addEllipse(in: CGRect(
-                                x: center.x - ellipseWidth / 2,
-                                y: 0,
-                                width: ellipseWidth,
-                                height: size
-                            ))
-                        }
+                        path.addEllipse(in: CGRect(
+                            x: center.x - ellipseWidth / 2,
+                            y: 0,
+                            width: ellipseWidth,
+                            height: size
+                        ))
+                        path.addArc(
+                            center: center,
+                            radius: radius,
+                            startAngle: .degrees(-90),
+                            endAngle: .degrees(90),
+                            clockwise: true
+                        )
                     } else {
-                        // Waning phases (gibbous to crescent)
-                        if phase > 0.5 {
-                            // Waning gibbous
-                            path.addEllipse(in: CGRect(x: 0, y: 0, width: size, height: size))
-                            let ellipseWidth = size * (2 * (1 - phase))
-                            path.addEllipse(in: CGRect(
-                                x: size - center.x - ellipseWidth / 2,
-                                y: 0,
-                                width: ellipseWidth,
-                                height: size
-                            ))
-                        } else {
-                            // Waning crescent
-                            let ellipseWidth = size * (1 - 2 * phase)
-                            path.addEllipse(in: CGRect(
-                                x: size - center.x - ellipseWidth / 2,
-                                y: 0,
-                                width: ellipseWidth,
-                                height: size
-                            ))
-                            path.addArc(
-                                center: center,
-                                radius: radius,
-                                startAngle: .degrees(-90),
-                                endAngle: .degrees(90),
-                                clockwise: false
-                            )
-                        }
+                        path.addEllipse(in: CGRect(x: 0, y: 0, width: size, height: size))
+                        let ellipseWidth = size * (2 * (1 - illumination))
+                        path.addEllipse(in: CGRect(
+                            x: size - center.x - ellipseWidth / 2,
+                            y: 0,
+                            width: ellipseWidth,
+                            height: size
+                        ))
                     }
                 }
             }
@@ -1713,7 +1714,6 @@ struct MoonTimesView: View {
                 
                 Spacer()
                 
-                // Timezone abbreviation in the center
                 Text(getCurrentTimeZoneAbbreviation())
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -1751,7 +1751,6 @@ struct MoonTimesView: View {
     }
     
     private func getCurrentTimeZoneAbbreviation() -> String {
-        // Get the current timezone abbreviation accounting for daylight saving
         return timeZone.abbreviation(for: Date()) ?? "Local"
     }
 }
@@ -1776,7 +1775,6 @@ struct NextMoonPhaseView: View {
                     .fontWeight(.semibold)
             }
             
-            // Only show "Next Full Moon" if it's different from the next phase
             if currentPhase.nextPhaseName != "Full Moon" {
                 HStack {
                     Text("Next Full Moon:")
@@ -1813,8 +1811,8 @@ struct LunarLocationRequiredView: View {
 // MARK: - Moon Calculation System
 struct MoonPhase {
     let name: String
-    let illumination: Double // 0.0 to 1.0
-    let age: Int // Days since new moon
+    let illumination: Double 
+    let age: Int 
     let isWaxing: Bool
     let nextPhaseName: String
     let daysToNextPhase: Int
@@ -1829,14 +1827,11 @@ struct MoonTimes {
 class MoonCalculator {
     
     static func getCurrentMoonPhase(for date: Date, timeZone: TimeZone = .current) -> MoonPhase {
-        // Convert date to Julian Day
         let julianDay = dateToJulianDay(date)
         
-        // Calculate moon phase
         let phase = calculateMoonPhase(julianDay: julianDay)
         let illumination = 0.5 * (1 - cos(2 * .pi * phase))
         
-        // Calculate age in days (moon cycle is ~29.53 days)
         let age = Int(phase * 29.53)
         
         let (name, isWaxing, nextPhase, daysToNext) = getMoonPhaseInfo(age: age, illumination: illumination)
@@ -1854,7 +1849,6 @@ class MoonCalculator {
     }
     
     static func calculateMoonTimes(for date: Date, latitude: Double, longitude: Double, timeZone: TimeZone) -> MoonTimes? {
-        // Set up calendar for the specific timezone
         var calendar = Calendar.current
         calendar.timeZone = timeZone
         
@@ -1868,23 +1862,18 @@ class MoonCalculator {
         print(" Latitude: \(latitude), Longitude: \(longitude)")
         print(" TimeZone: \(timeZone.identifier)")
         
-        // Check every 30 minutes throughout the day for more precision
         for halfHour in 0..<48 {
-            let currentTime = startOfDay.addingTimeInterval(Double(halfHour) * 1800) // 30 minutes = 1800 seconds
+            let currentTime = startOfDay.addingTimeInterval(Double(halfHour) * 1800) // 1800 seconds (30 minutes) 
             let currentAltitude = calculateMoonAltitude(for: currentTime, latitude: latitude, longitude: longitude, timeZone: timeZone)
             
             if let prevAlt = previousAltitude {
-                // Moonrise: altitude changes from negative to positive
                 if prevAlt < 0 && currentAltitude >= 0 && moonrise == nil {
-                    // Interpolate to find more precise time
                     let ratio = -prevAlt / (currentAltitude - prevAlt)
                     moonrise = currentTime.addingTimeInterval(-1800 + ratio * 1800)
                     print(" Found moonrise at: \(moonrise!)")
                 }
                 
-                // Moonset: altitude changes from positive to negative
                 if prevAlt >= 0 && currentAltitude < 0 && moonset == nil {
-                    // Interpolate to find more precise time
                     let ratio = -prevAlt / (currentAltitude - prevAlt)
                     moonset = currentTime.addingTimeInterval(-1800 + ratio * 1800)
                     print(" Found moonset at: \(moonset!)")
@@ -1893,8 +1882,7 @@ class MoonCalculator {
             
             previousAltitude = currentAltitude
             
-            // Debug: Print altitude for troubleshooting
-            if halfHour % 4 == 0 { // Every 2 hours
+            if halfHour % 4 == 0 { 
                 let formatter = DateFormatter()
                 formatter.timeStyle = .short
                 formatter.timeZone = timeZone
@@ -1906,17 +1894,14 @@ class MoonCalculator {
     }
     
     private static func dateToJulianDay(_ date: Date) -> Double {
-        // Convert to Julian Day (standard astronomical calculation)
         let timeInterval = date.timeIntervalSince1970
         let julianDay = (timeInterval / 86400.0) + 2440587.5
         return julianDay
     }
     
     private static func calculateMoonPhase(julianDay: Double) -> Double {
-        // Calculate moon phase based on Julian Day
-        // Reference: January 6, 2000 was a new moon
-        let newMoonReference = 2451550.1  // JD of new moon on Jan 6, 2000
-        let lunarCycle = 29.53058867      // Average lunar month in days
+        let newMoonReference = 2451550.1  
+        let lunarCycle = 29.53058867      
         
         let daysSinceNewMoon = julianDay - newMoonReference
         let cyclesSinceNewMoon = daysSinceNewMoon / lunarCycle
@@ -1926,14 +1911,11 @@ class MoonCalculator {
     }
     
     private static func calculateMoonAltitude(for date: Date, latitude: Double, longitude: Double, timeZone: TimeZone) -> Double {
-        // Convert date to UTC for astronomical calculations
         let utcDate = date
         let julianDay = dateToJulianDay(utcDate)
         
-        // Calculate moon's position (simplified)
         let moonPosition = calculateMoonPosition(julianDay: julianDay)
         
-        // Calculate local sidereal time for the given longitude and time
         let lst = calculateLocalSiderealTime(julianDay: julianDay, longitude: longitude)
         
         // Calculate hour angle (in degrees)
@@ -1943,56 +1925,44 @@ class MoonCalculator {
         while hourAngle > 180 { hourAngle -= 360 }
         while hourAngle < -180 { hourAngle += 360 }
         
-        // Convert to radians for trigonometric calculations
         let latRad = latitude * .pi / 180.0
         let decRad = moonPosition.declination * .pi / 180.0
         let haRad = hourAngle * .pi / 180.0
         
-        // Calculate altitude using spherical trigonometry
         let sinAlt = sin(latRad) * sin(decRad) + cos(latRad) * cos(decRad) * cos(haRad)
-        let altitudeRad = asin(max(-1.0, min(1.0, sinAlt))) // Clamp to valid range
+        let altitudeRad = asin(max(-1.0, min(1.0, sinAlt))) // asin expects value between -1 and 1
         let altitude = altitudeRad * 180.0 / .pi
         
-        // Apply atmospheric refraction correction for objects near horizon
         let refraction = if altitude > -1 && altitude < 15 {
             1.02 / tan((altitude + 10.3 / (altitude + 5.11)) * .pi / 180.0) / 60.0
         } else {
             0.0
         }
         
-        return altitude + refraction - 0.583 // Standard correction for moon's semidiameter and refraction
+        return altitude + refraction - 0.583 // correct for refraction at low altitudes and 0.583 offset
     }
     
     private static func calculateMoonPosition(julianDay: Double) -> (rightAscension: Double, declination: Double) {
-        // Simplified lunar position calculation
         let T = (julianDay - 2451545.0) / 36525.0
         
-        // Mean longitude of the Moon
         let L0 = normalizeAngle(218.3164477 + 481267.88123421 * T)
         
-        // Mean elongation of Moon from Sun
         let D = normalizeAngle(297.8501921 + 445267.1114034 * T)
         
-        // Sun's mean anomaly (not used in simplified calculation)
         let _ = normalizeAngle(357.5291092 + 35999.0502909 * T)
         
-        // Moon's mean anomaly
         let Mp = normalizeAngle(134.9633964 + 477198.8675055 * T)
         
-        // Argument of latitude
         let F = normalizeAngle(93.2720950 + 483202.0175233 * T)
         
-        // Calculate longitude and latitude corrections (main terms)
         let longitude = L0 + 6.289 * sin(Mp * .pi / 180.0) + 1.274 * sin((2 * D - Mp) * .pi / 180.0) + 0.658 * sin(2 * D * .pi / 180.0)
         let latitude = 5.128 * sin(F * .pi / 180.0)
         
-        // Convert to equatorial coordinates
         let obliquity = 23.4393 - 0.0000004 * (julianDay - 2451545.0)
         let obliquityRad = obliquity * .pi / 180.0
         let lonRad = longitude * .pi / 180.0
         let latRad = latitude * .pi / 180.0
         
-        // Right ascension and declination
         let ra = atan2(sin(lonRad) * cos(obliquityRad) - tan(latRad) * sin(obliquityRad), cos(lonRad)) * 180.0 / .pi
         let dec = asin(sin(latRad) * cos(obliquityRad) + cos(latRad) * sin(obliquityRad) * sin(lonRad)) * 180.0 / .pi
         
@@ -2000,14 +1970,9 @@ class MoonCalculator {
     }
     
     private static func calculateLocalSiderealTime(julianDay: Double, longitude: Double) -> Double {
-        // Calculate Greenwich Mean Sidereal Time
         let T = (julianDay - 2451545.0) / 36525.0
-        var gmst = 280.46061837 + 360.98564736629 * (julianDay - 2451545.0) + 0.000387933 * T * T - T * T * T / 38710000.0
+        let gmst = 280.46061837 + 360.98564736629 * (julianDay - 2451545.0) + 0.000387933 * T * T - T * T * T / 38710000.0
         
-        // Normalize GMST
-        gmst = normalizeAngle(gmst)
-        
-        // Convert to Local Sidereal Time
         let lst = normalizeAngle(gmst + longitude)
         
         return lst
@@ -2044,14 +2009,11 @@ class MoonCalculator {
     }
     
     private static func calculateDaysToNextFullMoon(age: Int) -> Int {
-        // Full moon occurs around day 14-15 of the lunar cycle
         let fullMoonDay = 15
         
         if age < fullMoonDay {
-            // We haven't reached this cycle's full moon yet
             return fullMoonDay - age
         } else {
-            // Full moon has passed, calculate days to next cycle's full moon
             let daysRemainingInCycle = 30 - age
             return daysRemainingInCycle + fullMoonDay
         }
