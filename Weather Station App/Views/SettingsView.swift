@@ -12,6 +12,7 @@ struct SettingsView: View {
     @StateObject private var menuBarManager = MenuBarManager.shared
     @StateObject private var appStateManager = AppStateManager.shared
     @StateObject private var launchAtLoginHelper = LaunchAtLoginHelper.shared
+    @StateObject private var credentialsSync = APICredentialsSync.shared
     @Environment(\.dismiss) private var dismiss
     
     @State private var applicationKey: String = ""
@@ -496,9 +497,16 @@ struct SettingsView: View {
                     }
                     
                     VStack(alignment: .leading, spacing: 16) {
-                        Text("API Configuration")
-                            .font(.title2)
-                            .fontWeight(.semibold)
+                        HStack {
+                            Text("API Configuration")
+                                .font(.title2)
+                                .fontWeight(.semibold)
+                            
+                            Spacer()
+                            
+                            // iCloud Sync Status Indicator
+                            iCloudSyncStatusView
+                        }
                         
                         VStack(alignment: .leading, spacing: 12) {
                             VStack(alignment: .leading, spacing: 6) {
@@ -515,6 +523,41 @@ struct SettingsView: View {
                                 SecureField("Enter Ecowitt API Key", text: $apiKey)
                                     .textFieldStyle(.roundedBorder)
                                     .font(.system(.body, design: .monospaced))
+                            }
+                            
+                            // iCloud Sync Toggle
+                            VStack(alignment: .leading, spacing: 8) {
+                                Toggle("Enable iCloud Sync", isOn: $credentialsSync.isSyncEnabled)
+                                    .toggleStyle(.checkbox)
+                                
+                                // iCloud Sync Info
+                                if credentialsSync.isSyncEnabled {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "info.circle")
+                                            .foregroundColor(.blue)
+                                            .font(.caption)
+                                        Text("API keys automatically sync across your devices via iCloud")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .padding(.vertical, 4)
+                                    .padding(.horizontal, 8)
+                                    .background(Color.blue.opacity(0.1))
+                                    .cornerRadius(6)
+                                } else {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "info.circle")
+                                            .foregroundColor(.secondary)
+                                            .font(.caption)
+                                        Text("Credentials are stored locally only")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .padding(.vertical, 4)
+                                    .padding(.horizontal, 8)
+                                    .background(Color.secondary.opacity(0.1))
+                                    .cornerRadius(6)
+                                }
                             }
                             
                             HStack(spacing: 12) {
@@ -675,6 +718,10 @@ struct SettingsView: View {
             apiKey = weatherService.credentials.apiKey
             unitSystemDisplayMode = UserDefaults.standard.unitSystemDisplayMode
             radarRefreshInterval = UserDefaults.standard.radarRefreshInterval
+            
+            // Debug: Verify credentialsSync is working
+            print("🔵 SettingsView appeared - credentialsSync.isSyncEnabled: \(credentialsSync.isSyncEnabled)")
+            print("🔵 SettingsView appeared - credentialsSync.syncStatus: \(credentialsSync.syncStatus)")
         }
         .sheet(isPresented: $showingAddStation) {
             AddWeatherStationView()
@@ -842,6 +889,90 @@ struct SettingsView: View {
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             NotificationCenter.default.post(name: .weatherDataUpdated, object: nil)
+        }
+    }
+    
+    // MARK: - iCloud Sync Status View
+    
+    @ViewBuilder
+    private var iCloudSyncStatusView: some View {
+        HStack(spacing: 6) {
+            switch credentialsSync.syncStatus {
+            case .disabled:
+                Image(systemName: "icloud.slash")
+                    .foregroundColor(.secondary)
+                Text("Disabled")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+            case .idle:
+                Image(systemName: "icloud")
+                    .foregroundColor(.secondary)
+                Text("iCloud")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+            case .syncing:
+                ProgressView()
+                    .scaleEffect(0.7)
+                    .frame(width: 16, height: 16)
+                Text("Syncing...")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+            case .success:
+                Image(systemName: "icloud.fill")
+                    .foregroundColor(.green)
+                if let lastSync = credentialsSync.lastSyncDate {
+                    Text(relativeTimeString(from: lastSync))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                } else {
+                    Text("Synced")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+            case .error(let message):
+                Image(systemName: "icloud.slash")
+                    .foregroundColor(.red)
+                Text("Error")
+                    .font(.caption)
+                    .foregroundColor(.red)
+            }
+            
+            // Only show force sync button if sync is enabled
+            if credentialsSync.isSyncEnabled {
+                Button(action: {
+                    credentialsSync.forceSynchronize()
+                }) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.caption)
+                }
+                .buttonStyle(.plain)
+                .help("Force sync with iCloud")
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color(NSColor.controlBackgroundColor))
+        .cornerRadius(6)
+    }
+    
+    private func relativeTimeString(from date: Date) -> String {
+        let seconds = Date().timeIntervalSince(date)
+        
+        if seconds < 60 {
+            return "Just now"
+        } else if seconds < 3600 {
+            let minutes = Int(seconds / 60)
+            return "\(minutes)m ago"
+        } else if seconds < 86400 {
+            let hours = Int(seconds / 3600)
+            return "\(hours)h ago"
+        } else {
+            let days = Int(seconds / 86400)
+            return "\(days)d ago"
         }
     }
 }

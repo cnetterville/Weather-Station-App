@@ -4,4 +4,25 @@
    <FileRef
       location = "self:">
    </FileRef>
+   <FileRef
+      location = "group:APICredentialsSync.swift">
+   </FileRef>
+   <FileRef
+      location = "group:iCloud-Sync-Setup.md">
+   </FileRef>
+   <FileRef
+      location = "group:iCloud-Sync-README.md">
+   </FileRef>
+   <FileRef
+      location = "group:IMPLEMENTATION_CHECKLIST.md">
+   </FileRef>
+   <FileRef
+      location = "group:iCloud-Sync-Diagrams.md">
+   </FileRef>
+   <FileRef
+      location = "group:SUMMARY.md">
+   </FileRef>
+   <FileRef
+      location = "group:QUICK_REFERENCE.md">
+   </FileRef>
 </Workspace>

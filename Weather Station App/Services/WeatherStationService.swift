@@ -64,6 +64,9 @@ class WeatherStationService: ObservableObject {
         
         // PHASE 1: Initialize memory management
         setupMemoryManagement()
+        
+        // Setup observer for iCloud credential changes
+        setupCredentialChangeObserver()
     }
     
     deinit {
@@ -1378,23 +1381,50 @@ class WeatherStationService: ObservableObject {
     }
     
     func updateCredentials(applicationKey: String, apiKey: String) {
-        credentials = APICredentials(applicationKey: applicationKey, apiKey: apiKey)
-        saveCredentials()
+        let newCredentials = APICredentials(applicationKey: applicationKey, apiKey: apiKey)
+        credentials = newCredentials
+        
+        // Use iCloud sync service to save credentials
+        APICredentialsSync.shared.saveCredentials(newCredentials)
     }
     
     // MARK: - Persistence
     
     private func saveCredentials() {
-        if let data = try? JSONEncoder().encode(credentials) {
-            UserDefaults.standard.set(data, forKey: "WeatherStationCredentials")
-        }
+        // Use iCloud sync service to save credentials
+        APICredentialsSync.shared.saveCredentials(credentials)
     }
     
     private func loadCredentials() {
-        if let data = UserDefaults.standard.data(forKey: "WeatherStationCredentials"),
-           let savedCredentials = try? JSONDecoder().decode(APICredentials.self, from: data) {
-            credentials = savedCredentials
+        // Load credentials from iCloud sync service
+        credentials = APICredentialsSync.shared.loadCredentials()
+    }
+    
+    /// Setup observer to handle credential changes from iCloud
+    private func setupCredentialChangeObserver() {
+        NotificationCenter.default.addObserver(
+            forName: .apiCredentialsDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self = self,
+                  let userInfo = notification.userInfo,
+                  let newCredentials = userInfo["credentials"] as? APICredentials else {
+                return
+            }
+            
+            // Update local credentials when changed from another device
+            self.credentials = newCredentials
+            self.logSync("✅ Credentials updated from iCloud")
         }
+    }
+    
+    // MARK: - Sync Logging
+    
+    private func logSync(_ message: String) {
+        #if DEBUG
+        print("[WeatherStationService] \(message)")
+        #endif
     }
     
     private func saveWeatherStations() {
