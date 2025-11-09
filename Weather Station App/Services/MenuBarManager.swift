@@ -544,7 +544,29 @@ class MenuBarManager: ObservableObject {
         guard let statusItem = statusItem else { return }
         
         let title = getMenuBarTitle()
-        statusItem.button?.title = title
+        
+        // Check if title contains bullet points for alerts
+        if title.contains("●") {
+            // Create attributed string with red bullets
+            let attributedString = NSMutableAttributedString(string: title)
+            
+            // Find all bullet points and make them red (without changing font size)
+            var searchRange = NSRange(location: 0, length: title.count)
+            while searchRange.length > 0 {
+                let range = (title as NSString).range(of: "●", options: [], range: searchRange)
+                if range.location == NSNotFound {
+                    break
+                }
+                // Make bullet red only
+                attributedString.addAttribute(.foregroundColor, value: NSColor.red, range: range)
+                searchRange = NSRange(location: range.location + range.length, length: title.count - range.location - range.length)
+            }
+            
+            statusItem.button?.attributedTitle = attributedString
+        } else {
+            // No alerts, use regular title
+            statusItem.button?.attributedTitle = NSAttributedString(string: title)
+        }
         
         // Update tooltip with detailed information
         statusItem.button?.toolTip = getMenuBarTooltip()
@@ -569,18 +591,20 @@ class MenuBarManager: ObservableObject {
         guard let weatherData = weatherService.weatherData[station.macAddress],
               let temp = Double(weatherData.outdoor.temperature.value) else {
             let displayLabel = station.displayLabelForMenuBar
-            return showStationName ? "\(displayLabel): Loading..." : "Loading..."
+            let alertIndicator = getAlertIndicator(for: station)
+            return showStationName ? "\(alertIndicator)\(displayLabel): Loading..." : "Loading..."
         }
         
         let tempString = formatTemperature(temp)
         let weatherIcon = getWeatherIconForStation(weatherData, station: station)
+        let alertIndicator = getAlertIndicator(for: station)
         
         let baseTitle: String
         if showStationName && weatherService.weatherStations.count > 1 {
             let displayLabel = station.displayLabelForMenuBar
-            baseTitle = "\(displayLabel): \(weatherIcon)\(tempString)"
+            baseTitle = "\(alertIndicator)\(displayLabel): \(weatherIcon)\(tempString)"
         } else {
-            baseTitle = "\(weatherIcon)\(tempString)"
+            baseTitle = "\(alertIndicator)\(weatherIcon)\(tempString)"
         }
         
         return baseTitle
@@ -600,12 +624,13 @@ class MenuBarManager: ObservableObject {
                let temp = Double(weatherData.outdoor.temperature.value) {
                 let tempString = formatTemperature(temp)
                 let weatherIcon = getWeatherIconForStation(weatherData, station: station)
+                let alertIndicator = getAlertIndicator(for: station)
                 let displayLabel = station.displayLabelForMenuBar
                 
                 // Use even shorter labels for "all stations" mode
                 let shortLabel = displayLabel.count > 4 ? 
                     String(displayLabel.prefix(4)) + ":" : displayLabel + ":"
-                tempStrings.append("\(shortLabel)\(weatherIcon)\(tempString)")
+                tempStrings.append("\(alertIndicator)\(shortLabel)\(weatherIcon)\(tempString)")
             }
         }
         
@@ -639,13 +664,14 @@ class MenuBarManager: ObservableObject {
         
         let tempString = formatTemperature(temp)
         let weatherIcon = getWeatherIconForStation(weatherData, station: station)
+        let alertIndicator = getAlertIndicator(for: station)
         
         let baseTitle: String
         if showStationName {
             let displayLabel = station.displayLabelForMenuBar
-            baseTitle = "\(displayLabel): \(weatherIcon)\(tempString)"
+            baseTitle = "\(alertIndicator)\(displayLabel): \(weatherIcon)\(tempString)"
         } else {
-            baseTitle = "\(weatherIcon)\(tempString)"
+            baseTitle = "\(alertIndicator)\(weatherIcon)\(tempString)"
         }
         
         return baseTitle
@@ -1142,6 +1168,18 @@ class MenuBarManager: ObservableObject {
         
         var tooltipLines: [String] = []
         
+        // Weather alerts (if any)
+        if let forecast = forecastService.getForecast(for: station), forecast.hasActiveAlerts {
+            tooltipLines.append("⚠️ WEATHER ALERTS ACTIVE")
+            for alert in forecast.weatherAlerts.prefix(3) {
+                tooltipLines.append("  • \(alert.eventName)")
+            }
+            if forecast.weatherAlerts.count > 3 {
+                tooltipLines.append("  ... and \(forecast.weatherAlerts.count - 3) more")
+            }
+            tooltipLines.append("")
+        }
+        
         // Station name
         tooltipLines.append("📍 \(station.name)")
         tooltipLines.append("")
@@ -1216,13 +1254,33 @@ class MenuBarManager: ObservableObject {
         tooltipLines.append("All Active Stations")
         tooltipLines.append("")
         
+        // Check for any alerts across all stations
+        let stationsWithAlerts = stations.filter { station in
+            if let forecast = forecastService.getForecast(for: station) {
+                return forecast.hasActiveAlerts
+            }
+            return false
+        }
+        
+        if !stationsWithAlerts.isEmpty {
+            tooltipLines.append("⚠️ Weather Alerts Active:")
+            for station in stationsWithAlerts {
+                if let forecast = forecastService.getForecast(for: station) {
+                    let alertCount = forecast.weatherAlerts.count
+                    tooltipLines.append("  • \(station.name): \(alertCount) alert\(alertCount == 1 ? "" : "s")")
+                }
+            }
+            tooltipLines.append("")
+        }
+        
         for station in stations {
             if let weatherData = weatherService.weatherData[station.macAddress],
                let temp = Double(weatherData.outdoor.temperature.value) {
                 let tempString = formatTemperature(temp)
                 let weatherIcon = getWeatherIconForStation(weatherData, station: station)
+                let alertIndicator = getAlertIndicator(for: station)
                 
-                var stationLine = "\(weatherIcon) \(station.name): \(tempString)"
+                var stationLine = "\(alertIndicator)\(weatherIcon) \(station.name): \(tempString)"
                 
                 // Add last update time for this station
                 if let lastUpdated = station.lastUpdated {
@@ -1267,6 +1325,18 @@ class MenuBarManager: ObservableObject {
         tooltipLines.append("🔄 Cycling Mode (Station \(currentCycleIndex + 1) of \(stations.count))")
         tooltipLines.append("")
         
+        // Weather alerts (if any)
+        if let forecast = forecastService.getForecast(for: station), forecast.hasActiveAlerts {
+            tooltipLines.append("⚠️ WEATHER ALERTS ACTIVE")
+            for alert in forecast.weatherAlerts.prefix(2) {
+                tooltipLines.append("  • \(alert.eventName)")
+            }
+            if forecast.weatherAlerts.count > 2 {
+                tooltipLines.append("  ... and \(forecast.weatherAlerts.count - 2) more")
+            }
+            tooltipLines.append("")
+        }
+        
         // Station name
         tooltipLines.append("📍 \(station.name)")
         tooltipLines.append("")
@@ -1289,14 +1359,15 @@ class MenuBarManager: ObservableObject {
         
         tooltipLines.append("")
         
-        // Show all stations in cycle
+        // Show all stations in cycle with alert indicators
         tooltipLines.append("Other Stations:")
         for (index, otherStation) in stations.enumerated() {
             if index != currentCycleIndex {
+                let alertIndicator = getAlertIndicator(for: otherStation)
                 if let otherData = weatherService.weatherData[otherStation.macAddress],
                    let otherTemp = Double(otherData.outdoor.temperature.value) {
                     let otherTempString = formatTemperature(otherTemp)
-                    tooltipLines.append("  • \(otherStation.name): \(otherTempString)")
+                    tooltipLines.append("  • \(alertIndicator)\(otherStation.name): \(otherTempString)")
                 }
             }
         }
@@ -1401,6 +1472,21 @@ class MenuBarManager: ObservableObject {
             NSApp.setActivationPolicy(.regular)
             logUI("Dock icon shown")
         }
+    }
+    
+    // MARK: - Weather Alert Indicator
+    
+    private func getAlertIndicator(for station: WeatherStation) -> String {
+        guard let forecast = forecastService.getForecast(for: station) else {
+            return ""
+        }
+        
+        // Check if there are any active alerts
+        if forecast.hasActiveAlerts {
+            return "● " // Medium black circle (will be colored red and sized smaller)
+        }
+        
+        return ""
     }
 }
 
