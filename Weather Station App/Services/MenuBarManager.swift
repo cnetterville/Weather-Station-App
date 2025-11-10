@@ -702,7 +702,7 @@ class MenuBarManager: ObservableObject {
         
         // Priority 5: Night time (lowest priority) - now using actual sunset/sunrise
         if showNightIcon && isNightTime(weatherData, for: station) {
-            let icon = getNightIconString()
+            let icon = getMoonPhaseEmojiForStation(station)
             logWeather("  Selected night icon: \(icon)")
             return icon
         }
@@ -728,7 +728,19 @@ class MenuBarManager: ObservableObject {
         let adaptedIcon = WeatherIconHelper.adaptIconForTimeOfDay(baseIcon, station: station)
         
         // Convert the SF Symbol to an emoji equivalent for menubar display
-        return convertSFSymbolToEmoji(adaptedIcon)
+        let emoji = convertSFSymbolToEmoji(adaptedIcon)
+        
+        // If it's night and we got a moon icon (nil), use moon phase emoji
+        if emoji == nil && (adaptedIcon == "moon.stars.fill" || adaptedIcon == "moon.fill") {
+            if let latitude = station.latitude, let longitude = station.longitude,
+               let sunTimes = SunCalculator.calculateSunTimes(for: Date(), latitude: latitude, longitude: longitude, timeZone: station.timeZone),
+               !sunTimes.isCurrentlyDaylight {
+                let moonPhase = MoonCalculator.getCurrentMoonPhase(for: Date(), timeZone: station.timeZone)
+                return moonPhase.emoji
+            }
+        }
+        
+        return emoji
     }
     
     // Helper method to convert SF Symbols to appropriate emoji for menubar
@@ -740,11 +752,10 @@ class MenuBarManager: ObservableObject {
         case "cloud.sun.fill":
             return "⛅"
             
-        // Night icons
-        case "moon.stars.fill":
-            return "🌙"
-        case "moon.fill":
-            return "🌙"
+        // Night icons - will be handled by moon phase in getWeatherIconForStation
+        case "moon.stars.fill", "moon.fill":
+            // This will be replaced with moon phase emoji in the calling function
+            return nil // Signal that we need moon phase emoji
         case "cloud.moon.fill":
             return "☁️" // Cloudy night still uses cloud emoji
         case "cloud.moon.rain.fill":
@@ -856,6 +867,16 @@ class MenuBarManager: ObservableObject {
     
     private func getNightIconString() -> String {
         return "🌙" // Moon emoji
+    }
+    
+    // NEW: Get moon phase emoji for the menu bar at night
+    private func getMoonPhaseEmojiForStation(_ station: WeatherStation) -> String {
+        guard let _ = station.latitude, let _ = station.longitude else {
+            return "🌙" // Default moon emoji if no location
+        }
+        
+        let moonPhase = MoonCalculator.getCurrentMoonPhase(for: Date(), timeZone: station.timeZone)
+        return moonPhase.emoji
     }
     
     private func getCloudyIconString() -> String {
@@ -994,6 +1015,12 @@ class MenuBarManager: ObservableObject {
         // Use solar radiation for nighttime detection as fallback
         // Very low solar radiation indicates true nighttime
         return solarValue < 50.0 // Nighttime threshold
+    }
+    
+    // Helper to get moon phase emoji for a station (for fallback scenarios)
+    private func getMoonPhaseEmojiForStationFallback(_ weatherData: WeatherStationData) -> String {
+        // Without station context, return default moon emoji
+        return "🌙"
     }
     
     private func setupCyclingTimer() {

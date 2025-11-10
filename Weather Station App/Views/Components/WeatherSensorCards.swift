@@ -31,6 +31,29 @@ struct OutdoorTemperatureCard: View {
         return WeatherIconHelper.adaptIconForTimeOfDay(baseIcon, station: station)
     }
     
+    // NEW: Get moon phase emoji for nighttime display
+    private func getMoonPhaseEmoji() -> String {
+        guard let _ = station.latitude, let _ = station.longitude else {
+            return "🌙" // Default moon if no location
+        }
+        
+        let moonPhase = MoonCalculator.getCurrentMoonPhase(for: Date(), timeZone: station.timeZone)
+        return moonPhase.emoji
+    }
+    
+    // NEW: Check if it's currently nighttime
+    private func isNighttime() -> Bool {
+        guard let latitude = station.latitude, let longitude = station.longitude else {
+            return false
+        }
+        
+        if let sunTimes = SunCalculator.calculateSunTimes(for: Date(), latitude: latitude, longitude: longitude, timeZone: station.timeZone) {
+            return !sunTimes.isCurrentlyDaylight
+        }
+        
+        return false
+    }
+    
     // Get today's forecast description
     private func getTodaysForecastDescription() -> String {
         guard let forecast = WeatherForecastService.shared.getForecast(for: station) else {
@@ -159,9 +182,17 @@ struct OutdoorTemperatureCard: View {
                         Text("Today's Forecast")
                             .font(.caption)
                             .foregroundColor(.secondary)
-                        Image(systemName: getTodaysForecastIcon())
-                            .font(.system(size: 32))
-                            .foregroundColor(.blue)
+                        
+                        // Show moon phase emoji at night, otherwise forecast icon
+                        if isNighttime() {
+                            Text(getMoonPhaseEmoji())
+                                .font(.system(size: 32))
+                        } else {
+                            Image(systemName: getTodaysForecastIcon())
+                                .font(.system(size: 32))
+                                .foregroundColor(.blue)
+                        }
+                        
                         Text(getTodaysForecastDescription())
                             .font(.caption2)
                             .foregroundColor(.secondary)

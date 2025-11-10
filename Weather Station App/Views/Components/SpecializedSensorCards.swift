@@ -1583,6 +1583,9 @@ struct LunarInfoView: View {
                     Text("Age: \(moonPhase.age) days")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                    
+                    Text(moonPhase.emoji)
+                        .font(.title)
                 }
                 
                 Spacer()
@@ -1834,6 +1837,33 @@ struct MoonPhase {
     let nextPhaseName: String
     let daysToNextPhase: Int
     let daysToNextFullMoon: Int
+    
+    // MARK: - Moon Phase Emoji
+    
+    /// Returns the appropriate moon phase emoji based on the current phase
+    var emoji: String {
+        // Moon phase emojis based on age (0-29 days)
+        switch age {
+        case 0...1:
+            return "🌑" // New Moon
+        case 2...6:
+            return "🌒" // Waxing Crescent
+        case 7...8:
+            return "🌓" // First Quarter
+        case 9...13:
+            return "🌔" // Waxing Gibbous
+        case 14...15:
+            return "🌕" // Full Moon
+        case 16...20:
+            return "🌖" // Waning Gibbous
+        case 21...22:
+            return "🌗" // Last Quarter
+        case 23...28:
+            return "🌘" // Waning Crescent
+        default:
+            return "🌑" // New Moon (for day 29+)
+        }
+    }
 }
 
 struct MoonTimes {
