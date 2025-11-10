@@ -1161,7 +1161,7 @@ struct SunTimesView: View {
                 }
             }
             
-            // Tomorrow's sunrise and sunset - More compact horizontal layout
+            // Tomorrow's sunrise and sunset
             if let latitude = station.latitude, let longitude = station.longitude {
                 let calendar = Calendar.current
                 let tomorrow = calendar.date(byAdding: .day, value: 1, to: Date()) ?? Date()
@@ -1170,40 +1170,57 @@ struct SunTimesView: View {
                     Divider()
                         .padding(.vertical, 2) 
             
-                    VStack(alignment: .leading, spacing: 4) { 
+                    VStack(alignment: .leading, spacing: 6) { 
                         Text("Tomorrow")
                             .font(.caption)
                             .foregroundColor(.secondary)
                             .fontWeight(.semibold)
                         
-                        // Compact horizontal layout for tomorrow's data with clear labels
-                        HStack(spacing: 16) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Sunrise \(tomorrowSunTimes.formattedSunrise)")
-                                    .font(.caption)
-                                    .fontWeight(.semibold)
-                                Text("Sunset \(tomorrowSunTimes.formattedSunset)")
+                        // Sunrise and sunset times in a clean row
+                        HStack(spacing: 12) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "sunrise.fill")
+                                    .foregroundColor(.orange)
+                                    .font(.caption2)
+                                Text("Sunrise")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                Text(tomorrowSunTimes.formattedSunrise)
                                     .font(.caption)
                                     .fontWeight(.semibold)
                             }
                             
                             Spacer()
                             
-                            VStack(alignment: .trailing, spacing: 2) {
-                                Text("Day Length:")
+                            HStack(spacing: 4) {
+                                Image(systemName: "sunset.fill")
+                                    .foregroundColor(.red)
+                                    .font(.caption2)
+                                Text("Sunset")
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
-                                Text(tomorrowSunTimes.formattedDayLength)
+                                Text(tomorrowSunTimes.formattedSunset)
                                     .font(.caption)
                                     .fontWeight(.semibold)
-                                
-                                // Day length difference display using computed property
-                                if let diff = tomorrowDayLengthDifference {
-                                    Text(diff.changeText)
-                                        .font(.caption2)
-                                        .fontWeight(.semibold)
-                                        .foregroundColor(diff.changeColor)
-                                }
+                            }
+                        }
+                        
+                        // Day length and difference in a separate clean row
+                        HStack(spacing: 8) {
+                            Text("Day Length:")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                            Text(tomorrowSunTimes.formattedDayLength)
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                            
+                            Spacer()
+                            
+                            if let diff = tomorrowDayLengthDifference {
+                                Text(diff.changeText)
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(diff.changeColor)
                             }
                         }
                     }
