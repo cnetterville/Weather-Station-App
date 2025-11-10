@@ -82,6 +82,11 @@ struct Weather_Station_AppApp: App {
                     // Disable automatic animations globally
                     NSAnimationContext.current.duration = 0
                     
+                    // Configure window to save frame automatically
+                    if let window = NSApp.mainWindow ?? NSApp.windows.first(where: { $0.contentView != nil }) {
+                        window.setFrameAutosaveName("MainWindow")
+                    }
+                    
                     logSuccess("ContentView appeared")
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .showMainWindow)) { _ in
@@ -110,7 +115,6 @@ struct Weather_Station_AppApp: App {
                     }
                 }
         }
-        .windowResizability(.contentMinSize)
         .defaultSize(width: 1200, height: 800)
         .commands {
             // Add menu bar commands
@@ -129,6 +133,5 @@ struct Weather_Station_AppApp: App {
                 .keyboardShortcut("q", modifiers: [.command])
             }
         }
-        .windowToolbarStyle(.unified(showsTitle: true))
     }
 }
