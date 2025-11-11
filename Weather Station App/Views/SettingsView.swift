@@ -258,6 +258,37 @@ struct SettingsView: View {
                                                 Toggle("Show rain icon when raining", isOn: $menuBarManager.showRainIcon)
                                                     .toggleStyle(.checkbox)
                                                 
+                                                Divider()
+                                                    .padding(.vertical, 4)
+                                                
+                                                Text("Weather Icons:")
+                                                    .font(.subheadline)
+                                                    .fontWeight(.medium)
+                                                
+                                                VStack(alignment: .leading, spacing: 6) {
+                                                    Toggle("Show rain icon when raining 💧", isOn: $menuBarManager.showRainIcon)
+                                                        .toggleStyle(.checkbox)
+                                                    
+                                                    Toggle("Show sun icon when sunny ☀️", isOn: $menuBarManager.showUVIcon)
+                                                        .toggleStyle(.checkbox)
+                                                    
+                                                    Toggle("Show cloud icon when cloudy ☁️", isOn: $menuBarManager.showCloudyIcon)
+                                                        .toggleStyle(.checkbox)
+                                                    
+                                                    Toggle("Show moon phase at night 🌙", isOn: $menuBarManager.showNightIcon)
+                                                        .toggleStyle(.checkbox)
+                                                }
+                                                
+                                                HStack(spacing: 6) {
+                                                    Image(systemName: "info.circle")
+                                                        .foregroundColor(.blue)
+                                                        .font(.caption)
+                                                    Text("Icons display based on current weather conditions (priority: rain > sun > clouds > moon)")
+                                                        .font(.caption)
+                                                        .foregroundColor(.secondary)
+                                                }
+                                                .padding(.top, 4)
+                                                
                                                 if !menuBarManager.availableStations.isEmpty {
                                                     Divider()
                                                         .padding(.vertical, 4)
@@ -535,7 +566,6 @@ struct SettingsView: View {
                                     HStack(spacing: 6) {
                                         Image(systemName: "info.circle")
                                             .foregroundColor(.blue)
-                                            .font(.caption)
                                         Text("API keys automatically sync across your devices via iCloud")
                                             .font(.caption)
                                             .foregroundColor(.secondary)
@@ -548,7 +578,6 @@ struct SettingsView: View {
                                     HStack(spacing: 6) {
                                         Image(systemName: "info.circle")
                                             .foregroundColor(.secondary)
-                                            .font(.caption)
                                         Text("Credentials are stored locally only")
                                             .font(.caption)
                                             .foregroundColor(.secondary)
