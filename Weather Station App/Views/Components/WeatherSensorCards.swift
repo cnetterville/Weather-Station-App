@@ -179,7 +179,7 @@ struct OutdoorTemperatureCard: View {
                     
                     // Today's Forecast - centered
                     VStack(alignment: .center, spacing: 4) {
-                        Text("Today's Forecast")
+                        Text(isNighttime() ? "Tonight's Forecast" : "Today's Forecast")
                             .font(.caption)
                             .foregroundColor(.secondary)
                         

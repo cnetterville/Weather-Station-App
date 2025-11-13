@@ -366,6 +366,19 @@ struct ExpandedForecastDetails: View {
     let station: WeatherStation
     @StateObject private var forecastService = WeatherForecastService.shared
     
+    // Check if it's currently nighttime
+    private func isNighttime() -> Bool {
+        guard let latitude = station.latitude, let longitude = station.longitude else {
+            return false
+        }
+        
+        if let sunTimes = SunCalculator.calculateSunTimes(for: Date(), latitude: latitude, longitude: longitude, timeZone: station.timeZone) {
+            return !sunTimes.isCurrentlyDaylight
+        }
+        
+        return false
+    }
+    
     private var hourlyForecasts: [HourlyWeatherForecast] {
         guard let weatherForecast = forecastService.getForecast(for: station) else {
             return []
@@ -376,7 +389,7 @@ struct ExpandedForecastDetails: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if forecast.isToday, let restOfDay = forecast.restOfDayForecast {
-                RestOfDaySection(restOfDay: restOfDay)
+                RestOfDaySection(restOfDay: restOfDay, isNighttime: isNighttime())
                 Divider()
             }
             
@@ -558,15 +571,16 @@ struct HourlyForecastItem: View {
 
 struct RestOfDaySection: View {
     let restOfDay: DaypartForecast
+    let isNighttime: Bool
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Header
             HStack {
-                Image(systemName: "sun.horizon.fill")
+                Image(systemName: isNighttime ? "moon.stars.fill" : "sun.horizon.fill")
                     .font(.caption)
-                    .foregroundColor(.orange)
-                Text("Rest of Day")
+                    .foregroundColor(isNighttime ? .indigo : .orange)
+                Text(isNighttime ? "Rest of Tonight" : "Rest of Day")
                     .font(.caption)
                     .fontWeight(.semibold)
                     .foregroundColor(.secondary)
@@ -688,10 +702,10 @@ struct RestOfDaySection: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(Color.orange.opacity(0.08))
+                .fill((isNighttime ? Color.indigo : Color.orange).opacity(0.08))
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.orange.opacity(0.2), lineWidth: 1)
+                        .stroke((isNighttime ? Color.indigo : Color.orange).opacity(0.2), lineWidth: 1)
                 )
         )
     }
@@ -702,6 +716,27 @@ struct ForecastDayRow: View {
     let station: WeatherStation
     let isFirst: Bool
     let isExpanded: Bool
+    
+    // Check if it's currently nighttime
+    private func isNighttime() -> Bool {
+        guard let latitude = station.latitude, let longitude = station.longitude else {
+            return false
+        }
+        
+        if let sunTimes = SunCalculator.calculateSunTimes(for: Date(), latitude: latitude, longitude: longitude, timeZone: station.timeZone) {
+            return !sunTimes.isCurrentlyDaylight
+        }
+        
+        return false
+    }
+    
+    private var displayDay: String {
+        if forecast.isToday {
+            return isNighttime() ? "Tonight" : "Today"
+        } else {
+            return forecast.shortDayOfWeek
+        }
+    }
     
     private var displayIcon: String {
         // Only apply night icon conversion for today's forecast
@@ -716,10 +751,10 @@ struct ForecastDayRow: View {
             // Top row: Day, Icon, Description, Temperature
             HStack(spacing: 8) {
                 // Day
-                Text(forecast.displayDay)
+                Text(displayDay)
                     .font(.system(size: isFirst ? 15 : 13, weight: isFirst ? .bold : .medium))
                     .foregroundColor(isFirst ? .primary : .secondary)
-                    .frame(width: 45, alignment: .leading)
+                    .frame(width: 60, alignment: .leading)
                 
                 // Weather icon
                 Image(systemName: displayIcon)
@@ -771,10 +806,10 @@ struct ForecastDayRow: View {
                     Text(forecast.monthDay)
                         .font(.caption2)
                         .foregroundColor(.secondary)
-                        .frame(width: 45, alignment: .leading)
+                        .frame(width: 60, alignment: .leading)
                 } else {
                     Spacer()
-                        .frame(width: 45)
+                        .frame(width: 60)
                 }
                 
                 // Precipitation amount and/or probability

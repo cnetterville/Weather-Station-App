@@ -13,6 +13,19 @@ struct WindCard: View {
     let onTitleChange: (String) -> Void
     let getDailyWindStats: () -> DailyWindStats?
     
+    // Check if it's currently nighttime
+    private func isNighttime() -> Bool {
+        guard let latitude = station.latitude, let longitude = station.longitude else {
+            return false
+        }
+        
+        if let sunTimes = SunCalculator.calculateSunTimes(for: Date(), latitude: latitude, longitude: longitude, timeZone: station.timeZone) {
+            return !sunTimes.isCurrentlyDaylight
+        }
+        
+        return false
+    }
+    
     var body: some View {
         EditableWeatherCard(
             title: .constant(station.customLabels.wind),
@@ -55,7 +68,7 @@ struct WindCard: View {
                 
                 // Daily Wind Maximums Section
                 if let windStats = getDailyWindStats() {
-                    DailyWindMaximumsView(windStats: windStats)
+                    DailyWindMaximumsView(windStats: windStats, isNighttime: isNighttime())
                     Divider()
                 }
                 
@@ -238,10 +251,11 @@ struct CompassLabel: View {
 
 struct DailyWindMaximumsView: View {
     let windStats: DailyWindStats
+    let isNighttime: Bool
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Today's Maximum")
+            Text(isNighttime ? "Tonight's Maximum" : "Today's Maximum")
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .fontWeight(.semibold)
@@ -354,6 +368,19 @@ struct PressureCard: View {
     let onTitleChange: (String) -> Void
     let getDailyPressureStats: () -> DailyPressureStats?
     
+    // Check if it's currently nighttime
+    private func isNighttime() -> Bool {
+        guard let latitude = station.latitude, let longitude = station.longitude else {
+            return false
+        }
+        
+        if let sunTimes = SunCalculator.calculateSunTimes(for: Date(), latitude: latitude, longitude: longitude, timeZone: station.timeZone) {
+            return !sunTimes.isCurrentlyDaylight
+        }
+        
+        return false
+    }
+    
     var body: some View {
         EditableWeatherCard(
             title: .constant(station.customLabels.pressure),
@@ -391,7 +418,8 @@ struct PressureCard: View {
                 if let pressureStats = getDailyPressureStats() {
                     DailyPressureRangeView(
                         pressureStats: pressureStats,
-                        currentPressure: Double(data.pressure.relative.value) ?? 0.0
+                        currentPressure: Double(data.pressure.relative.value) ?? 0.0,
+                        isNighttime: isNighttime()
                     )
                 } else {
                     // Fallback when no high/low data available
@@ -550,10 +578,11 @@ struct PressureGaugeView: View {
 struct DailyPressureRangeView: View {
     let pressureStats: DailyPressureStats
     let currentPressure: Double
+    let isNighttime: Bool
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Today's Range")
+            Text(isNighttime ? "Tonight's Range" : "Today's Range")
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .fontWeight(.semibold)
@@ -956,6 +985,12 @@ struct AirQualityCard: View {
     let onTitleChange: (String) -> Void
     let getDailyPM25Stats: () -> DailyPM25Stats?
     
+    // Note: This card doesn't have station access, so we'll use a simple time check
+    private func isNighttime() -> Bool {
+        let hour = Calendar.current.component(.hour, from: Date())
+        return hour >= 18 || hour < 6
+    }
+    
     var body: some View {
         EditableWeatherCard(
             title: .constant(title),
@@ -1002,12 +1037,13 @@ struct AirQualityCard: View {
                     DailyAirQualityRangeView(
                         pm25Stats: pm25Stats,
                         currentPM25: Double(data.pm25.value) ?? 0.0,
-                        currentAQI: Int(data.realTimeAqi.value) ?? 0
+                        currentAQI: Int(data.realTimeAqi.value) ?? 0,
+                        isNighttime: isNighttime()
                     )
                 } else {
                     // Enhanced fallback when no high/low data available
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Today's Range")
+                        Text(isNighttime() ? "Tonight's Range" : "Today's Range")
                             .font(.caption)
                             .foregroundColor(.secondary)
                             .fontWeight(.semibold)
@@ -1168,10 +1204,11 @@ struct DailyAirQualityRangeView: View {
     let pm25Stats: DailyPM25Stats
     let currentPM25: Double
     let currentAQI: Int
+    let isNighttime: Bool
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Today's Range")
+            Text(isNighttime ? "Tonight's Range" : "Today's Range")
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .fontWeight(.semibold)
