@@ -1,0 +1,54 @@
+--- a/Weather Station App/Services/WeatherStationService.swift
++++ b/Weather Station App/Services/WeatherStationService.swift
+@@ -1795,6 +1795,37 @@
+     private func parseWeatherResponseSafely(from data: Data, for station: WeatherStation) -> WeatherStationResponse? {
++        // First check if response is HTML instead of JSON
++        if let responseString = String(data: data, encoding: .utf8) {
++            let trimmed = responseString.trimmingCharacters(in: .whitespacesAndNewlines)
++            if trimmed.hasPrefix("<") || trimmed.hasPrefix("<!DOCTYPE") || trimmed.contains("<html") {
++                logError(" [Station: \(station.name)] ❌ API returned HTML instead of JSON")
++                logError(" 🔍 Possible causes: Invalid MAC address, device not found, or API endpoint issue")
++                logError(" 📄 HTML Response (first 500 chars):")
++                logError(String(trimmed.prefix(500)))
++                
++                // Return an error response instead of nil
++                return WeatherStationResponse(
++                    code: -1,
++                    msg: "API returned HTML instead of JSON. The device may not exist or MAC address '\(station.macAddress)' is invalid.",
++                    data: WeatherStationData.empty()
++                )
++            }
++            
++            // Check for empty response
++            if trimmed.isEmpty {
++                logError(" [Station: \(station.name)] ❌ API returned empty response")
++                return WeatherStationResponse(
++                    code: -1,
++                    msg: "API returned empty response",
++                    data: WeatherStationData.empty()
++                )
++            }
++            
++            // Log first part of response for debugging
++            if data.count > 0 {
++                logDebug(" [Station: \(station.name)] 📦 Response preview: \(String(trimmed.prefix(200)))")
++            }
++        }
++        
+         let decoder = JSONDecoder()
+         
+         // First, try standard parsing
+@@ -1819,6 +1850,12 @@
+                 }
+             }
+         } catch {
+             logDebug(" Even generic JSON parsing failed for \(station.name): \(error)")
++            
++            // Try to log the raw response for debugging
++            if let responseString = String(data: data, encoding: .utf8) {
++                logError(" 📄 Raw response that failed to parse:")
++                logError(responseString)
++            }
+         }
+         
+         return nil

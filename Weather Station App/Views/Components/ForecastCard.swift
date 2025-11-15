@@ -8,6 +8,7 @@
 import SwiftUI
 import CoreLocation
 import MapKit
+import Combine
 
 struct ForecastCard: View {
     let station: WeatherStation
@@ -366,14 +367,27 @@ struct ExpandedForecastDetails: View {
     let station: WeatherStation
     @StateObject private var forecastService = WeatherForecastService.shared
     
-    // Check if it's currently nighttime
+    // Timer to trigger updates when day/night changes
+    @State private var currentDate = Date()
+    
+    // Check if it's currently nighttime (after sunset, before midnight)
     private func isNighttime() -> Bool {
         guard let latitude = station.latitude, let longitude = station.longitude else {
             return false
         }
         
-        if let sunTimes = SunCalculator.calculateSunTimes(for: Date(), latitude: latitude, longitude: longitude, timeZone: station.timeZone) {
-            return !sunTimes.isCurrentlyDaylight
+        // Get sunset time for today
+        if let sunTimes = SunCalculator.calculateSunTimes(for: currentDate, latitude: latitude, longitude: longitude, timeZone: station.timeZone) {
+            // It's "tonight" if current time is after sunset but before midnight
+            let calendar = Calendar.current
+            var localCalendar = calendar
+            localCalendar.timeZone = station.timeZone
+            
+            // Get start of next day (midnight)
+            let startOfTomorrow = localCalendar.date(byAdding: .day, value: 1, to: localCalendar.startOfDay(for: currentDate)) ?? currentDate
+            
+            // After sunset and before midnight = "Tonight"
+            return currentDate >= sunTimes.sunset && currentDate < startOfTomorrow
         }
         
         return false
@@ -506,6 +520,14 @@ struct ExpandedForecastDetails: View {
         )
         .padding(.horizontal, 4)
         .padding(.top, 4)
+        .onAppear {
+            // Update immediately on appear
+            currentDate = Date()
+        }
+        .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { _ in
+            // Update every minute to catch day/night transitions
+            currentDate = Date()
+        }
     }
 }
 
@@ -717,14 +739,27 @@ struct ForecastDayRow: View {
     let isFirst: Bool
     let isExpanded: Bool
     
-    // Check if it's currently nighttime
+    // Timer to trigger updates when day/night changes
+    @State private var currentDate = Date()
+    
+    // Check if it's currently nighttime (after sunset, before midnight)
     private func isNighttime() -> Bool {
         guard let latitude = station.latitude, let longitude = station.longitude else {
             return false
         }
         
-        if let sunTimes = SunCalculator.calculateSunTimes(for: Date(), latitude: latitude, longitude: longitude, timeZone: station.timeZone) {
-            return !sunTimes.isCurrentlyDaylight
+        // Get sunset time for today
+        if let sunTimes = SunCalculator.calculateSunTimes(for: currentDate, latitude: latitude, longitude: longitude, timeZone: station.timeZone) {
+            // It's "tonight" if current time is after sunset but before midnight
+            let calendar = Calendar.current
+            var localCalendar = calendar
+            localCalendar.timeZone = station.timeZone
+            
+            // Get start of next day (midnight)
+            let startOfTomorrow = localCalendar.date(byAdding: .day, value: 1, to: localCalendar.startOfDay(for: currentDate)) ?? currentDate
+            
+            // After sunset and before midnight = "Tonight"
+            return currentDate >= sunTimes.sunset && currentDate < startOfTomorrow
         }
         
         return false
@@ -892,6 +927,14 @@ struct ForecastDayRow: View {
             }
         )
         .cornerRadius(isFirst ? 8 : 6)
+        .onAppear {
+            // Update immediately on appear
+            currentDate = Date()
+        }
+        .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { _ in
+            // Update every minute to catch day/night transitions
+            currentDate = Date()
+        }
     }
 }
 

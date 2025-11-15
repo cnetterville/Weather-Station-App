@@ -6,8 +6,11 @@ import Darwin.Mach
 class WeatherStationService: ObservableObject {
     static let shared = WeatherStationService()
     
-    // Using the exact CDN endpoint from your working example
-    private let realTimeURL = "https://cdnapi.ecowitt.net/api/v3/device/real_time"
+    // API endpoints - primary endpoint for most reliable results
+    // NOTE: Some devices work better with api.ecowitt.net, others with cdnapi.ecowitt.net
+    // The app will automatically try both endpoints if one returns HTML instead of JSON
+    private let realTimeURL = "https://api.ecowitt.net/api/v3/device/real_time"
+    private let realTimeURLFallback = "https://cdnapi.ecowitt.net/api/v3/device/real_time"
     private let historyURL = "https://api.ecowitt.net/api/v3/device/history"
     private let deviceListURL = "https://api.ecowitt.net/api/v3/device/list"
     
@@ -165,12 +168,25 @@ class WeatherStationService: ObservableObject {
     
     private func shouldFetchFreshData(for station: WeatherStation) -> Bool {
         // Check if we have data and it's still fresh
-        if let _ = weatherData[station.macAddress],
-           let lastUpdated = station.lastUpdated,
-           TimestampExtractor.isDataFresh(lastUpdated, freshnessDuration: dataFreshnessDuration) {
-            let ageSeconds = Int(Date().timeIntervalSince(lastUpdated))
-            logData(" Station \(station.name) has fresh data (age: \(ageSeconds)s)")
-            return false
+        if let data = weatherData[station.macAddress] {
+            // Check if the data is actually valid (not an error response)
+            // If we got an HTML response before, the data would be empty
+            if data.isEmpty() {
+                // Don't keep retrying if we got an error response
+                if let lastUpdated = station.lastUpdated {
+                    let timeSinceLastTry = Date().timeIntervalSince(lastUpdated)
+                    // Only retry every 30 minutes for devices that returned HTML
+                    if timeSinceLastTry < 1800 {
+                        logDebug(" Station \(station.name) returned error previously, waiting before retry")
+                        return false
+                    }
+                }
+            } else if let lastUpdated = station.lastUpdated,
+                      TimestampExtractor.isDataFresh(lastUpdated, freshnessDuration: dataFreshnessDuration) {
+                let ageSeconds = Int(Date().timeIntervalSince(lastUpdated))
+                logData(" Station \(station.name) has fresh data (age: \(ageSeconds)s)")
+                return false
+            }
         }
         
         // Check if we're already fetching this station
@@ -284,7 +300,7 @@ class WeatherStationService: ObservableObject {
     }
     
     /// Perform the actual network request (separated from deduplication logic)
-    private func performActualWeatherRequest(for station: WeatherStation) async -> WeatherStationResponse? {
+    private func performActualWeatherRequest(for station: WeatherStation, useFallbackEndpoint: Bool = false) async -> WeatherStationResponse? {
         guard credentials.isValid else {
             await MainActor.run {
                 logError(" Credentials invalid for \(station.name)")
@@ -293,7 +309,14 @@ class WeatherStationService: ObservableObject {
             return nil
         }
         
-        let urlString = "\(realTimeURL)?application_key=\(credentials.applicationKey)&api_key=\(credentials.apiKey)&mac=\(station.macAddress)&call_back=all"
+        // Clean up parameters to remove any whitespace or invalid characters
+        let cleanAppKey = credentials.applicationKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanApiKey = credentials.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanMac = station.macAddress.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Use fallback endpoint if requested
+        let endpoint = useFallbackEndpoint ? realTimeURLFallback : realTimeURL
+        let urlString = "\(endpoint)?application_key=\(cleanAppKey)&api_key=\(cleanApiKey)&mac=\(cleanMac)&call_back=all"
         
         guard let url = URL(string: urlString) else {
             await MainActor.run {
@@ -303,6 +326,8 @@ class WeatherStationService: ObservableObject {
         }
         
         logNetwork(" [Station: \(station.name)] Performing actual network request")
+        logDebug(" 🔗 Using endpoint: \(useFallbackEndpoint ? "CDN (fallback)" : "Primary API")")
+        logDebug(" 🔗 Full URL: \(url.absoluteString)")
         
         do {
             var request = URLRequest(url: url)
@@ -310,6 +335,8 @@ class WeatherStationService: ObservableObject {
             request.timeoutInterval = 15.0
             request.setValue("application/json", forHTTPHeaderField: "Accept")
             request.setValue("gzip", forHTTPHeaderField: "Accept-Encoding")
+            // Add User-Agent to prevent API from returning HTML
+            request.setValue("EcowittWeatherApp/1.0", forHTTPHeaderField: "User-Agent")
             
             // Intelligent caching
             if let lastRequest = await requestQueue.run({ self.lastRequestTimes[station.macAddress] }),
@@ -328,6 +355,13 @@ class WeatherStationService: ObservableObject {
             }
             
             logNetwork(" [Station: \(station.name)] Response: \(data.count) bytes in \(String(format: "%.2f", requestDuration))s")
+            
+            // Debug: Check Content-Type header
+            if let httpResponse = response as? HTTPURLResponse {
+                if let contentType = httpResponse.value(forHTTPHeaderField: "Content-Type") {
+                    logDebug(" Content-Type: \(contentType)")
+                }
+            }
             
             if let httpResponse = response as? HTTPURLResponse {
                 if httpResponse.statusCode == 429 {
@@ -352,6 +386,24 @@ class WeatherStationService: ObservableObject {
                     if maxConcurrentRequests < 6 {
                         maxConcurrentRequests += 1
                     }
+                    logSuccess(" [Station: \(station.name)] Successfully parsed weather data")
+                } else if weatherResponse.code == -1 {
+                    // Custom error code we set for HTML responses
+                    
+                    // If we got HTML and haven't tried the fallback endpoint yet, try it now
+                    if !useFallbackEndpoint && weatherResponse.msg.contains("HTML") {
+                        logWarning(" [Station: \(station.name)] Primary endpoint returned HTML, trying CDN fallback...")
+                        return await performActualWeatherRequest(for: station, useFallbackEndpoint: true)
+                    }
+                    
+                    await MainActor.run {
+                        errorMessage = "\(station.name): \(weatherResponse.msg)"
+                    }
+                    logWarning(" ⚠️  [Station: \(station.name)] This device may not support real-time data")
+                    logWarning(" ⚠️  [Station: \(station.name)] Consider deactivating this station or checking the MAC address")
+                    
+                    // Don't keep retrying HTML responses - return the error response
+                    return weatherResponse
                 }
                 return weatherResponse
             }
@@ -1561,7 +1613,8 @@ class WeatherStationService: ObservableObject {
         logDebug(" Starting camera image search for station: \(station.name)")
         logDebug(" Using associated camera MAC: \(cameraMAC)")
         
-        // Construct the camera endpoint URL carefully
+        // Camera images may be served from CDN endpoint
+        // Try CDN first for cameras as they typically serve media assets
         let baseURL = "https://cdnapi.ecowitt.net/api/v3/device/real_time"
         let applicationKey = credentials.applicationKey.trimmingCharacters(in: .whitespacesAndNewlines)
         let apiKey = credentials.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1793,6 +1846,38 @@ class WeatherStationService: ObservableObject {
     // MARK: - Model Validation and Recovery
     
     private func parseWeatherResponseSafely(from data: Data, for station: WeatherStation) -> WeatherStationResponse? {
+        // First check if response is HTML instead of JSON
+        if let responseString = String(data: data, encoding: .utf8) {
+            let trimmed = responseString.trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            // Debug: Show what we actually received
+            logDebug(" [Station: \(station.name)] Response starts with: '\(String(trimmed.prefix(50)))'")
+            
+            if trimmed.hasPrefix("<") || trimmed.hasPrefix("<!DOCTYPE") || trimmed.contains("<html") {
+                logError(" [Station: \(station.name)] ❌ API returned HTML instead of JSON")
+                logError(" 🔍 Possible causes: Invalid MAC address, device not found, or API endpoint issue")
+                logError(" 📄 HTML Response (first 500 chars):")
+                logError(String(trimmed.prefix(500)))
+                
+                // Return an error response instead of nil
+                return WeatherStationResponse(
+                    code: -1,
+                    msg: "API returned HTML instead of JSON. The device may not exist or MAC address '\(station.macAddress)' is invalid.",
+                    data: WeatherStationData.empty()
+                )
+            }
+            
+            // Check for empty response
+            if trimmed.isEmpty {
+                logError(" [Station: \(station.name)] ❌ API returned empty response")
+                return WeatherStationResponse(
+                    code: -1,
+                    msg: "API returned empty response",
+                    data: WeatherStationData.empty()
+                )
+            }
+        }
+        
         let decoder = JSONDecoder()
         
         // First, try standard parsing
@@ -1821,11 +1906,18 @@ class WeatherStationService: ObservableObject {
                 }
             }
         } catch {
-            logDebug(" Even generic JSON parsing failed for \(station.name): \(error)")
+            logError(" [Station: \(station.name)] ❌ JSON parsing failed: \(error)")
+            
+            // Try to log the raw response for debugging
+            if let responseString = String(data: data, encoding: .utf8) {
+                logError(" 📄 Raw response that failed to parse:")
+                logError(responseString)
+            }
         }
         
         return nil
     }
+
     
     private func extractWeatherDataSafely(from dataDict: [String: Any], for station: WeatherStation) -> WeatherStationData {
         logNetwork(" [Station: \(station.name)] Attempting safe data extraction from available fields")

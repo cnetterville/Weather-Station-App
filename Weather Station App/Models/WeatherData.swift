@@ -316,6 +316,12 @@ extension WeatherStationData {
         )
     }
     
+    /// Check if this is an empty/error data structure
+    func isEmpty() -> Bool {
+        // Check if outdoor temperature is the default "0" value, which indicates empty data
+        return outdoor.temperature.time == "0" && outdoor.temperature.value == "0"
+    }
+    
     static func fromPartialData(_ dict: [String: Any]) -> WeatherStationData {
         // Start with empty data
         var data = WeatherStationData.empty()

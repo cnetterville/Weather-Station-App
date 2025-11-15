@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Combine
 
 struct WindCard: View {
     let station: WeatherStation
@@ -13,14 +14,27 @@ struct WindCard: View {
     let onTitleChange: (String) -> Void
     let getDailyWindStats: () -> DailyWindStats?
     
-    // Check if it's currently nighttime
+    // Timer to trigger updates when day/night changes
+    @State private var currentDate = Date()
+    
+    // Check if it's currently nighttime (after sunset, before midnight)
     private func isNighttime() -> Bool {
         guard let latitude = station.latitude, let longitude = station.longitude else {
             return false
         }
         
-        if let sunTimes = SunCalculator.calculateSunTimes(for: Date(), latitude: latitude, longitude: longitude, timeZone: station.timeZone) {
-            return !sunTimes.isCurrentlyDaylight
+        // Get sunset time for today
+        if let sunTimes = SunCalculator.calculateSunTimes(for: currentDate, latitude: latitude, longitude: longitude, timeZone: station.timeZone) {
+            // It's "tonight" if current time is after sunset but before midnight
+            let calendar = Calendar.current
+            var localCalendar = calendar
+            localCalendar.timeZone = station.timeZone
+            
+            // Get start of next day (midnight)
+            let startOfTomorrow = localCalendar.date(byAdding: .day, value: 1, to: localCalendar.startOfDay(for: currentDate)) ?? currentDate
+            
+            // After sunset and before midnight = "Tonight"
+            return currentDate >= sunTimes.sunset && currentDate < startOfTomorrow
         }
         
         return false
@@ -75,6 +89,14 @@ struct WindCard: View {
                 // Additional Wind Information
                 AdditionalWindInfoView(data: data)
             }
+        }
+        .onAppear {
+            // Update immediately on appear
+            currentDate = Date()
+        }
+        .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { _ in
+            // Update every minute to catch day/night transitions
+            currentDate = Date()
         }
     }
 }
@@ -368,14 +390,27 @@ struct PressureCard: View {
     let onTitleChange: (String) -> Void
     let getDailyPressureStats: () -> DailyPressureStats?
     
-    // Check if it's currently nighttime
+    // Timer to trigger updates when day/night changes
+    @State private var currentDate = Date()
+    
+    // Check if it's currently nighttime (after sunset, before midnight)
     private func isNighttime() -> Bool {
         guard let latitude = station.latitude, let longitude = station.longitude else {
             return false
         }
         
-        if let sunTimes = SunCalculator.calculateSunTimes(for: Date(), latitude: latitude, longitude: longitude, timeZone: station.timeZone) {
-            return !sunTimes.isCurrentlyDaylight
+        // Get sunset time for today
+        if let sunTimes = SunCalculator.calculateSunTimes(for: currentDate, latitude: latitude, longitude: longitude, timeZone: station.timeZone) {
+            // It's "tonight" if current time is after sunset but before midnight
+            let calendar = Calendar.current
+            var localCalendar = calendar
+            localCalendar.timeZone = station.timeZone
+            
+            // Get start of next day (midnight)
+            let startOfTomorrow = localCalendar.date(byAdding: .day, value: 1, to: localCalendar.startOfDay(for: currentDate)) ?? currentDate
+            
+            // After sunset and before midnight = "Tonight"
+            return currentDate >= sunTimes.sunset && currentDate < startOfTomorrow
         }
         
         return false
@@ -434,6 +469,14 @@ struct PressureCard: View {
                     }
                 }
             }
+        }
+        .onAppear {
+            // Update immediately on appear
+            currentDate = Date()
+        }
+        .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { _ in
+            // Update every minute to catch day/night transitions
+            currentDate = Date()
         }
     }
 }
@@ -985,10 +1028,17 @@ struct AirQualityCard: View {
     let onTitleChange: (String) -> Void
     let getDailyPM25Stats: () -> DailyPM25Stats?
     
-    // Note: This card doesn't have station access, so we'll use a simple time check
+    // Timer to trigger updates when day/night changes
+    @State private var currentDate = Date()
+    
+    // Note: This card doesn't have station access, so we use sunset approximation
+    // Using 6pm-midnight as "Tonight" (typical sunset range across seasons)
+    // After midnight (00:00), it becomes "Today" again
     private func isNighttime() -> Bool {
-        let hour = Calendar.current.component(.hour, from: Date())
-        return hour >= 18 || hour < 6
+        let calendar = Calendar.current
+        let hour = calendar.component(.hour, from: currentDate)
+        // "Tonight" is from 6 PM (18:00) until midnight (24:00/0:00)
+        return hour >= 18
     }
     
     var body: some View {
@@ -1074,6 +1124,14 @@ struct AirQualityCard: View {
                     }
                 }
             }
+        }
+        .onAppear {
+            // Update immediately on appear
+            currentDate = Date()
+        }
+        .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { _ in
+            // Update every minute to catch day/night transitions
+            currentDate = Date()
         }
     }
 }
