@@ -13,11 +13,13 @@ struct SettingsView: View {
     @StateObject private var appStateManager = AppStateManager.shared
     @StateObject private var launchAtLoginHelper = LaunchAtLoginHelper.shared
     @StateObject private var credentialsSync = APICredentialsSync.shared
+    @StateObject private var localDeviceManager = LocalDeviceManager.shared
     @Environment(\.dismiss) private var dismiss
     
     @State private var applicationKey: String = ""
     @State private var apiKey: String = ""
     @State private var showingAddStation = false
+    @State private var showingAddLocalDevice = false
     @State private var testMessage: String = ""
     @State private var testSuccess: Bool = false
     @State private var isTesting: Bool = false
@@ -737,6 +739,56 @@ struct SettingsView: View {
                             )
                         }
                     }
+                    
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack {
+                            Text("Local Devices (Signal Strength)")
+                                .font(.title2)
+                                .fontWeight(.semibold)
+                            
+                            Spacer()
+                            
+                            Button("Add Device") {
+                                showingAddLocalDevice = true
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "info.circle")
+                                    .foregroundColor(.blue)
+                                Text("Connect to your gateway device locally to view sensor signal strength and battery data")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.vertical, 4)
+                            .padding(.horizontal, 8)
+                            .background(Color.blue.opacity(0.1))
+                            .cornerRadius(6)
+                        }
+                        
+                        if localDeviceManager.localDevices.isEmpty {
+                            VStack(spacing: 12) {
+                                Image(systemName: "antenna.radiowaves.left.and.right.slash")
+                                    .font(.system(size: 24))
+                                    .foregroundColor(.secondary)
+                                Text("No local devices configured")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                Text("Add a local gateway device to view real-time signal strength for all sensors")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .multilineTextAlignment(.center)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 20)
+                            .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                            .cornerRadius(8)
+                        } else {
+                            LocalDevicesListSection()
+                        }
+                    }
                 }
                 .padding()
             }
@@ -750,6 +802,9 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showingAddStation) {
             AddWeatherStationView()
+        }
+        .sheet(isPresented: $showingAddLocalDevice) {
+            AddLocalDeviceView()
         }
         .sheet(isPresented: $showingEditStation) {
             if let station = editingStation {
@@ -1239,6 +1294,7 @@ struct EditWeatherStationView: View {
                                     .font(.headline)
                                 
                                 SensorToggleRow("🔋 Battery Status", isOn: $sensorPreferences.showBatteryStatus)
+                                SensorToggleRow("📡 Signal Strength", isOn: $sensorPreferences.showSignalStrength)
                                 SensorToggleRow("🌅 Sunrise/Sunset", isOn: $sensorPreferences.showSunriseSunset)
                                 SensorToggleRow("🌙 Moon & Lunar", isOn: $sensorPreferences.showLunar)
                                 SensorToggleRow("📅 4-Day Forecast", isOn: $sensorPreferences.showForecast)
@@ -1363,6 +1419,7 @@ struct EditWeatherStationView: View {
         sensorPreferences.showTempHumidityCh2 = value
         sensorPreferences.showTempHumidityCh3 = value
         sensorPreferences.showBatteryStatus = value
+        sensorPreferences.showSignalStrength = value
         sensorPreferences.showSunriseSunset = value
         sensorPreferences.showLunar = value
         sensorPreferences.showForecast = value
@@ -1986,5 +2043,451 @@ struct DiscoveredStationsSection_Previews: PreviewProvider {
 struct ExistingStationsSection_Previews: PreviewProvider {
     static var previews: some View {
         ExistingStationsSection(applicationKey: "", apiKey: "", testIndividualStation: { _ in }, copyAPIURL: { _ in })
+    }
+}
+
+// MARK: - Local Devices Section
+
+struct LocalDevicesListSection: View {
+    @StateObject private var localDeviceManager = LocalDeviceManager.shared
+    @StateObject private var weatherService = WeatherStationService.shared
+    @State private var editingDeviceID: UUID?
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            ForEach(localDeviceManager.localDevices) { device in
+                LocalDeviceRow(
+                    device: device,
+                    onEdit: {
+                        editingDeviceID = device.id
+                    }
+                )
+            }
+        }
+        .sheet(item: $editingDeviceID) { deviceID in
+            if let device = localDeviceManager.localDevices.first(where: { $0.id == deviceID }) {
+                EditLocalDeviceView(device: device)
+            }
+        }
+    }
+}
+
+extension UUID: @retroactive Identifiable {
+    public var id: UUID { self }
+}
+
+struct LocalDeviceRow: View {
+    let device: LocalDeviceManager.LocalDevice
+    let onEdit: () -> Void
+    
+    @StateObject private var localDeviceManager = LocalDeviceManager.shared
+    @StateObject private var weatherService = WeatherStationService.shared
+    @State private var testingConnection = false
+    @State private var testMessage = ""
+    @State private var testSuccess = false
+    
+    private var associatedStation: WeatherStation? {
+        guard let mac = device.associatedStationMAC else { return nil }
+        return weatherService.weatherStations.first { $0.macAddress == mac }
+    }
+    
+    private var dateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter
+    }
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Circle()
+                    .fill(device.isEnabled ? Color.green : Color.gray)
+                    .frame(width: 10, height: 10)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(device.name)
+                        .font(.headline)
+                    Text(device.ipAddress)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .font(.system(.caption, design: .monospaced))
+                    
+                    if let station = associatedStation {
+                        HStack(spacing: 4) {
+                            Image(systemName: "link")
+                                .font(.caption2)
+                            Text("Associated with: \(station.name)")
+                                .font(.caption2)
+                                .foregroundColor(.blue)
+                        }
+                    } else {
+                        Text("⚠️ Not associated with any station")
+                            .font(.caption2)
+                            .foregroundColor(.orange)
+                    }
+                    
+                    if let lastUpdated = device.lastUpdated {
+                        Text("Last updated: \(lastUpdated, formatter: dateFormatter)")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    if !device.sensors.isEmpty {
+                        Text("\(device.sensors.count) sensor(s) detected")
+                            .font(.caption2)
+                            .foregroundColor(.green)
+                    }
+                }
+                
+                Spacer()
+                
+                VStack(spacing: 4) {
+                    Button {
+                        testConnection()
+                    } label: {
+                        Text("Test")
+                    }
+                    .buttonStyle(.bordered)
+                    .font(.caption)
+                    .disabled(testingConnection)
+                    
+                    Button {
+                        onEdit()
+                    } label: {
+                        Text("Edit")
+                    }
+                    .buttonStyle(.bordered)
+                    .font(.caption)
+                    
+                    Button {
+                        Task {
+                            await localDeviceManager.refreshDevice(device)
+                        }
+                    } label: {
+                        Text("Refresh")
+                    }
+                    .buttonStyle(.bordered)
+                    .font(.caption)
+                    .disabled(localDeviceManager.isRefreshing)
+                }
+                
+                Toggle("", isOn: Binding(
+                    get: { device.isEnabled },
+                    set: { newValue in
+                        var updated = device
+                        updated.isEnabled = newValue
+                        localDeviceManager.updateDevice(updated)
+                    }
+                ))
+                
+                Button("Remove") {
+                    localDeviceManager.removeDevice(device)
+                }
+                .foregroundColor(.red)
+            }
+            
+            if testingConnection {
+                HStack {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                    Text("Testing connection...")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            
+            if !testMessage.isEmpty {
+                HStack {
+                    Image(systemName: testSuccess ? "checkmark.circle.fill" : "xmark.circle.fill")
+                        .foregroundColor(testSuccess ? .green : .red)
+                    Text(testMessage)
+                        .font(.caption)
+                        .foregroundColor(testSuccess ? .green : .red)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background((testSuccess ? Color.green : Color.red).opacity(0.1))
+                .cornerRadius(6)
+            }
+        }
+        .padding()
+        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+        .cornerRadius(8)
+    }
+    
+    private func testConnection() {
+        testingConnection = true
+        testMessage = ""
+        
+        Task {
+            let result = await localDeviceManager.testConnection(device)
+            
+            await MainActor.run {
+                testingConnection = false
+                testSuccess = result.success
+                testMessage = result.message
+            }
+        }
+    }
+}
+
+// MARK: - Add Local Device View
+
+struct AddLocalDeviceView: View {
+    @StateObject private var localDeviceManager = LocalDeviceManager.shared
+    @StateObject private var weatherService = WeatherStationService.shared
+    @Environment(\.dismiss) private var dismiss
+    
+    @State private var deviceName = ""
+    @State private var ipAddress = ""
+    @State private var selectedStationMAC: String = ""
+    @State private var testingConnection = false
+    @State private var testMessage = ""
+    @State private var testSuccess = false
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            HStack {
+                Text("Add Local Device")
+                    .font(.title)
+                    .fontWeight(.bold)
+                
+                Spacer()
+                
+                Button("Cancel") {
+                    dismiss()
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Device Name")
+                        .font(.headline)
+                    TextField("e.g., Home GW2000", text: $deviceName)
+                        .textFieldStyle(.roundedBorder)
+                }
+                
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("IP Address")
+                        .font(.headline)
+                    TextField("e.g., 192.168.1.100", text: $ipAddress)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(.body, design: .monospaced))
+                    
+                    Text("Find the IP address in your router's DHCP client list or Ecowitt app")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Associate with Weather Station")
+                        .font(.headline)
+                    
+                    Picker("Station", selection: $selectedStationMAC) {
+                        Text("None (select later)")
+                            .tag("")
+                        
+                        ForEach(weatherService.weatherStations) { station in
+                            Text(station.name)
+                                .tag(station.macAddress)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    
+                    Text("Link this device to a weather station to show signal strength data")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding()
+            
+            HStack(spacing: 12) {
+                Button("Test Connection") {
+                    testConnection()
+                }
+                .buttonStyle(.bordered)
+                .disabled(deviceName.isEmpty || ipAddress.isEmpty || testingConnection)
+                
+                Spacer()
+                
+                Button("Add Device") {
+                    addDevice()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(deviceName.isEmpty || ipAddress.isEmpty)
+            }
+            .padding(.horizontal)
+            
+            if testingConnection {
+                HStack {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                    Text("Testing connection...")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            
+            if !testMessage.isEmpty {
+                ScrollView {
+                    HStack(alignment: .top) {
+                        Image(systemName: testSuccess ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .foregroundColor(testSuccess ? .green : .red)
+                        Text(testMessage)
+                            .font(.caption)
+                            .foregroundColor(testSuccess ? .green : .red)
+                            .textSelection(.enabled)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background((testSuccess ? Color.green : Color.red).opacity(0.1))
+                .cornerRadius(6)
+                .frame(maxHeight: 100)
+            }
+            
+            Spacer()
+        }
+        .padding()
+        .frame(width: 500, height: 500)
+    }
+    
+    private func testConnection() {
+        testingConnection = true
+        testMessage = ""
+        
+        let tempDevice = LocalDeviceManager.LocalDevice(
+            name: deviceName,
+            ipAddress: ipAddress
+        )
+        
+        Task {
+            let result = await localDeviceManager.testConnection(tempDevice)
+            
+            await MainActor.run {
+                testingConnection = false
+                testSuccess = result.success
+                testMessage = result.message
+            }
+        }
+    }
+    
+    private func addDevice() {
+        let newDevice = LocalDeviceManager.LocalDevice(
+            name: deviceName,
+            ipAddress: ipAddress,
+            associatedStationMAC: selectedStationMAC.isEmpty ? nil : selectedStationMAC
+        )
+        
+        localDeviceManager.addDevice(newDevice)
+        
+        // Immediately try to fetch sensor data
+        Task {
+            await localDeviceManager.refreshDevice(newDevice)
+        }
+        
+        dismiss()
+    }
+}
+
+// MARK: - Edit Local Device View
+
+struct EditLocalDeviceView: View {
+    @StateObject private var localDeviceManager = LocalDeviceManager.shared
+    @StateObject private var weatherService = WeatherStationService.shared
+    @Environment(\.dismiss) private var dismiss
+    
+    let device: LocalDeviceManager.LocalDevice
+    
+    @State private var deviceName = ""
+    @State private var ipAddress = ""
+    @State private var selectedStationMAC: String = ""
+    @State private var isEnabled = true
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            HStack {
+                Text("Edit Local Device")
+                    .font(.title)
+                    .fontWeight(.bold)
+                
+                Spacer()
+                
+                Button("Cancel") {
+                    dismiss()
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Device Name")
+                        .font(.headline)
+                    TextField("Device name", text: $deviceName)
+                        .textFieldStyle(.roundedBorder)
+                }
+                
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("IP Address")
+                        .font(.headline)
+                    TextField("IP Address", text: $ipAddress)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(.body, design: .monospaced))
+                }
+                
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Associate with Weather Station")
+                        .font(.headline)
+                    
+                    Picker("Station", selection: $selectedStationMAC) {
+                        Text("None")
+                            .tag("")
+                        
+                        ForEach(weatherService.weatherStations) { station in
+                            Text(station.name)
+                                .tag(station.macAddress)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+                
+                Toggle("Enable device", isOn: $isEnabled)
+                    .toggleStyle(.checkbox)
+            }
+            .padding()
+            
+            Button("Save Changes") {
+                saveChanges()
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(deviceName.isEmpty || ipAddress.isEmpty)
+            
+            Spacer()
+        }
+        .padding()
+        .frame(width: 450, height: 400)
+        .onAppear {
+            deviceName = device.name
+            ipAddress = device.ipAddress
+            selectedStationMAC = device.associatedStationMAC ?? ""
+            isEnabled = device.isEnabled
+        }
+    }
+    
+    private func saveChanges() {
+        var updatedDevice = device
+        updatedDevice.name = deviceName
+        updatedDevice.ipAddress = ipAddress
+        updatedDevice.associatedStationMAC = selectedStationMAC.isEmpty ? nil : selectedStationMAC
+        updatedDevice.isEnabled = isEnabled
+        
+        localDeviceManager.updateDevice(updatedDevice)
+        dismiss()
     }
 }

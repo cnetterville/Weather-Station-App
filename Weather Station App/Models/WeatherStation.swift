@@ -121,6 +121,7 @@ enum CardType: String, Codable, CaseIterable, Identifiable {
     case solar = "solar"
     case lightning = "lightning"
     case batteryStatus = "battery_status"
+    case signalStrength = "signal_strength"
     case sunriseSunset = "sunrise_sunset"
     case lunar = "lunar"
     case camera = "camera"
@@ -147,6 +148,7 @@ enum CardType: String, Codable, CaseIterable, Identifiable {
         case .solar: return "Solar & UV"
         case .lightning: return "Lightning"
         case .batteryStatus: return "Battery Status"
+        case .signalStrength: return "Signal Strength"
         case .sunriseSunset: return "Sunrise/Sunset"
         case .lunar: return "Lunar"
         case .camera: return "Camera"
@@ -173,6 +175,7 @@ enum CardType: String, Codable, CaseIterable, Identifiable {
             .solar,
             .lightning,
             .batteryStatus,
+            .signalStrength,
             .sunriseSunset,
             .lunar,
             .camera
@@ -202,6 +205,7 @@ struct SensorLabels: Codable, Equatable, Hashable {
     var camera: String = "Weather Camera"
     var radar: String = "Weather Radar"
     var forecast: String = "5-Day Forecast"
+    var signalStrength: String = "Signal Strength"
 }
 
 struct SensorPreferences: Codable, Equatable, Hashable {
@@ -221,6 +225,7 @@ struct SensorPreferences: Codable, Equatable, Hashable {
     var showTempHumidityCh2: Bool = false
     var showTempHumidityCh3: Bool = false
     var showBatteryStatus: Bool = false
+    var showSignalStrength: Bool = false
     var showSunriseSunset: Bool = true
     var showLunar: Bool = true
     var showCamera: Bool = true
@@ -249,6 +254,7 @@ struct SensorPreferences: Codable, Equatable, Hashable {
         showTempHumidityCh2 = try container.decodeIfPresent(Bool.self, forKey: .showTempHumidityCh2) ?? false
         showTempHumidityCh3 = try container.decodeIfPresent(Bool.self, forKey: .showTempHumidityCh3) ?? false
         showBatteryStatus = try container.decodeIfPresent(Bool.self, forKey: .showBatteryStatus) ?? false
+        showSignalStrength = try container.decodeIfPresent(Bool.self, forKey: .showSignalStrength) ?? false
         showSunriseSunset = try container.decodeIfPresent(Bool.self, forKey: .showSunriseSunset) ?? true
         showLunar = try container.decodeIfPresent(Bool.self, forKey: .showLunar) ?? true
         showCamera = try container.decodeIfPresent(Bool.self, forKey: .showCamera) ?? true
@@ -273,7 +279,7 @@ struct SensorPreferences: Codable, Equatable, Hashable {
         case showAirQualityCh1, showAirQualityCh2, showAirQualityCh3
         case showUVIndex, showSolar, showLightning
         case showTempHumidityCh1, showTempHumidityCh2, showTempHumidityCh3
-        case showBatteryStatus, showSunriseSunset, showLunar, showCamera, showRadar
+        case showBatteryStatus, showSignalStrength, showSunriseSunset, showLunar, showCamera, showRadar
         case showForecast
     }
 }

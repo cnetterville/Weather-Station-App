@@ -244,6 +244,7 @@ struct ReorderModeView: View {
         case .solar: return station.customLabels.solar
         case .lightning: return station.customLabels.lightning
         case .batteryStatus: return station.customLabels.batteryStatus
+        case .signalStrength: return station.customLabels.signalStrength
         case .sunriseSunset: return station.customLabels.sunriseSunset
         case .lunar: return station.customLabels.lunar
         case .camera: return station.customLabels.camera
@@ -270,6 +271,7 @@ struct ReorderModeView: View {
         case .solar: return station.sensorPreferences.showSolar
         case .lightning: return station.sensorPreferences.showLightning
         case .batteryStatus: return station.sensorPreferences.showBatteryStatus
+        case .signalStrength: return station.sensorPreferences.showSignalStrength
         case .sunriseSunset: return station.sensorPreferences.showSunriseSunset && station.latitude != nil && station.longitude != nil
         case .lunar: return station.sensorPreferences.showLunar && station.latitude != nil && station.longitude != nil
         case .camera: return station.sensorPreferences.showCamera && station.associatedCameraMAC != nil
@@ -291,6 +293,7 @@ struct ReorderModeView: View {
         case .solar: return "sun.max.fill"
         case .lightning: return "bolt.fill"
         case .batteryStatus: return "battery.100"
+        case .signalStrength: return "antenna.radiowaves.left.and.right"
         case .sunriseSunset: return "sunrise.fill"
         case .lunar: return "moon.fill"
         case .camera: return "camera.fill"
@@ -384,6 +387,7 @@ struct ReorderableWeatherCardsView: View {
         case .solar: return station.sensorPreferences.showSolar
         case .lightning: return station.sensorPreferences.showLightning
         case .batteryStatus: return station.sensorPreferences.showBatteryStatus
+        case .signalStrength: return station.sensorPreferences.showSignalStrength
         case .sunriseSunset: return station.sensorPreferences.showSunriseSunset && station.latitude != nil && station.longitude != nil
         case .lunar: return station.sensorPreferences.showLunar && station.latitude != nil && station.longitude != nil
         case .camera: return station.sensorPreferences.showCamera && station.associatedCameraMAC != nil
@@ -435,6 +439,8 @@ struct ReorderableWeatherCardsView: View {
             lunarCardView()
         case .camera:
             cameraCardView()
+        case .signalStrength:
+            signalStrengthCardView()
         }
     }
     
@@ -750,6 +756,15 @@ struct ReorderableWeatherCardsView: View {
             station: station,
             onTitleChange: { newTitle in
                 updateStationLabel(\.camera, with: newTitle)
+            }
+        )
+    }
+    
+    private func signalStrengthCardView() -> some View {
+        SignalStrengthCard(
+            station: station,
+            onTitleChange: { newTitle in
+                updateStationLabel(\.signalStrength, with: newTitle)
             }
         )
     }
