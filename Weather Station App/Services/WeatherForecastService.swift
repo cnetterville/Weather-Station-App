@@ -144,6 +144,16 @@ class WeatherForecastService: ObservableObject {
                 restOfDay = processDaypartForecast(restOfDayData)
             }
             
+            // Extract extended details using reflection (WeatherKit doesn't expose all properties directly)
+            let humidity = extractHumidityFromDayWeather(dayWeather)
+            let uvIndex = dayWeather.uvIndex.value > 0 ? dayWeather.uvIndex.value : nil
+            
+            // Visibility - use reflection to extract if available
+            let visibility = extractVisibilityFromDayWeather(dayWeather)
+            
+            // Pressure - use reflection to extract if available
+            let pressure = extractPressureFromDayWeather(dayWeather)
+            
             let forecast = DailyWeatherForecast(
                 date: dayWeather.date,
                 weatherCode: weatherCode,
@@ -154,7 +164,11 @@ class WeatherForecastService: ObservableObject {
                 maxWindSpeed: windSpeedKmh,
                 windDirection: windDirection,
                 timezone: timeZone,
-                restOfDayForecast: restOfDay
+                restOfDayForecast: restOfDay,
+                humidity: humidity,
+                uvIndex: uvIndex,
+                visibility: visibility,
+                pressure: pressure
             )
             dailyForecasts.append(forecast)
         }
@@ -400,6 +414,49 @@ class WeatherForecastService: ObservableObject {
             }
         }
         
+        return nil
+    }
+    
+    // MARK: - Extended Data Extraction Helpers
+    
+    /// Extract humidity from DayWeather using reflection
+    private func extractHumidityFromDayWeather(_ dayWeather: Any) -> Int? {
+        let mirror = Mirror(reflecting: dayWeather)
+        for child in mirror.children {
+            if child.label == "humidity" || child.label == "relativeHumidity" {
+                if let humidityValue = child.value as? Double {
+                    return Int((humidityValue * 100.0).rounded())
+                }
+            }
+        }
+        return nil
+    }
+    
+    /// Extract visibility from DayWeather using reflection
+    private func extractVisibilityFromDayWeather(_ dayWeather: Any) -> Double? {
+        let mirror = Mirror(reflecting: dayWeather)
+        for child in mirror.children {
+            if child.label == "visibility" {
+                if let measurement = child.value as? Measurement<UnitLength> {
+                    // Convert to kilometers
+                    return measurement.converted(to: .kilometers).value
+                }
+            }
+        }
+        return nil
+    }
+    
+    /// Extract atmospheric pressure from DayWeather using reflection
+    private func extractPressureFromDayWeather(_ dayWeather: Any) -> Double? {
+        let mirror = Mirror(reflecting: dayWeather)
+        for child in mirror.children {
+            if child.label == "pressure" || child.label == "pressureAtSeaLevel" {
+                if let measurement = child.value as? Measurement<UnitPressure> {
+                    // Convert to millibars (hPa)
+                    return measurement.converted(to: .millibars).value
+                }
+            }
+        }
         return nil
     }
     

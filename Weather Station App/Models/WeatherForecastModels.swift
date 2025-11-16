@@ -130,6 +130,12 @@ struct DailyWeatherForecast {
     let timezone: TimeZone
     let restOfDayForecast: DaypartForecast?
     
+    // Extended details for days without hourly data
+    let humidity: Int?
+    let uvIndex: Int?
+    let visibility: Double? // in kilometers
+    let pressure: Double? // in millibars/hPa
+    
     // Computed properties for UI
     var dayOfWeek: String {
         let formatter = DateFormatter()
@@ -297,6 +303,71 @@ struct DailyWeatherForecast {
         case 1..<5: return SwiftUI.Color.blue.opacity(0.3)
         case 5..<15: return SwiftUI.Color.blue.opacity(0.4)
         default: return SwiftUI.Color.blue.opacity(0.5)
+        }
+    }
+    
+    // Formatted extended details
+    var formattedHumidity: String {
+        guard let hum = humidity else { return "—" }
+        return "\(hum)%"
+    }
+    
+    var formattedUVIndex: String {
+        guard let uv = uvIndex else { return "—" }
+        return "\(uv)"
+    }
+    
+    var uvIndexLevel: String {
+        guard let uv = uvIndex else { return "—" }
+        switch uv {
+        case 0...2: return "Low"
+        case 3...5: return "Moderate"
+        case 6...7: return "High"
+        case 8...10: return "Very High"
+        default: return "Extreme"
+        }
+    }
+    
+    var uvIndexColor: SwiftUI.Color {
+        guard let uv = uvIndex else { return .gray }
+        switch uv {
+        case 0...2: return .green
+        case 3...5: return .yellow
+        case 6...7: return .orange
+        case 8...10: return .red
+        default: return .purple
+        }
+    }
+    
+    var formattedVisibility: String {
+        guard let vis = visibility else { return "—" }
+        let displayMode = UserDefaults.standard.unitSystemDisplayMode
+        
+        switch displayMode {
+        case .imperial:
+            let miles = vis * 0.621371
+            return String(format: "%.1fmi", miles)
+        case .metric:
+            return String(format: "%.1fkm", vis)
+        case .both:
+            let miles = vis * 0.621371
+            return String(format: "%.1fkm/%.1fmi", vis, miles)
+        }
+    }
+    
+    var formattedPressure: String {
+        guard let press = pressure else { return "—" }
+        let displayMode = UserDefaults.standard.unitSystemDisplayMode
+        
+        switch displayMode {
+        case .imperial:
+            let inHg = press * 0.02953
+            return String(format: "%.2finHg", inHg)
+        case .metric:
+            return String(format: "%.0fhPa", press)
+        case .both:
+            let inHg = press * 0.02953
+            return String(format: "%.0fhPa/%.2finHg", press, inHg)
         }
     }
 }

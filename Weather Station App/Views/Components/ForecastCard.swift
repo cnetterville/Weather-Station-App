@@ -408,12 +408,8 @@ struct ExpandedForecastDetails: View {
             }
             
             if hourlyForecasts.isEmpty {
-                // Fallback if no hourly data
-                Text("Hourly data unavailable")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 8)
+                // Extended daily details when no hourly data available
+                ExtendedDailyDetails(forecast: forecast)
             } else {
                 // Hourly forecast header
                 HStack {
@@ -436,80 +432,6 @@ struct ExpandedForecastDetails: View {
                     }
                     .padding(.horizontal, 4)
                 }
-                
-                Divider()
-                
-                // Daily summary
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Image(systemName: "sun.max.fill")
-                            .font(.caption)
-                            .foregroundColor(.orange)
-                        Text("Daily Summary")
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    HStack(spacing: 16) {
-                        // Temperature range
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("High/Low")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                            HStack(spacing: 4) {
-                                Text(forecast.formattedMaxTemp)
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(.orange)
-                                Text("/")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                Text(forecast.formattedMinTemp)
-                                    .font(.subheadline)
-                                    .foregroundColor(.blue)
-                            }
-                        }
-                        
-                        // Precipitation
-                        if forecast.precipitation > 0.1 || forecast.precipitationProbability > 20 {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Rain")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                                HStack(spacing: 2) {
-                                    if forecast.precipitation > 0.1 {
-                                        Text(forecast.formattedPrecipitation)
-                                            .font(.subheadline)
-                                            .fontWeight(.semibold)
-                                    }
-                                    if forecast.precipitationProbability > 0 {
-                                        Text("(\(forecast.precipitationProbability)%)")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
-                            }
-                        }
-                        
-                        Spacer()
-                        
-                        // Wind
-                        VStack(alignment: .trailing, spacing: 4) {
-                            Text("Wind")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                            HStack(spacing: 4) {
-                                Text(forecast.formattedWindSpeed)
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
-                                Text(forecast.windDirectionText)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-                }
             }
         }
         .padding(.horizontal, 8)
@@ -528,6 +450,216 @@ struct ExpandedForecastDetails: View {
             // Update every minute to catch day/night transitions
             currentDate = Date()
         }
+    }
+}
+
+// Extended daily details for days without hourly forecasts
+struct ExtendedDailyDetails: View {
+    let forecast: DailyWeatherForecast
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Header
+            HStack {
+                Image(systemName: "info.circle.fill")
+                    .font(.caption)
+                    .foregroundColor(.blue)
+                Text("Daily Details")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.secondary)
+            }
+            
+            // Three-column grid layout
+            VStack(spacing: 12) {
+                // Row 1: Temperature Range, Precipitation, Wind
+                HStack(alignment: .top, spacing: 0) {
+                    // Temperature
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("High / Low")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        HStack(spacing: 4) {
+                            Text(forecast.formattedMaxTemp)
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.orange)
+                            Text("/")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text(forecast.formattedMinTemp)
+                                .font(.subheadline)
+                                .foregroundColor(.blue)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    
+                    // Precipitation
+                    if forecast.precipitation > 0.1 || forecast.precipitationProbability > 20 {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Precipitation")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            HStack(spacing: 4) {
+                                Image(systemName: "drop.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.blue)
+                                if forecast.precipitation > 0.1 {
+                                    Text(forecast.formattedPrecipitation)
+                                        .font(.subheadline)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(.blue)
+                                }
+                                if forecast.precipitationProbability > 0 {
+                                    Text("(\(forecast.precipitationProbability)%)")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        Spacer()
+                            .frame(maxWidth: .infinity)
+                    }
+                    
+                    // Wind
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Wind")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.up")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(.secondary)
+                                .rotationEffect(.degrees(Double(forecast.windDirection)))
+                            Text(forecast.formattedWindSpeed)
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.primary)
+                            Text(forecast.windDirectionText)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                
+                Divider()
+                
+                // Row 2: Humidity, UV Index, Visibility
+                HStack(alignment: .top, spacing: 0) {
+                    // Humidity
+                    if forecast.humidity != nil {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Humidity")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            HStack(spacing: 4) {
+                                Image(systemName: "humidity.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.blue)
+                                Text(forecast.formattedHumidity)
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.primary)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        Spacer()
+                            .frame(maxWidth: .infinity)
+                    }
+                    
+                    // UV Index
+                    if forecast.uvIndex != nil {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("UV Index")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            HStack(spacing: 4) {
+                                Image(systemName: "sun.max.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(forecast.uvIndexColor)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(forecast.formattedUVIndex)
+                                        .font(.subheadline)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(.primary)
+                                    Text(forecast.uvIndexLevel)
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        Spacer()
+                            .frame(maxWidth: .infinity)
+                    }
+                    
+                    // Visibility
+                    if forecast.visibility != nil {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Visibility")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            HStack(spacing: 4) {
+                                Image(systemName: "eye.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.gray)
+                                Text(forecast.formattedVisibility)
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.primary)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        Spacer()
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                
+                // Row 3: Pressure (if available and we have space)
+                if forecast.pressure != nil {
+                    Divider()
+                    
+                    HStack(alignment: .top, spacing: 0) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Pressure")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            HStack(spacing: 4) {
+                                Image(systemName: "gauge.medium")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.purple)
+                                Text(forecast.formattedPressure)
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.primary)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        
+                        Spacer()
+                            .frame(maxWidth: .infinity)
+                        
+                        Spacer()
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.blue.opacity(0.05))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.blue.opacity(0.15), lineWidth: 1)
+                )
+        )
     }
 }
 
