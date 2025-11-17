@@ -41,14 +41,27 @@ struct OutdoorTemperatureCard: View {
         return moonPhase.emoji
     }
     
-    // NEW: Check if it's currently nighttime
+    // NEW: Check if it's currently nighttime (after sunset but before midnight)
+    // This matches the logic used in ForecastCard for consistent "Tonight's" vs "Today's" display
     private func isNighttime() -> Bool {
         guard let latitude = station.latitude, let longitude = station.longitude else {
             return false
         }
         
-        if let sunTimes = SunCalculator.calculateSunTimes(for: Date(), latitude: latitude, longitude: longitude, timeZone: station.timeZone) {
-            return !sunTimes.isCurrentlyDaylight
+        let currentDate = Date()
+        
+        // Get sunset time for today
+        if let sunTimes = SunCalculator.calculateSunTimes(for: currentDate, latitude: latitude, longitude: longitude, timeZone: station.timeZone) {
+            // It's "tonight" if current time is after sunset but before midnight
+            let calendar = Calendar.current
+            var localCalendar = calendar
+            localCalendar.timeZone = station.timeZone
+            
+            // Get start of next day (midnight)
+            let startOfTomorrow = localCalendar.date(byAdding: .day, value: 1, to: localCalendar.startOfDay(for: currentDate)) ?? currentDate
+            
+            // After sunset and before midnight = "Tonight"
+            return currentDate >= sunTimes.sunset && currentDate < startOfTomorrow
         }
         
         return false
