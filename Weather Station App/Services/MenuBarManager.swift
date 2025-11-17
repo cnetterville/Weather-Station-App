@@ -14,7 +14,7 @@ class MenuBarManager: ObservableObject {
     private let weatherService = WeatherStationService.shared
     private let forecastService = WeatherForecastService.shared
     private var cycleThroughTimer: Timer?
-    private var backgroundRefreshTimer: Timer?
+    private var backgroundRefreshTimer: DispatchSourceTimer? // Changed to DispatchSourceTimer for better background reliability
     
     @Published var isMenuBarEnabled: Bool = false {
         didSet {
@@ -369,31 +369,7 @@ class MenuBarManager: ObservableObject {
     }
     
     private func setupContextMenu() {
-        let menu = NSMenu()
-        
-        // Open App menu item
-        let openAppItem = NSMenuItem(title: "Open Weather Station App", action: #selector(statusItemClicked), keyEquivalent: "")
-        openAppItem.target = self
-        menu.addItem(openAppItem)
-        
-        // Separator
-        menu.addItem(NSMenuItem.separator())
-        
-        // Refresh Data menu item
-        let refreshItem = NSMenuItem(title: "Refresh Data", action: #selector(refreshWeatherData), keyEquivalent: "")
-        refreshItem.target = self
-        menu.addItem(refreshItem)
-        
-        // Separator
-        menu.addItem(NSMenuItem.separator())
-        
-        // Quit menu item
-        let quitItem = NSMenuItem(title: "Quit Weather Station App", action: #selector(quitApplication), keyEquivalent: "q")
-        quitItem.target = self
-        menu.addItem(quitItem)
-        
-        // Don't set the menu directly - we'll show it manually on right-click
-        // statusItem?.menu = menu
+        // Context menu is built dynamically in showContextMenu() to include last updated times
     }
     
     @objc private func refreshWeatherData() {
@@ -446,13 +422,57 @@ class MenuBarManager: ObservableObject {
     private func showContextMenu() {
         guard let statusItem = statusItem else { return }
         
-        // Create the menu
+        // Create the menu dynamically with current data
         let menu = NSMenu()
         
         // Open App menu item
         let openAppItem = NSMenuItem(title: "Open Weather Station App", action: #selector(openMainApp), keyEquivalent: "")
         openAppItem.target = self
         menu.addItem(openAppItem)
+        
+        // Separator
+        menu.addItem(NSMenuItem.separator())
+        
+        // Last Updated Section based on display mode
+        switch displayMode {
+        case .singleStation:
+            if let station = getSelectedStation() {
+                addLastUpdatedInfo(for: station, to: menu)
+            }
+            
+        case .allStations:
+            let stations = availableStations
+            if !stations.isEmpty {
+                let titleItem = NSMenuItem(title: "Last Updated:", action: nil, keyEquivalent: "")
+                titleItem.isEnabled = false
+                menu.addItem(titleItem)
+                
+                for station in stations {
+                    addLastUpdatedInfo(for: station, to: menu, indent: true)
+                }
+            }
+            
+        case .cycleThrough:
+            let stations = availableStations
+            if !stations.isEmpty {
+                let titleItem = NSMenuItem(title: "Last Updated:", action: nil, keyEquivalent: "")
+                titleItem.isEnabled = false
+                menu.addItem(titleItem)
+                
+                // Show current station first, then others
+                if currentCycleIndex < stations.count {
+                    let currentStation = stations[currentCycleIndex]
+                    addLastUpdatedInfo(for: currentStation, to: menu, indent: true, isCurrent: true)
+                    
+                    // Show other stations
+                    for (index, station) in stations.enumerated() {
+                        if index != currentCycleIndex {
+                            addLastUpdatedInfo(for: station, to: menu, indent: true)
+                        }
+                    }
+                }
+            }
+        }
         
         // Separator
         menu.addItem(NSMenuItem.separator())
@@ -477,6 +497,30 @@ class MenuBarManager: ObservableObject {
         // Clear the menu after showing (so it doesn't interfere with left-click)
         DispatchQueue.main.async {
             statusItem.menu = nil
+        }
+    }
+    
+    // Helper method to add last updated info for a station to the menu
+    private func addLastUpdatedInfo(for station: WeatherStation, to menu: NSMenu, indent: Bool = false, isCurrent: Bool = false) {
+        let prefix = indent ? "  " : ""
+        let currentIndicator = isCurrent ? "→ " : ""
+        
+        if let lastUpdated = station.lastUpdated {
+            let timeAgo = getTimeAgoString(from: lastUpdated)
+            let formatter = DateFormatter()
+            formatter.dateStyle = .none
+            formatter.timeStyle = .short
+            let timeString = formatter.string(from: lastUpdated)
+            
+            let title = "\(prefix)\(currentIndicator)\(station.name): \(timeAgo) (\(timeString))"
+            let menuItem = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+            menuItem.isEnabled = false
+            menu.addItem(menuItem)
+        } else {
+            let title = "\(prefix)\(currentIndicator)\(station.name): No data yet"
+            let menuItem = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+            menuItem.isEnabled = false
+            menu.addItem(menuItem)
         }
     }
     
@@ -1067,10 +1111,20 @@ class MenuBarManager: ObservableObject {
             return
         }
         
-        backgroundRefreshTimer = Timer.scheduledTimer(withTimeInterval: backgroundRefreshInterval, repeats: true) { [weak self] timer in
+        // Use DispatchSourceTimer for more reliable background operation
+        let queue = DispatchQueue(label: "com.weatherstation.menubar.refresh", qos: .utility)
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        
+        // Convert interval to UInt64 nanoseconds
+        let intervalNanoseconds = UInt64(backgroundRefreshInterval * 1_000_000_000)
+        
+        timer.schedule(deadline: .now() + .nanoseconds(Int(intervalNanoseconds)), 
+                       repeating: .nanoseconds(Int(intervalNanoseconds)),
+                       leeway: .seconds(5)) // Allow 5 second leeway for system optimization
+        
+        timer.setEventHandler { [weak self] in
             guard let self = self else {
                 logError("MenuBarManager deallocated, stopping background refresh timer")
-                timer.invalidate()
                 return
             }
             
@@ -1120,8 +1174,11 @@ class MenuBarManager: ObservableObject {
             }
         }
         
+        timer.resume()
+        backgroundRefreshTimer = timer
+        
         let minutes = Int(backgroundRefreshInterval / 60)
-        logRefresh("MenuBar background refresh started: every \(minutes) minute\(minutes == 1 ? "" : "s")")
+        logRefresh("MenuBar background refresh started: every \(minutes) minute\(minutes == 1 ? "" : "s") using DispatchSourceTimer")
         
         // Run an initial refresh after a short delay if data is stale
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
@@ -1151,9 +1208,11 @@ class MenuBarManager: ObservableObject {
     }
     
     private func stopBackgroundRefresh() {
-        backgroundRefreshTimer?.invalidate()
-        backgroundRefreshTimer = nil
-        logRefresh("MenuBar background refresh stopped")
+        if let timer = backgroundRefreshTimer {
+            timer.cancel()
+            backgroundRefreshTimer = nil
+            logRefresh("MenuBar background refresh stopped (DispatchSourceTimer cancelled)")
+        }
     }
     
     // MARK: - Dock Visibility
