@@ -304,9 +304,10 @@ struct RadarTileView: View {
         <body>
             <div id="iframe-container">
                 <iframe 
-                    src="https://embed.windy.com/embed2.html?lat=\(lat)&lon=\(lon)&detailLat=\(lat)&detailLon=\(lon)&width=100%&height=100%&zoom=\(zoom)&level=surface&overlay=radar&product=ecmwf&menu=&message=&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=mph&metricTemp=°F&radarRange=-1&timestamp=\(timestamp)"
+                    src="https://embed.windy.com/embed2.html?lat=\(lat)&lon=\(lon)&detailLat=\(lat)&detailLon=\(lon)&width=100%&height=100%&zoom=\(zoom)&level=surface&overlay=radar&product=ecmwf&menu=&message=&marker=false&calendar=now&pressure=&type=map&location=coordinates&detail=false&metricWind=mph&metricTemp=°F&radarRange=-1&timestamp=\(timestamp)"
                     frameborder="0"
-                    onload="onIframeLoad()">
+                    onload="onIframeLoad()"
+                    allow="">
                 </iframe>
                 <div id="marker-overlay">
                     \(markersHTML)
