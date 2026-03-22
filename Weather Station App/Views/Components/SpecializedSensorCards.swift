@@ -394,8 +394,11 @@ struct LightningCard: View {
                 
                 Divider()
                 
-                // Last Lightning Detection
-                LastLightningDetectionView(getLastLightningStats: getLastLightningStats)
+                // Last Lightning Detection with update time (Change 1)
+                LastLightningDetectionView(
+                    getLastLightningStats: getLastLightningStats,
+                    lastUpdateTime: data.lightning.distance.lastUpdateTime
+                )
             }
         }
     }
@@ -579,6 +582,7 @@ struct LightningBoltAnimation: View {
 
 struct LastLightningDetectionView: View {
     let getLastLightningStats: () -> LastLightningStats?
+    let lastUpdateTime: Date?
     
     var body: some View {
         if let lightningStats = getLastLightningStats() {
@@ -601,7 +605,17 @@ struct LastLightningDetectionView: View {
                     Spacer()
                 }
                 
-                // Removed existing code that displayed lightning confidence indicator here
+                // Add API last update time (Change 1)
+                if let lastUpdate = lastUpdateTime {
+                    HStack {
+                        Image(systemName: "arrow.clockwise.circle.fill")
+                            .foregroundColor(.blue)
+                            .font(.caption)
+                        Text("Data updated: \(formatRelativeTime(lastUpdate))")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
             }
         } else {
             // Fallback when no lightning data available
@@ -622,8 +636,26 @@ struct LastLightningDetectionView: View {
                     
                     Spacer()
                 }
+                
+                // Add API last update time even when no lightning detected (Change 1)
+                if let lastUpdate = lastUpdateTime {
+                    HStack {
+                        Image(systemName: "arrow.clockwise.circle.fill")
+                            .foregroundColor(.blue)
+                            .font(.caption)
+                        Text("Data updated: \(formatRelativeTime(lastUpdate))")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
             }
         }
+    }
+    
+    private func formatRelativeTime(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: date, relativeTo: Date())
     }
 }
 
@@ -639,8 +671,21 @@ struct BatteryStatusCard: View {
             onTitleChange: onTitleChange
         ) {
             VStack(alignment: .leading, spacing: 8) {
-                // System Health Overview (Traffic Light Dashboard)
-                BatteryHealthDashboard(data: data)
+                // Last update time at the top (Change 1)
+                if let lastUpdate = getLastUpdateTime() {
+                    HStack {
+                        Image(systemName: "clock.fill")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Text("Last updated: \(formatRelativeTime(lastUpdate))")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.bottom, 4)
+                }
+                
+                // System Health Overview (Traffic Light Dashboard) - Enhanced with Device Status (Change 2)
+                BatteryHealthDashboard(data: data, deviceStatus: data.deviceStatus)
                 
                 Divider()
                 
@@ -651,10 +696,36 @@ struct BatteryStatusCard: View {
             .font(.caption)
         }
     }
+    
+    // Helper to get the most recent last update time from battery data
+    private func getLastUpdateTime() -> Date? {
+        let batteries = [
+            data.battery.console,
+            data.battery.hapticArrayBattery,
+            data.battery.hapticArrayCapacitor,
+            data.battery.lightningSensor,
+            data.battery.rainfallSensor,
+            data.battery.pm25SensorCh1,
+            data.battery.pm25SensorCh2,
+            data.battery.tempHumiditySensorCh1,
+            data.battery.tempHumiditySensorCh2,
+            data.battery.tempHumiditySensorCh3
+        ]
+        
+        let updateTimes = batteries.compactMap { $0?.lastUpdateTime }
+        return updateTimes.max()
+    }
+    
+    private func formatRelativeTime(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return formatter.localizedString(for: date, relativeTo: Date())
+    }
 }
 
 struct BatteryHealthDashboard: View {
     let data: WeatherStationData
+    let deviceStatus: DeviceStatus?
     
     private var systemHealthStats: (total: Int, healthy: Int, warning: Int, critical: Int) {
         var stats = (total: 0, healthy: 0, warning: 0, critical: 0)
@@ -693,6 +764,70 @@ struct BatteryHealthDashboard: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
+            // Device Status Banner (Change 2: Device Status Data)
+            if let status = deviceStatus {
+                HStack(spacing: 8) {
+                    // Online/Offline status
+                    HStack(spacing: 4) {
+                        Image(systemName: status.isOnline ? "antenna.radiowaves.left.and.right" : "antenna.radiowaves.left.and.right.slash")
+                            .foregroundColor(status.isOnline ? .green : .red)
+                            .font(.caption)
+                        Text(status.isOnline ? "Online" : "Offline")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(status.isOnline ? .green : .red)
+                    }
+                    
+                    // Signal strength
+                    if let signalStrength = status.signalStrength {
+                        Divider()
+                            .frame(height: 12)
+                        HStack(spacing: 4) {
+                            Image(systemName: signalIcon(for: signalStrength))
+                                .foregroundColor(signalColor(signalStrength))
+                                .font(.caption)
+                            Text("\(signalStrength)%")
+                                .font(.caption)
+                                .foregroundColor(signalColor(signalStrength))
+                        }
+                    }
+                    
+                    // Firmware version
+                    if let firmware = status.firmwareVersion {
+                        Divider()
+                            .frame(height: 12)
+                        HStack(spacing: 4) {
+                            Image(systemName: "gear")
+                                .foregroundColor(.secondary)
+                                .font(.caption2)
+                            Text("v\(firmware)")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    
+                    Spacer()
+                    
+                    // Last communication
+                    if let lastComm = status.lastCommunication {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.clockwise")
+                                .foregroundColor(.blue)
+                                .font(.caption2)
+                            Text(formatRelativeTime(lastComm))
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+                .padding(.vertical, 4)
+                .padding(.horizontal, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(status.isOnline ? Color.green.opacity(0.1) : Color.red.opacity(0.1))
+                )
+            }
+            
             Text("System Health Overview")
                 .font(.caption)
                 .foregroundColor(.secondary)
@@ -756,6 +891,30 @@ struct BatteryHealthDashboard: View {
         }
     }
     
+    private func signalColor(_ strength: Int) -> Color {
+        switch strength {
+        case 75...100: return .green
+        case 50..<75: return .yellow
+        case 25..<50: return .orange
+        default: return .red
+        }
+    }
+    
+    private func signalIcon(for strength: Int) -> String {
+        switch strength {
+        case 75...100: return "wifi"
+        case 50..<75: return "wifi.exclamationmark"
+        case 25..<50: return "wifi.slash"
+        default: return "wifi.slash"
+        }
+    }
+    
+    private func formatRelativeTime(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: date, relativeTo: Date())
+    }
+    
     private var overallSystemStatus: String {
         if systemHealthStats.critical > 0 {
             return "Critical"
@@ -804,8 +963,14 @@ struct BatteryMainSystemsView: View {
                     BatteryHealthIndicator(value: console.value)
                     Text("Console:")
                     Spacer()
-                    Text("\(console.value) \(console.unit)")
-                        .fontWeight(.semibold)
+                    // Use API description if available (Change 3)
+                    if let description = console.description {
+                        Text(description)
+                            .fontWeight(.semibold)
+                    } else {
+                        Text("\(console.value) \(console.unit)")
+                            .fontWeight(.semibold)
+                    }
                 }
             }
             
@@ -814,8 +979,14 @@ struct BatteryMainSystemsView: View {
                     BatteryHealthIndicator(value: haptic.value)
                     Text("Haptic Array:")
                     Spacer()
-                    Text("\(haptic.value) \(haptic.unit)")
-                        .fontWeight(.semibold)
+                    // Use API description if available (Change 3)
+                    if let description = haptic.description {
+                        Text(description)
+                            .fontWeight(.semibold)
+                    } else {
+                        Text("\(haptic.value) \(haptic.unit)")
+                            .fontWeight(.semibold)
+                    }
                 }
             }
             
@@ -825,9 +996,16 @@ struct BatteryMainSystemsView: View {
                     BatteryHealthIndicator(value: hapticCap.value)
                     Text("Haptic Capacitor:")
                     Spacer()
-                    Text("\(hapticCap.value) \(hapticCap.unit)")
-                        .fontWeight(.semibold)
-                        .foregroundColor(.blue)
+                    // Use API description if available (Change 3)
+                    if let description = hapticCap.description {
+                        Text(description)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.blue)
+                    } else {
+                        Text("\(hapticCap.value) \(hapticCap.unit)")
+                            .fontWeight(.semibold)
+                            .foregroundColor(.blue)
+                    }
                 }
             }
         }
@@ -845,7 +1023,13 @@ struct BatterySensorSystemsView: View {
                     BatteryHealthIndicator(value: lightning.value)
                     Text("Lightning Sensor:")
                     Spacer()
-                    Text(WeatherStatusHelpers.batteryLevelText(lightning.value))
+                    // Use API description if available (Change 3)
+                    if let description = lightning.description {
+                        Text(description)
+                            .fontWeight(.semibold)
+                    } else {
+                        Text(WeatherStatusHelpers.batteryLevelText(lightning.value))
+                    }
                 }
             }
             
@@ -854,7 +1038,13 @@ struct BatterySensorSystemsView: View {
                     BatteryHealthIndicator(value: rainfall.value)
                     Text("Rainfall Sensor:")
                     Spacer()
-                    Text("\(rainfall.value) \(rainfall.unit)")
+                    // Use API description if available (Change 3)
+                    if let description = rainfall.description {
+                        Text(description)
+                            .fontWeight(.semibold)
+                    } else {
+                        Text("\(rainfall.value) \(rainfall.unit)")
+                    }
                 }
             }
             
@@ -863,7 +1053,13 @@ struct BatterySensorSystemsView: View {
                     BatteryHealthIndicator(value: pm25Ch1.value)
                     Text("PM2.5 Ch1:")
                     Spacer()
-                    Text(WeatherStatusHelpers.batteryLevelText(pm25Ch1.value))
+                    // Use API description if available (Change 3)
+                    if let description = pm25Ch1.description {
+                        Text(description)
+                            .fontWeight(.semibold)
+                    } else {
+                        Text(WeatherStatusHelpers.batteryLevelText(pm25Ch1.value))
+                    }
                 }
             }
             
@@ -872,7 +1068,13 @@ struct BatterySensorSystemsView: View {
                     BatteryHealthIndicator(value: pm25Ch2.value)
                     Text("PM2.5 Ch2:")
                     Spacer()
-                    Text(WeatherStatusHelpers.batteryLevelText(pm25Ch2.value))
+                    // Use API description if available (Change 3)
+                    if let description = pm25Ch2.description {
+                        Text(description)
+                            .fontWeight(.semibold)
+                    } else {
+                        Text(WeatherStatusHelpers.batteryLevelText(pm25Ch2.value))
+                    }
                 }
             }
             
@@ -881,7 +1083,13 @@ struct BatterySensorSystemsView: View {
                     BatteryHealthIndicator(value: th1.value)
                     Text("Temp/Humidity Ch1:")
                     Spacer()
-                    Text(WeatherStatusHelpers.tempHumidityBatteryStatusText(th1.value))
+                    // Use API description if available (Change 3)
+                    if let description = th1.description {
+                        Text(description)
+                            .fontWeight(.semibold)
+                    } else {
+                        Text(WeatherStatusHelpers.tempHumidityBatteryStatusText(th1.value))
+                    }
                 }
             }
             
@@ -890,7 +1098,13 @@ struct BatterySensorSystemsView: View {
                     BatteryHealthIndicator(value: th2.value)
                     Text("Temp/Humidity Ch2:")
                     Spacer()
-                    Text(WeatherStatusHelpers.tempHumidityBatteryStatusText(th2.value))
+                    // Use API description if available (Change 3)
+                    if let description = th2.description {
+                        Text(description)
+                            .fontWeight(.semibold)
+                    } else {
+                        Text(WeatherStatusHelpers.tempHumidityBatteryStatusText(th2.value))
+                    }
                 }
             }
             
@@ -899,7 +1113,13 @@ struct BatterySensorSystemsView: View {
                     BatteryHealthIndicator(value: th3.value)
                     Text("Temp/Humidity Ch3:")
                     Spacer()
-                    Text(WeatherStatusHelpers.tempHumidityBatteryStatusText(th3.value))
+                    // Use API description if available (Change 3)
+                    if let description = th3.description {
+                        Text(description)
+                            .fontWeight(.semibold)
+                    } else {
+                        Text(WeatherStatusHelpers.tempHumidityBatteryStatusText(th3.value))
+                    }
                 }
             }
         }
@@ -1272,17 +1492,26 @@ struct SunPositionArc: View {
         return currentTime >= sunTimes.sunrise && currentTime <= sunTimes.sunset
     }
     
-    private var skyGradientColors: [Color] {
+    // Get color for a specific position along the arc (0 to 1)
+    private func arcColor(at position: CGFloat) -> Color {
         if !isDaytime {
-            return [Color.black.opacity(0.3), Color.blue.opacity(0.4), Color.black.opacity(0.3)]
+            return Color.purple.opacity(0.6)
         }
         
-        if sunPosition < 0.2 {
-            return [Color.orange.opacity(0.4), Color.pink.opacity(0.3), Color.blue.opacity(0.2)]
-        } else if sunPosition > 0.8 {
-            return [Color.blue.opacity(0.2), Color.orange.opacity(0.4), Color.red.opacity(0.3)]
+        // Color transitions based on sun position
+        if position < sunPosition {
+            // Before current sun position - use gradient from purple/pink to orange/yellow
+            let relativePosition = position / sunPosition
+            if relativePosition < 0.5 {
+                // Early morning - purple/pink
+                return Color.purple.opacity(0.6)
+            } else {
+                // Approaching current time - transition to orange
+                return Color.orange.opacity(0.7)
+            }
         } else {
-            return [Color.blue.opacity(0.3), Color.cyan.opacity(0.2), Color.blue.opacity(0.3)]
+            // After current sun position - lighter/grayed out
+            return Color.gray.opacity(0.4)
         }
     }
     
@@ -1290,220 +1519,114 @@ struct SunPositionArc: View {
         GeometryReader { geometry in
             let width = geometry.size.width
             let height = geometry.size.height
-            let arcHeight = height * 0.85 // More realistic arc curve
-            let horizonY = height * 0.75 // Position horizon line lower for better proportions
+            let padding: CGFloat = 40 // Padding from edges
+            let arcWidth = width - (padding * 2)
+            let arcHeight = height * 0.7 // Height of the arc
+            let baseY = height * 0.85 // Base line Y position
             
             ZStack {
-                // Sky gradient background
-                LinearGradient(
-                    gradient: Gradient(colors: skyGradientColors),
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: horizonY)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .opacity(0.5)
-                
-                // Horizon line
-                Rectangle()
-                    .fill(Color.secondary.opacity(0.3))
-                    .frame(height: 2)
-                    .position(x: width / 2, y: horizonY)
-                
-                // Ground/earth representation below horizon
-                Rectangle()
-                    .fill(
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                Color.brown.opacity(0.2),
-                                Color.brown.opacity(0.3)
-                            ]),
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .frame(height: height - horizonY)
-                    .position(x: width / 2, y: horizonY + (height - horizonY) / 2)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .opacity(0.3)
-                
-                // Background arc representing the sun's path (dashed line)
+                // Full dashed arc path (background)
                 Path { path in
-                    path.move(to: CGPoint(x: 0, y: horizonY))
+                    path.move(to: CGPoint(x: padding, y: baseY))
                     path.addQuadCurve(
-                        to: CGPoint(x: width, y: horizonY),
-                        control: CGPoint(x: width / 2, y: horizonY - arcHeight)
+                        to: CGPoint(x: width - padding, y: baseY),
+                        control: CGPoint(x: width / 2, y: baseY - arcHeight)
                     )
                 }
                 .stroke(
-                    Color.secondary.opacity(0.4),
-                    style: StrokeStyle(lineWidth: 2, dash: [6, 4])
+                    Color.gray.opacity(0.3),
+                    style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [8, 6])
                 )
                 
-                // Daylight portion of the arc (if currently daylight) - enhanced with gradient
+                // Colored portion of arc (from sunrise to current position)
                 if isDaytime {
                     Path { path in
-                        path.move(to: CGPoint(x: 0, y: horizonY))
+                        let endX = padding + (arcWidth * sunPosition)
                         
-                        let endX = width * sunPosition
-                        let controlX = endX / 2
-                        let controlY = horizonY - (arcHeight * sin(.pi * sunPosition))
+                        path.move(to: CGPoint(x: padding, y: baseY))
+                        
+                        // Calculate end point on the arc
+                        let endProgress = sunPosition
+                        let arcEndY = baseY - (arcHeight * sin(.pi * endProgress))
                         
                         path.addQuadCurve(
-                            to: CGPoint(x: endX, y: horizonY),
-                            control: CGPoint(x: controlX, y: controlY)
+                            to: CGPoint(x: endX, y: arcEndY),
+                            control: CGPoint(x: width / 2, y: baseY - arcHeight)
                         )
                     }
+                    .trim(from: 0, to: sunPosition)
                     .stroke(
                         LinearGradient(
                             gradient: Gradient(colors: [
-                                .orange.opacity(0.7),
-                                .yellow,
-                                .orange.opacity(0.7)
+                                Color(red: 0.6, green: 0.3, blue: 0.8).opacity(0.8), // Purple
+                                Color(red: 0.8, green: 0.4, blue: 0.6).opacity(0.8), // Pink
+                                Color.orange.opacity(0.9), // Orange
+                                Color.yellow.opacity(0.9) // Yellow
                             ]),
                             startPoint: .leading,
                             endPoint: .trailing
                         ),
-                        style: StrokeStyle(lineWidth: 4, lineCap: .round)
+                        style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [8, 6])
                     )
-                    .shadow(color: .yellow.opacity(0.5), radius: 3)
                 }
                 
-                // Sunrise marker with label and icon
-                VStack(spacing: 2) {
-                    Circle()
-                        .fill(
-                            RadialGradient(
-                                gradient: Gradient(colors: [.orange.opacity(0.8), .orange]),
-                                center: .center,
-                                startRadius: 0,
-                                endRadius: 6
-                            )
-                        )
-                        .frame(width: 12, height: 12)
-                        .shadow(color: .orange.opacity(0.6), radius: 3)
-                    
-                    Image(systemName: "sunrise.fill")
-                        .font(.system(size: 10))
-                        .foregroundColor(.orange.opacity(0.8))
-                }
-                .position(x: 30, y: horizonY + 5)
+                // Calculate sun position on arc
+                let sunX = padding + (arcWidth * sunPosition)
+                let sunY = baseY - (arcHeight * sin(.pi * sunPosition))
                 
-                // Sunset marker with label and icon
-                VStack(spacing: 2) {
-                    Circle()
-                        .fill(
-                            RadialGradient(
-                                gradient: Gradient(colors: [.red.opacity(0.8), .red]),
-                                center: .center,
-                                startRadius: 0,
-                                endRadius: 6
-                            )
-                        )
-                        .frame(width: 12, height: 12)
-                        .shadow(color: .red.opacity(0.6), radius: 3)
-                    
-                    Image(systemName: "sunset.fill")
-                        .font(.system(size: 10))
-                        .foregroundColor(.red.opacity(0.8))
-                }
-                .position(x: width - 30, y: horizonY + 5)
-                
-                // Sun position indicator - enhanced with glow and rays
-                let sunX = width * sunPosition
-                let sunY = isDaytime ?
-                    horizonY - (arcHeight * sin(.pi * sunPosition)) :
-                    horizonY + 10 // Below horizon when not daylight
-                
+                // Sun icon with glow
                 ZStack {
-                    // Sun glow effect (outer layer)
+                    // Outer glow
                     if isDaytime {
                         Circle()
                             .fill(
                                 RadialGradient(
                                     gradient: Gradient(colors: [
-                                        .yellow.opacity(0.4),
-                                        .orange.opacity(0.2),
-                                        .clear
+                                        Color.orange.opacity(0.4),
+                                        Color.orange.opacity(0.2),
+                                        Color.clear
                                     ]),
                                     center: .center,
                                     startRadius: 0,
-                                    endRadius: 18
+                                    endRadius: 20
                                 )
                             )
-                            .frame(width: 36, height: 36)
-                        
-                        // Sun rays (longer and more visible)
-                        ForEach(0..<12) { index in
-                            Rectangle()
-                                .fill(.yellow.opacity(0.6))
-                                .frame(width: 2, height: 10)
-                                .offset(y: -14)
-                                .rotationEffect(.degrees(Double(index) * 30))
-                        }
+                            .frame(width: 40, height: 40)
                     }
                     
-                    // Main sun circle (larger)
+                    // Sun circle with texture
                     Circle()
                         .fill(
                             RadialGradient(
                                 gradient: Gradient(colors: [
-                                    .yellow,
-                                    isDaytime ? .orange : .gray
+                                    Color(red: 1.0, green: 0.9, blue: 0.6),
+                                    Color.orange
                                 ]),
                                 center: .center,
                                 startRadius: 0,
-                                endRadius: 10
+                                endRadius: 12
                             )
                         )
-                        .frame(width: 20, height: 20)
-                        .shadow(color: isDaytime ? .yellow.opacity(0.8) : .clear, radius: 6)
-                    
-                    // Sun highlight
-                    Circle()
-                        .fill(.white.opacity(0.7))
-                        .frame(width: 8, height: 8)
-                        .offset(x: -3, y: -3)
+                        .frame(width: 24, height: 24)
+                        .overlay(
+                            Circle()
+                                .fill(Color.white.opacity(0.4))
+                                .frame(width: 10, height: 10)
+                                .offset(x: -4, y: -4)
+                        )
+                        .shadow(color: .orange.opacity(0.6), radius: 6)
                 }
                 .position(x: sunX, y: sunY)
                 
-                // Current time label (only during daytime) - positioned above the sun
-                if isDaytime {
-                    Text(currentTimeString)
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(.primary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(
-                            Capsule()
-                                .fill(.ultraThinMaterial)
-                                .shadow(color: .black.opacity(0.15), radius: 3)
-                        )
-                        .position(x: sunX, y: sunY - 35)
-                }
-                
-                // Zenith marker (noon position) - subtle indicator
-                if isDaytime && sunPosition > 0.3 && sunPosition < 0.7 {
-                    VStack(spacing: 2) {
-                        Text("☀︎")
-                            .font(.caption2)
-                            .foregroundColor(.yellow.opacity(0.5))
-                        Text("Noon")
-                            .font(.caption2)
-                            .foregroundColor(.secondary.opacity(0.6))
-                    }
-                    .position(x: width / 2, y: horizonY - arcHeight - 15)
+                // Moon icon (top right, only shown at night or near sunset)
+                if !isDaytime || sunPosition > 0.8 {
+                    Image(systemName: "moon.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(.gray.opacity(0.6))
+                        .position(x: width - 30, y: 20)
                 }
             }
         }
-    }
-    
-    private var currentTimeString: String {
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        formatter.timeZone = sunTimes.timeZone
-        return formatter.string(from: currentTime)
     }
 }
 

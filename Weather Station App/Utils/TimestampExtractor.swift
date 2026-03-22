@@ -101,7 +101,6 @@ struct TimestampExtractor {
             weatherData.rainfallPiezo,
             weatherData.lightning,
             weatherData.pm25Ch1,
-            weatherData.tempAndHumidityCh1,
             weatherData.tempAndHumidityCh2,
             weatherData.battery
         ]
@@ -111,6 +110,7 @@ struct TimestampExtractor {
             weatherData.rainfall,
             weatherData.pm25Ch2,
             weatherData.pm25Ch3,
+            weatherData.tempAndHumidityCh1,
             weatherData.tempAndHumidityCh3
         ]
         

@@ -32,11 +32,13 @@ struct EcowittDevice: Codable {
     let latitude: Double?
     let stationtype: String?
     let iotdeviceList: [String]?
+    let deviceStatus: String? // "Online" or "Offline"
     
     enum CodingKeys: String, CodingKey {
         case id, name, mac, type, createtime, longitude, latitude, stationtype
         case dateZoneId = "date_zone_id"
         case iotdeviceList = "iotdevice_list"
+        case deviceStatus = "device_status"
     }
     
     // Convert to WeatherStation

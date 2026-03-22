@@ -102,10 +102,10 @@ struct TemperatureSensorsSection: View {
             }
             
             // Additional Temperature/Humidity Ch1 Sensor
-            if station.sensorPreferences.showTempHumidityCh1 {
+            if station.sensorPreferences.showTempHumidityCh1, let tempHumCh1 = data.tempAndHumidityCh1 {
                 ChannelTemperatureCard(
                     station: station,
-                    data: data.tempAndHumidityCh1,
+                    data: tempHumCh1,
                     title: station.customLabels.tempHumidityCh1,
                     onTitleChange: { newTitle in
                         station.customLabels.tempHumidityCh1 = newTitle

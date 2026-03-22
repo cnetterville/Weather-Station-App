@@ -7,6 +7,48 @@
 
 import Foundation
 
+// MARK: - Device Status
+
+struct DeviceStatus: Codable {
+    let isOnline: Bool
+    let signalStrength: Int? // Signal strength percentage (0-100)
+    let firmwareVersion: String?
+    let lastCommunication: Date?
+    
+    enum CodingKeys: String, CodingKey {
+        case isOnline = "is_online"
+        case signalStrength = "signal_strength"
+        case firmwareVersion = "firmware_version"
+        case lastCommunication = "last_communication"
+    }
+    
+    // Custom decoder to handle different date formats
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        isOnline = try container.decodeIfPresent(Bool.self, forKey: .isOnline) ?? false
+        signalStrength = try container.decodeIfPresent(Int.self, forKey: .signalStrength)
+        firmwareVersion = try container.decodeIfPresent(String.self, forKey: .firmwareVersion)
+        
+        // Handle lastCommunication as either timestamp string or Date
+        if let timeString = try? container.decodeIfPresent(String.self, forKey: .lastCommunication),
+           let timestamp = Double(timeString) {
+            lastCommunication = Date(timeIntervalSince1970: timestamp)
+        } else if let date = try? container.decodeIfPresent(Date.self, forKey: .lastCommunication) {
+            lastCommunication = date
+        } else {
+            lastCommunication = nil
+        }
+    }
+    
+    // Simple initializer
+    init(isOnline: Bool, signalStrength: Int? = nil, firmwareVersion: String? = nil, lastCommunication: Date? = nil) {
+        self.isOnline = isOnline
+        self.signalStrength = signalStrength
+        self.firmwareVersion = firmwareVersion
+        self.lastCommunication = lastCommunication
+    }
+}
+
 struct WeatherStationResponse: Codable {
     let code: Int
     let msg: String
@@ -26,11 +68,12 @@ struct WeatherStationData: Codable {
     let pm25Ch1: PM25Data
     let pm25Ch2: PM25Data? // Made optional
     let pm25Ch3: PM25Data? // Add pm25Ch3
-    let tempAndHumidityCh1: TempHumidityData
+    let tempAndHumidityCh1: TempHumidityData? // Made optional - not all stations have Ch1
     let tempAndHumidityCh2: TempHumidityData
     let tempAndHumidityCh3: TempHumidityData? // Made optional
     let battery: BatteryData
     let camera: CameraData? // Add camera data
+    let deviceStatus: DeviceStatus? // New: Device status from API
     
     enum CodingKeys: String, CodingKey {
         case outdoor, indoor, wind, pressure, lightning, battery, camera
@@ -43,6 +86,7 @@ struct WeatherStationData: Codable {
         case tempAndHumidityCh1 = "temp_and_humidity_ch1"
         case tempAndHumidityCh2 = "temp_and_humidity_ch2"
         case tempAndHumidityCh3 = "temp_and_humidity_ch3"
+        case deviceStatus = "device_status"
     }
 }
 
@@ -50,6 +94,41 @@ struct MeasurementData: Codable {
     let time: String
     let unit: String
     let value: String
+    let description: String? // New: Battery data description from API
+    let lastUpdateTime: Date? // New: Last update time from API
+    
+    enum CodingKeys: String, CodingKey {
+        case time, unit, value, description
+        case lastUpdateTime = "last_update_time"
+    }
+    
+    // Custom decoder to handle optional new fields
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        time = try container.decode(String.self, forKey: .time)
+        unit = try container.decode(String.self, forKey: .unit)
+        value = try container.decode(String.self, forKey: .value)
+        description = try container.decodeIfPresent(String.self, forKey: .description)
+        
+        // Handle lastUpdateTime as either timestamp string or Date
+        if let timeString = try? container.decodeIfPresent(String.self, forKey: .lastUpdateTime),
+           let timestamp = Double(timeString) {
+            lastUpdateTime = Date(timeIntervalSince1970: timestamp)
+        } else if let date = try? container.decodeIfPresent(Date.self, forKey: .lastUpdateTime) {
+            lastUpdateTime = date
+        } else {
+            lastUpdateTime = nil
+        }
+    }
+    
+    // Keep simple initializer for creating empty data
+    init(time: String, unit: String, value: String, description: String? = nil, lastUpdateTime: Date? = nil) {
+        self.time = time
+        self.unit = unit
+        self.value = value
+        self.description = description
+        self.lastUpdateTime = lastUpdateTime
+    }
 }
 
 struct OutdoorData: Codable {
@@ -312,7 +391,8 @@ extension WeatherStationData {
                 tempHumiditySensorCh2: nil,
                 tempHumiditySensorCh3: nil
             ),
-            camera: nil // Optional
+            camera: nil, // Optional
+            deviceStatus: nil // Optional
         )
     }
     
@@ -345,7 +425,8 @@ extension WeatherStationData {
                     tempAndHumidityCh2: data.tempAndHumidityCh2,
                     tempAndHumidityCh3: data.tempAndHumidityCh3,
                     battery: data.battery,
-                    camera: data.camera
+                    camera: data.camera,
+                    deviceStatus: data.deviceStatus
                 )
             }
         }

@@ -258,7 +258,7 @@ struct ReorderModeView: View {
         case .forecast: return station.sensorPreferences.showForecast
         case .radar: return station.sensorPreferences.showRadar && station.latitude != nil && station.longitude != nil
         case .indoorTemp: return station.sensorPreferences.showIndoorTemp
-        case .tempHumidityCh1: return station.sensorPreferences.showTempHumidityCh1
+        case .tempHumidityCh1: return station.sensorPreferences.showTempHumidityCh1 && data.tempAndHumidityCh1 != nil
         case .tempHumidityCh2: return station.sensorPreferences.showTempHumidityCh2
         case .tempHumidityCh3: return station.sensorPreferences.showTempHumidityCh3 && data.tempAndHumidityCh3 != nil
         case .wind: return station.sensorPreferences.showWind
@@ -374,7 +374,7 @@ struct ReorderableWeatherCardsView: View {
         case .forecast: return station.sensorPreferences.showForecast
         case .radar: return station.sensorPreferences.showRadar && station.latitude != nil && station.longitude != nil
         case .indoorTemp: return station.sensorPreferences.showIndoorTemp
-        case .tempHumidityCh1: return station.sensorPreferences.showTempHumidityCh1
+        case .tempHumidityCh1: return station.sensorPreferences.showTempHumidityCh1 && data.tempAndHumidityCh1 != nil
         case .tempHumidityCh2: return station.sensorPreferences.showTempHumidityCh2
         case .tempHumidityCh3: return station.sensorPreferences.showTempHumidityCh3 && data.tempAndHumidityCh3 != nil
         case .wind: return station.sensorPreferences.showWind
@@ -512,24 +512,28 @@ struct ReorderableWeatherCardsView: View {
     private func tempHumidityCardView(channel: Int) -> some View {
         switch channel {
         case 1:
-            ChannelTemperatureCard(
-                station: station,
-                data: data.tempAndHumidityCh1,
-                title: station.customLabels.tempHumidityCh1,
-                onTitleChange: { newTitle in
-                    updateStationLabel(\.tempHumidityCh1, with: newTitle)
-                },
-                getDailyTemperatureStats: {
-                    DailyTemperatureCalculator.getFlexibleTempHumidityCh1DailyStats(
-                        weatherData: data,
-                        historicalData: weatherService.historicalData[station.macAddress],
-                        station: station
-                    )
-                },
-                getDailyHumidityStats: {
-                    getTempHumidityCh1HumidityStats()
-                }
-            )
+            if let ch1Data = data.tempAndHumidityCh1 {
+                ChannelTemperatureCard(
+                    station: station,
+                    data: ch1Data,
+                    title: station.customLabels.tempHumidityCh1,
+                    onTitleChange: { newTitle in
+                        updateStationLabel(\.tempHumidityCh1, with: newTitle)
+                    },
+                    getDailyTemperatureStats: {
+                        DailyTemperatureCalculator.getFlexibleTempHumidityCh1DailyStats(
+                            weatherData: data,
+                            historicalData: weatherService.historicalData[station.macAddress],
+                            station: station
+                        )
+                    },
+                    getDailyHumidityStats: {
+                        getTempHumidityCh1HumidityStats()
+                    }
+                )
+            } else {
+                EmptyView()
+            }
         case 2:
             ChannelTemperatureCard(
                 station: station,
@@ -763,6 +767,7 @@ struct ReorderableWeatherCardsView: View {
     private func signalStrengthCardView() -> some View {
         SignalStrengthCard(
             station: station,
+            data: data,
             onTitleChange: { newTitle in
                 updateStationLabel(\.signalStrength, with: newTitle)
             }
