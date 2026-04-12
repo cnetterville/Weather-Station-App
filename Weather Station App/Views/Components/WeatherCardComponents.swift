@@ -34,11 +34,12 @@ struct WeatherCard<Content: View>: View {
             }
             
             content
+                .frame(maxHeight: .infinity, alignment: .top)
             
             Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding()
-        .frame(minHeight: 200, maxHeight: 220)
         .background(Color(NSColor.controlBackgroundColor))
         .cornerRadius(12)
         .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
@@ -106,10 +107,11 @@ struct EditableWeatherCard<Content: View>: View {
                 Spacer()
             }
             
-            // Content - now adaptive to content size
+            // Content
             content
+                .frame(maxHeight: .infinity, alignment: .top)
         }
-        .frame(maxWidth: .infinity, minHeight: 120, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(16)
         .background {
             // Modern multi-layer background effect
