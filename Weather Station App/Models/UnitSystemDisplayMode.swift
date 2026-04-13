@@ -43,7 +43,7 @@ extension UserDefaults {
                let mode = UnitSystemDisplayMode(rawValue: rawValue) {
                 return mode
             }
-            return .both // Default to showing both
+            return .imperial // Default to imperial
         }
         set {
             set(newValue.rawValue, forKey: "UnitSystemDisplayMode")
