@@ -7,63 +7,59 @@
 
 import SwiftUI
 
-// AppDelegate to handle notifications when no windows exist
+// Window delegate that hides the window on close instead of destroying it (for menu bar mode)
+class MainWindowDelegate: NSObject, NSWindowDelegate {
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        // If menu bar is enabled, hide the window instead of closing it
+        if MenuBarManager.shared.isMenuBarEnabled {
+            logUI("Hiding main window instead of closing (menu bar mode)")
+            sender.orderOut(nil)
+            return false
+        }
+        return true
+    }
+}
+
+// AppDelegate to handle app lifecycle
 class AppDelegate: NSObject, NSApplicationDelegate {
+    let mainWindowDelegate = MainWindowDelegate()
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         logSuccess("AppDelegate: App finished launching")
-        
-        // Set up observer for showing main window when needed
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleShowMainWindow),
-            name: .showMainWindow,
-            object: nil
-        )
     }
-    
-    @objc func handleShowMainWindow() {
-        logUI("AppDelegate: Received showMainWindow notification")
-        
-        // Check if there are any existing main windows
-        let hasMainWindow = NSApp.windows.contains { window in
-            !window.className.contains("StatusBar") && 
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        // Don't terminate when menu bar mode is active
+        return !MenuBarManager.shared.isMenuBarEnabled
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            showMainWindow()
+        }
+        return true
+    }
+
+    func showMainWindow() {
+        logUI("AppDelegate: Showing main window")
+
+        // Find hidden main window and show it
+        if let window = NSApp.windows.first(where: { window in
+            !window.className.contains("StatusBar") &&
             !window.className.contains("Item") &&
             window.contentView != nil &&
-            window.frame.width > 500
-        }
-        
-        if hasMainWindow {
-            logSuccess("AppDelegate: Main window already exists, letting ContentView handle it")
-            return
-        }
-        
-        logUI("AppDelegate: No main window exists, creating new one")
-        
-        // Create a new window with proper SwiftUI lifecycle management
-        DispatchQueue.main.async {
-            // Use NSApp's built-in mechanism to create a new untitled document/window
-            // This will trigger SwiftUI to create a new WindowGroup instance
-            if NSApp.responds(to: #selector(NSDocumentController.newDocument(_:))) {
-                NSApp.sendAction(#selector(NSDocumentController.newDocument(_:)), to: nil, from: nil)
-                logSuccess("AppDelegate: Sent newDocument action")
-            } else {
-                // Fallback: Try to trigger File > New menu item
-                if let fileMenu = NSApp.mainMenu?.item(withTitle: "File"),
-                   let newItem = fileMenu.submenu?.items.first(where: { $0.title.contains("New") }) {
-                    NSApp.sendAction(newItem.action!, to: newItem.target, from: newItem)
-                    logSuccess("AppDelegate: Triggered File > New menu item")
-                } else {
-                    logError("AppDelegate: Could not find way to create new window")
-                }
-            }
-            
-            // Ensure the app is active
+            window.title == "Main"
+        }) {
+            window.makeKeyAndOrderFront(nil)
+            window.orderFrontRegardless()
+            NSApp.activate(ignoringOtherApps: true)
+            logSuccess("AppDelegate: Showed existing hidden window")
+        } else {
+            // No window exists at all - create a new one
+            logUI("AppDelegate: No window found, creating new one")
+            NSApp.sendAction(#selector(NSDocumentController.newDocument(_:)), to: nil, from: nil)
             NSApp.activate(ignoringOtherApps: true)
         }
-    }
-    
-    deinit {
-        NotificationCenter.default.removeObserver(self)
     }
 }
 
@@ -78,41 +74,34 @@ struct Weather_Station_AppApp: App {
                 .onAppear {
                     // Initialize the menu bar manager when app starts
                     _ = MenuBarManager.shared
-                    
+
                     // Disable automatic animations globally
                     NSAnimationContext.current.duration = 0
-                    
-                    // Configure window to save frame automatically
-                    if let window = NSApp.mainWindow ?? NSApp.windows.first(where: { $0.contentView != nil }) {
-                        window.setFrameAutosaveName("MainWindow")
-                    }
-                    
-                    logSuccess("ContentView appeared")
-                }
-                .onReceive(NotificationCenter.default.publisher(for: .showMainWindow)) { _ in
-                    // Handle the notification within the SwiftUI context
-                    logUI("ContentView: Received showMainWindow notification")
-                    
-                    // Since we're already in a ContentView, this window should already be visible
-                    // Just ensure the app is activated and window is brought forward
+
+                    // Configure window: save frame, install delegate, ensure proper sizing
                     DispatchQueue.main.async {
-                        NSApp.activate(ignoringOtherApps: true)
-                        
-                        if let window = NSApp.mainWindow ?? NSApp.windows.first(where: { window in
-                            !window.className.contains("StatusBar") && 
+                        if let window = NSApp.windows.first(where: { window in
+                            window.title == "Main" &&
+                            !window.className.contains("StatusBar") &&
                             !window.className.contains("Item") &&
                             window.contentView != nil
-                        }) {
-                            if window.isMiniaturized {
-                                window.deminiaturize(nil)
+                        }) ?? NSApp.mainWindow {
+                            window.setFrameAutosaveName("MainWindow")
+
+                            // Install our delegate to intercept window close
+                            window.delegate = (NSApp.delegate as? AppDelegate)?.mainWindowDelegate
+
+                            // Ensure the window meets minimum size on first appearance
+                            if window.frame.width < 800 || window.frame.height < 600 {
+                                let newWidth = max(window.frame.width, 1200)
+                                let newHeight = max(window.frame.height, 800)
+                                window.setContentSize(NSSize(width: newWidth, height: newHeight))
+                                window.center()
                             }
-                            window.makeKeyAndOrderFront(nil)
-                            window.orderFrontRegardless()
-                            logSuccess("Activated existing window from ContentView")
-                        } else {
-                            logWarning("No main window found in ContentView")
                         }
                     }
+
+                    logSuccess("ContentView appeared")
                 }
         }
         .defaultSize(width: 1200, height: 800)

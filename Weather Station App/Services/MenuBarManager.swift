@@ -524,51 +524,63 @@ class MenuBarManager: ObservableObject {
         }
     }
     
-    @objc private func openMainApp() {
-        logUI("MenuBar clicked - attempting to show app")
-        
-        // Activate the app first
-        NSApp.activate(ignoringOtherApps: true)
-        
-        // Try to find existing main window
-        let mainWindows = NSApp.windows.filter { window in
-            !window.className.contains("StatusBar") && 
+    /// Find the main content window by checking for the "Main" window group title or sufficient size
+    private func findMainWindow() -> NSWindow? {
+        // First, try to find by title matching the WindowGroup("Main") identifier
+        if let window = NSApp.windows.first(where: { window in
+            window.title == "Main" &&
+            window.contentView != nil &&
+            !window.className.contains("StatusBar") &&
+            !window.className.contains("Item")
+        }) {
+            return window
+        }
+
+        // Fallback: find by size (a properly-sized main window)
+        if let window = NSApp.windows.first(where: { window in
+            !window.className.contains("StatusBar") &&
             !window.className.contains("Item") &&
             window.contentView != nil &&
-            window.frame.width > 500
+            window.frame.width > 300
+        }) {
+            return window
         }
-        
-        if let existingWindow = mainWindows.first {
-            logUI("Found existing window - bringing to front")
-            
+
+        return nil
+    }
+
+    @objc private func openMainApp() {
+        logUI("MenuBar clicked - attempting to show app")
+
+        // Activate the app first
+        NSApp.activate(ignoringOtherApps: true)
+
+        if let existingWindow = findMainWindow() {
+            logUI("Found existing main window - bringing to front")
+
             if existingWindow.isMiniaturized {
                 existingWindow.deminiaturize(nil)
             }
-            
+
             existingWindow.makeKeyAndOrderFront(nil)
             existingWindow.orderFrontRegardless()
-            
+
+            // Ensure the window is properly sized and on screen
+            ensureWindowIsProperlyPositioned(existingWindow)
+
         } else {
-            logWarning("No existing window found - using simple notification approach")
-            
-            // Use a simple notification that ContentView will handle
-            NotificationCenter.default.post(name: .showMainWindow, object: nil)
-            
-            // Give it a moment, then try to activate any window that appears
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                NSApp.activate(ignoringOtherApps: true)
-                
-                // Look for any new windows
-                if let newWindow = NSApp.windows.first(where: { window in
-                    !window.className.contains("StatusBar") && 
-                    !window.className.contains("Item") &&
-                    window.contentView != nil &&
-                    window.frame.width > 500
-                }) {
+            logWarning("No existing window found - asking AppDelegate to show/create one")
+
+            // Delegate to AppDelegate which handles window creation
+            (NSApp.delegate as? AppDelegate)?.showMainWindow()
+
+            // Give it a moment to appear, then ensure proper sizing
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                if let newWindow = self.findMainWindow() {
+                    self.ensureWindowIsProperlyPositioned(newWindow)
                     newWindow.makeKeyAndOrderFront(nil)
+                    newWindow.orderFrontRegardless()
                     logSuccess("Found and activated new window")
-                } else {
-                    logWarning("No window appeared after notification")
                 }
             }
         }
@@ -584,6 +596,38 @@ class MenuBarManager: ObservableObject {
         }
     }
     
+    private func ensureWindowIsProperlyPositioned(_ window: NSWindow) {
+        let minWidth: CGFloat = 1200
+        let minHeight: CGFloat = 800
+
+        // If the window is too small, resize it
+        if window.frame.width < minWidth || window.frame.height < minHeight {
+            let newWidth = max(window.frame.width, minWidth)
+            let newHeight = max(window.frame.height, minHeight)
+            window.setContentSize(NSSize(width: newWidth, height: newHeight))
+            logUI("Resized window to \(Int(newWidth))x\(Int(newHeight))")
+        }
+
+        // Ensure the window is visible on screen
+        guard let screen = window.screen ?? NSScreen.main else { return }
+        let screenFrame = screen.visibleFrame
+        let windowFrame = window.frame
+
+        // Check if the window is mostly off-screen
+        let visibleArea = windowFrame.intersection(screenFrame)
+        let isOffScreen = visibleArea.isNull ||
+            visibleArea.width < windowFrame.width * 0.5 ||
+            visibleArea.height < windowFrame.height * 0.5
+
+        if isOffScreen {
+            // Center the window on screen
+            let x = screenFrame.midX - windowFrame.width / 2
+            let y = screenFrame.midY - windowFrame.height / 2
+            window.setFrameOrigin(NSPoint(x: x, y: y))
+            logUI("Repositioned window to center of screen")
+        }
+    }
+
     private func updateMenuBarTitle() {
         guard let statusItem = statusItem else { return }
         
