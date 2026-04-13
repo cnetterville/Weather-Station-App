@@ -1475,156 +1475,290 @@ struct SunTimesView: View {
 struct SunPositionArc: View {
     let sunTimes: SunTimes
     let currentTime: Date
-    
+
+    @State private var glowPulse: Bool = false
+
     private var sunPosition: CGFloat {
         if currentTime < sunTimes.sunrise {
-            return 0 
+            return 0
         } else if currentTime > sunTimes.sunset {
-            return 1 
+            return 1
         } else {
             let totalDaylight = sunTimes.sunset.timeIntervalSince(sunTimes.sunrise)
             let timeSinceSunrise = currentTime.timeIntervalSince(sunTimes.sunrise)
             return CGFloat(timeSinceSunrise / totalDaylight)
         }
     }
-    
+
     private var isDaytime: Bool {
-        return currentTime >= sunTimes.sunrise && currentTime <= sunTimes.sunset
+        currentTime >= sunTimes.sunrise && currentTime <= sunTimes.sunset
     }
-    
-    // Get color for a specific position along the arc (0 to 1)
-    private func arcColor(at position: CGFloat) -> Color {
-        if !isDaytime {
-            return Color.purple.opacity(0.6)
-        }
-        
-        // Color transitions based on sun position
-        if position < sunPosition {
-            // Before current sun position - use gradient from purple/pink to orange/yellow
-            let relativePosition = position / sunPosition
-            if relativePosition < 0.5 {
-                // Early morning - purple/pink
-                return Color.purple.opacity(0.6)
-            } else {
-                // Approaching current time - transition to orange
-                return Color.orange.opacity(0.7)
+
+    /// Point on an elliptical arc at a given progress (0 = left/sunrise, 1 = right/sunset)
+    private func arcPoint(progress: CGFloat, centerX: CGFloat, baseY: CGFloat, halfWidth: CGFloat, arcHeight: CGFloat) -> CGPoint {
+        let angle = CGFloat.pi * (1 - progress) // pi -> 0
+        return CGPoint(
+            x: centerX + halfWidth * cos(angle),
+            y: baseY - arcHeight * sin(angle)
+        )
+    }
+
+    /// Build an elliptical arc path using line segments
+    private func ellipsePath(from startProgress: CGFloat, to endProgress: CGFloat, centerX: CGFloat, baseY: CGFloat, halfWidth: CGFloat, arcHeight: CGFloat) -> Path {
+        Path { path in
+            let steps = 60
+            let start = Int(startProgress * CGFloat(steps))
+            let end = Int(endProgress * CGFloat(steps))
+            for i in start...end {
+                let t = CGFloat(i) / CGFloat(steps)
+                let angle = CGFloat.pi * (1 - t)
+                let x = centerX + halfWidth * cos(angle)
+                let y = baseY - arcHeight * sin(angle)
+                if i == start {
+                    path.move(to: CGPoint(x: x, y: y))
+                } else {
+                    path.addLine(to: CGPoint(x: x, y: y))
+                }
             }
-        } else {
-            // After current sun position - lighter/grayed out
-            return Color.gray.opacity(0.4)
         }
     }
-    
+
+    /// Sky gradient colors based on time of day
+    private var skyColors: [Color] {
+        if !isDaytime {
+            return [
+                Color(red: 0.05, green: 0.05, blue: 0.15),
+                Color(red: 0.1, green: 0.1, blue: 0.25)
+            ]
+        }
+        // Blend from dawn/dusk warm tones to midday blue based on sun position
+        let midday = 1.0 - abs(sunPosition - 0.5) * 2.0 // 0 at edges, 1 at noon
+        if midday > 0.5 {
+            return [
+                Color(red: 0.4, green: 0.65, blue: 0.95),
+                Color(red: 0.55, green: 0.78, blue: 1.0)
+            ]
+        } else {
+            return [
+                Color(red: 0.95, green: 0.6, blue: 0.3).opacity(0.6),
+                Color(red: 0.55, green: 0.7, blue: 0.95).opacity(0.6)
+            ]
+        }
+    }
+
     var body: some View {
         GeometryReader { geometry in
             let width = geometry.size.width
             let height = geometry.size.height
-            let padding: CGFloat = 40 // Padding from edges
-            let arcWidth = width - (padding * 2)
-            let arcHeight = height * 0.7 // Height of the arc
-            let baseY = height * 0.85 // Base line Y position
-            
+            let labelSpace: CGFloat = 16
+            let padding: CGFloat = 40
+            let centerX = width / 2
+            let baseY = height - labelSpace
+            let halfWidth = (width - padding * 2) / 2 // horizontal extent
+            let arcHeight = baseY - 8 // vertical extent (leave top margin)
+            let arcLeft = centerX - halfWidth
+            let arcRight = centerX + halfWidth
+
             ZStack {
-                // Full dashed arc path (background)
+                // Sky background fill behind the arc
                 Path { path in
-                    path.move(to: CGPoint(x: padding, y: baseY))
-                    path.addQuadCurve(
-                        to: CGPoint(x: width - padding, y: baseY),
-                        control: CGPoint(x: width / 2, y: baseY - arcHeight)
-                    )
+                    let steps = 60
+                    path.move(to: CGPoint(x: arcLeft, y: baseY))
+                    for i in 0...steps {
+                        let t = CGFloat(i) / CGFloat(steps)
+                        let angle = CGFloat.pi * (1 - t)
+                        let x = centerX + halfWidth * cos(angle)
+                        let y = baseY - arcHeight * sin(angle)
+                        path.addLine(to: CGPoint(x: x, y: y))
+                    }
+                    path.addLine(to: CGPoint(x: arcLeft, y: baseY))
+                    path.closeSubpath()
                 }
-                .stroke(
-                    Color.gray.opacity(0.3),
-                    style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [8, 6])
+                .fill(
+                    LinearGradient(
+                        colors: skyColors,
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
                 )
-                
-                // Colored portion of arc (from sunrise to current position)
-                if isDaytime {
-                    Path { path in
-                        let endX = padding + (arcWidth * sunPosition)
-                        
-                        path.move(to: CGPoint(x: padding, y: baseY))
-                        
-                        // Calculate end point on the arc
-                        let endProgress = sunPosition
-                        let arcEndY = baseY - (arcHeight * sin(.pi * endProgress))
-                        
-                        path.addQuadCurve(
-                            to: CGPoint(x: endX, y: arcEndY),
-                            control: CGPoint(x: width / 2, y: baseY - arcHeight)
-                        )
-                    }
-                    .trim(from: 0, to: sunPosition)
-                    .stroke(
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                Color(red: 0.6, green: 0.3, blue: 0.8).opacity(0.8), // Purple
-                                Color(red: 0.8, green: 0.4, blue: 0.6).opacity(0.8), // Pink
-                                Color.orange.opacity(0.9), // Orange
-                                Color.yellow.opacity(0.9) // Yellow
-                            ]),
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        ),
-                        style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [8, 6])
-                    )
-                }
-                
-                // Calculate sun position on arc
-                let sunX = padding + (arcWidth * sunPosition)
-                let sunY = baseY - (arcHeight * sin(.pi * sunPosition))
-                
-                // Sun icon with glow
-                ZStack {
-                    // Outer glow
-                    if isDaytime {
+                .opacity(0.25)
+
+                // Night stars
+                if !isDaytime {
+                    ForEach(0..<8, id: \.self) { i in
+                        let seed = CGFloat(i)
+                        let starX = arcLeft + 15 + (seed * 37).truncatingRemainder(dividingBy: max(1, halfWidth * 2 - 30))
+                        let starY = baseY - arcHeight * 0.3 - (seed * 23).truncatingRemainder(dividingBy: max(1, arcHeight * 0.5))
                         Circle()
-                            .fill(
-                                RadialGradient(
-                                    gradient: Gradient(colors: [
-                                        Color.orange.opacity(0.4),
-                                        Color.orange.opacity(0.2),
-                                        Color.clear
-                                    ]),
-                                    center: .center,
-                                    startRadius: 0,
-                                    endRadius: 20
-                                )
-                            )
-                            .frame(width: 40, height: 40)
+                            .fill(Color.white.opacity(0.5 + Double(i % 3) * 0.15))
+                            .frame(width: i % 3 == 0 ? 3 : 2, height: i % 3 == 0 ? 3 : 2)
+                            .position(x: starX, y: starY)
                     }
-                    
-                    // Sun circle with texture
+                }
+
+                // Dashed background arc (full elliptical arc)
+                ellipsePath(from: 0, to: 1, centerX: centerX, baseY: baseY, halfWidth: halfWidth, arcHeight: arcHeight)
+                    .stroke(
+                        Color.gray.opacity(0.25),
+                        style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [6, 5])
+                    )
+
+                // Colored traversed arc (sunrise to current sun position)
+                if isDaytime && sunPosition > 0 {
+                    ellipsePath(from: 0, to: sunPosition, centerX: centerX, baseY: baseY, halfWidth: halfWidth, arcHeight: arcHeight)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color(red: 0.9, green: 0.5, blue: 0.2),
+                                    Color(red: 1.0, green: 0.75, blue: 0.2),
+                                    Color(red: 1.0, green: 0.85, blue: 0.35)
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            ),
+                            style: StrokeStyle(lineWidth: 3, lineCap: .round)
+                        )
+                }
+
+                // Horizon line
+                Path { path in
+                    path.move(to: CGPoint(x: arcLeft - 5, y: baseY))
+                    path.addLine(to: CGPoint(x: arcRight + 5, y: baseY))
+                }
+                .stroke(Color.secondary.opacity(0.4), lineWidth: 1)
+
+                // Sunrise time label (left)
+                Text(sunTimes.formattedSunrise)
+                    .font(.system(size: 9, weight: .medium, design: .rounded))
+                    .foregroundColor(.orange)
+                    .position(x: arcLeft + 20, y: baseY + 10)
+
+                // Sunset time label (right)
+                Text(sunTimes.formattedSunset)
+                    .font(.system(size: 9, weight: .medium, design: .rounded))
+                    .foregroundColor(.red.opacity(0.8))
+                    .position(x: arcRight - 20, y: baseY + 10)
+
+                // Sun or Moon indicator on the arc
+                let indicatorPos = arcPoint(progress: isDaytime ? sunPosition : 0.5, centerX: centerX, baseY: baseY, halfWidth: halfWidth, arcHeight: arcHeight)
+
+                if isDaytime {
+                    // Sun glow halo
                     Circle()
                         .fill(
                             RadialGradient(
-                                gradient: Gradient(colors: [
-                                    Color(red: 1.0, green: 0.9, blue: 0.6),
-                                    Color.orange
-                                ]),
+                                colors: [
+                                    Color.yellow.opacity(0.35),
+                                    Color.orange.opacity(0.15),
+                                    Color.clear
+                                ],
                                 center: .center,
-                                startRadius: 0,
-                                endRadius: 12
+                                startRadius: 2,
+                                endRadius: 22
                             )
                         )
-                        .frame(width: 24, height: 24)
-                        .overlay(
-                            Circle()
-                                .fill(Color.white.opacity(0.4))
-                                .frame(width: 10, height: 10)
-                                .offset(x: -4, y: -4)
+                        .frame(width: 44, height: 44)
+                        .scaleEffect(glowPulse ? 1.15 : 0.95)
+                        .position(x: indicatorPos.x, y: indicatorPos.y)
+
+                    // Sun rays (8 short lines radiating outward)
+                    ForEach(0..<8, id: \.self) { i in
+                        let angle = Double(i) * .pi / 4.0
+                        let innerR: CGFloat = 14
+                        let outerR: CGFloat = 19
+                        Path { path in
+                            path.move(to: CGPoint(
+                                x: indicatorPos.x + innerR * cos(CGFloat(angle)),
+                                y: indicatorPos.y + innerR * sin(CGFloat(angle))
+                            ))
+                            path.addLine(to: CGPoint(
+                                x: indicatorPos.x + outerR * cos(CGFloat(angle)),
+                                y: indicatorPos.y + outerR * sin(CGFloat(angle))
+                            ))
+                        }
+                        .stroke(Color.orange.opacity(0.5), lineWidth: 1.5)
+                    }
+
+                    // Sun disc
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [
+                                    Color(red: 1.0, green: 0.95, blue: 0.7),
+                                    Color(red: 1.0, green: 0.8, blue: 0.3),
+                                    Color.orange
+                                ],
+                                center: UnitPoint(x: 0.35, y: 0.35),
+                                startRadius: 0,
+                                endRadius: 11
+                            )
                         )
-                        .shadow(color: .orange.opacity(0.6), radius: 6)
+                        .frame(width: 22, height: 22)
+                        .shadow(color: .orange.opacity(0.7), radius: 6)
+                        .position(x: indicatorPos.x, y: indicatorPos.y)
+                } else {
+                    // Moon at night - position along arc based on how far past sunset
+                    let moonPos: CGFloat = {
+                        let timeSinceSunset = currentTime.timeIntervalSince(sunTimes.sunset)
+                        let timeBeforeSunrise = sunTimes.sunrise.timeIntervalSince(currentTime)
+                        if timeSinceSunset > 0 {
+                            // After sunset: moon rises from right
+                            let nightProgress = min(timeSinceSunset / 14400, 1.0) // 4 hours to peak
+                            return 0.5 + CGFloat(nightProgress) * 0.3
+                        } else if timeBeforeSunrise > 0 {
+                            // Before sunrise: moon setting to left
+                            let nightProgress = min(timeBeforeSunrise / 14400, 1.0)
+                            return 0.5 - CGFloat(nightProgress) * 0.3
+                        }
+                        return 0.5
+                    }()
+                    let moonPoint = arcPoint(progress: moonPos, centerX: centerX, baseY: baseY, halfWidth: halfWidth * 0.7, arcHeight: arcHeight * 0.7)
+
+                    // Moon glow
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [
+                                    Color.white.opacity(0.15),
+                                    Color.clear
+                                ],
+                                center: .center,
+                                startRadius: 2,
+                                endRadius: 16
+                            )
+                        )
+                        .frame(width: 32, height: 32)
+                        .position(x: moonPoint.x, y: moonPoint.y)
+
+                    // Moon disc
+                    ZStack {
+                        Circle()
+                            .fill(
+                                RadialGradient(
+                                    colors: [
+                                        Color(red: 0.85, green: 0.85, blue: 0.9),
+                                        Color(red: 0.7, green: 0.7, blue: 0.8)
+                                    ],
+                                    center: UnitPoint(x: 0.4, y: 0.35),
+                                    startRadius: 0,
+                                    endRadius: 9
+                                )
+                            )
+                            .frame(width: 18, height: 18)
+
+                        // Crescent shadow
+                        Circle()
+                            .fill(Color(red: 0.1, green: 0.1, blue: 0.2).opacity(0.7))
+                            .frame(width: 14, height: 14)
+                            .offset(x: 5, y: -1)
+                    }
+                    .position(x: moonPoint.x, y: moonPoint.y)
                 }
-                .position(x: sunX, y: sunY)
-                
-                // Moon icon (top right, only shown at night or near sunset)
-                if !isDaytime || sunPosition > 0.8 {
-                    Image(systemName: "moon.fill")
-                        .font(.system(size: 20))
-                        .foregroundColor(.gray.opacity(0.6))
-                        .position(x: width - 30, y: 20)
-                }
+            }
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+                glowPulse = true
             }
         }
     }
