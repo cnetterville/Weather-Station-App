@@ -15,6 +15,9 @@ class MenuBarManager: ObservableObject {
     private let forecastService = WeatherForecastService.shared
     private var cycleThroughTimer: Timer?
     private var backgroundRefreshTimer: DispatchSourceTimer? // Changed to DispatchSourceTimer for better background reliability
+    private var menuBarUpdateWorkItem: DispatchWorkItem? // Debounce work item for batching rapid updates
+    // Sun-time cache: keyed by "macAddress_yyyy-MM-dd" so values refresh each calendar day
+    private var sunTimesCache: [String: SunTimes?] = [:]
     
     @Published var isMenuBarEnabled: Bool = false {
         didSet {
@@ -295,28 +298,30 @@ class MenuBarManager: ObservableObject {
         )
     }
     
-    @objc private func weatherDataUpdated() {
-        DispatchQueue.main.async { [weak self] in
+    /// Debounced menu bar update — coalesces rapid notifications into a single update.
+    private func scheduleMenuBarUpdate(delay: TimeInterval = 0.15) {
+        menuBarUpdateWorkItem?.cancel()
+        let item = DispatchWorkItem { [weak self] in
             self?.updateMenuBarTitle()
         }
+        menuBarUpdateWorkItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
+    }
+
+    @objc private func weatherDataUpdated() {
+        scheduleMenuBarUpdate()
     }
     
     @objc private func unitSystemChanged() {
-        DispatchQueue.main.async { [weak self] in
-            self?.updateMenuBarTitle()
-        }
+        scheduleMenuBarUpdate()
     }
     
     @objc private func weatherStationsUpdated() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-            self?.updateMenuBarTitle()
-        }
+        scheduleMenuBarUpdate()
     }
     
     @objc private func forecastDataUpdated() {
-        DispatchQueue.main.async { [weak self] in
-            self?.updateMenuBarTitle()
-        }
+        scheduleMenuBarUpdate()
     }
     
     @objc private func appWillTerminate() {
@@ -753,46 +758,29 @@ class MenuBarManager: ObservableObject {
     
     // Helper method to get weather icon for a specific station
     private func getWeatherIconForStation(_ weatherData: WeatherStationData, station: WeatherStation) -> String {
-        logWeather("Getting weather icon for station: \(station.name)")
-        
         // Priority 1: Use Open-Meteo forecast icon if available
         if let forecastIcon = getForecastIconForStation(station) {
-            logWeather("  Using forecast icon: \(forecastIcon)")
             return forecastIcon
         }
         
-        logDebug("  - showRainIcon: \(showRainIcon)")
-        logDebug("  - showUVIcon: \(showUVIcon)")
-        logDebug("  - showCloudyIcon: \(showCloudyIcon)")
-        logDebug("  - showNightIcon: \(showNightIcon)")
-        
-        // Fallback to current weather condition icons
         // Priority 2: Rain (highest priority)
         if showRainIcon && isRaining(weatherData) {
-            let icon = getRainIconString()
-            logWeather("  Selected rain icon: \(icon)")
-            return icon
+            return getRainIconString()
         }
         
         // Priority 3: High UV (sunny conditions)
         if showUVIcon && hasSignificantUV(weatherData) {
-            let icon = getUVIconString()
-            logWeather("  Selected UV icon: \(icon)")
-            return icon
+            return getUVIconString()
         }
         
         // Priority 4: Cloudy daytime (overcast but still daylight)
         if showCloudyIcon && isCloudyDaytime(weatherData) {
-            let icon = getCloudyIconString()
-            logWeather("  Selected cloudy icon: \(icon)")
-            return icon
+            return getCloudyIconString()
         }
         
-        // Priority 5: Night time (lowest priority) - now using actual sunset/sunrise
+        // Priority 5: Night time (lowest priority) - uses cached sunrise/sunset
         if showNightIcon && isNightTime(weatherData, for: station) {
-            let icon = getMoonPhaseEmojiForStation(station)
-            logWeather("  Selected night icon: \(icon)")
-            return icon
+            return getMoonPhaseEmojiForStation(station)
         }
         
         return ""
@@ -801,13 +789,11 @@ class MenuBarManager: ObservableObject {
     // New method to get forecast-based weather icon
     private func getForecastIconForStation(_ station: WeatherStation) -> String? {
         guard let forecast = forecastService.getForecast(for: station) else {
-            logWeather("  No forecast data available for \(station.name)")
             return nil
         }
         
         // Find today's forecast
         guard let todaysForecast = forecast.dailyForecasts.first(where: { $0.isToday }) else {
-            logWeather("  No today's forecast found for \(station.name)")
             return nil
         }
         
@@ -820,9 +806,7 @@ class MenuBarManager: ObservableObject {
         
         // If it's night and we got a moon icon (nil), use moon phase emoji
         if emoji == nil && (adaptedIcon == "moon.stars.fill" || adaptedIcon == "moon.fill") {
-            if let latitude = station.latitude, let longitude = station.longitude,
-               let sunTimes = SunCalculator.calculateSunTimes(for: Date(), latitude: latitude, longitude: longitude, timeZone: station.timeZone),
-               !sunTimes.isCurrentlyDaylight {
+            if let sunTimes = cachedSunTimes(for: station), !sunTimes.isCurrentlyDaylight {
                 let moonPhase = MoonCalculator.getCurrentMoonPhase(for: Date(), timeZone: station.timeZone)
                 return moonPhase.emoji
             }
@@ -1028,19 +1012,9 @@ class MenuBarManager: ObservableObject {
     }
     
     private func isNightTime(_ weatherData: WeatherStationData, for station: WeatherStation) -> Bool {
-        // Use actual sunrise/sunset calculation if coordinates are available
-        if let latitude = station.latitude,
-           let longitude = station.longitude {
-            
-            let sunTimes = SunCalculator.calculateSunTimes(
-                for: Date(),
-                latitude: latitude,
-                longitude: longitude,
-                timeZone: station.timeZone
-            )
-            
-            // Return true if it's currently NOT daylight (i.e., between sunset and sunrise)
-            return sunTimes?.isCurrentlyDaylight == false
+        // Use cached sunrise/sunset calculation if coordinates are available
+        if station.latitude != nil && station.longitude != nil {
+            return cachedSunTimes(for: station)?.isCurrentlyDaylight == false
         }
         
         // Fallback to solar radiation if coordinates are not available
@@ -1049,8 +1023,7 @@ class MenuBarManager: ObservableObject {
             return false
         }
         
-        // Very low solar radiation indicates nighttime
-        return solarValue < 50.0 // Nighttime threshold
+        return solarValue < 50.0
     }
     
     private func isCloudyDaytime(_ weatherData: WeatherStationData) -> Bool {
@@ -1093,6 +1066,22 @@ class MenuBarManager: ObservableObject {
         return ""
     }
     
+    /// Returns cached sun times for a station, recalculating only once per calendar day.
+    private func cachedSunTimes(for station: WeatherStation) -> SunTimes? {
+        guard let latitude = station.latitude, let longitude = station.longitude else { return nil }
+        let dateKey = ISO8601DateFormatter().string(from: Calendar.current.startOfDay(for: Date()))
+        let cacheKey = "\(station.macAddress)_\(dateKey)"
+        if let cached = sunTimesCache[cacheKey] {
+            return cached
+        }
+        let result = SunCalculator.calculateSunTimes(for: Date(), latitude: latitude, longitude: longitude, timeZone: station.timeZone)
+        sunTimesCache[cacheKey] = result
+        // Evict stale entries from previous days (keep cache small)
+        let keysToRemove = sunTimesCache.keys.filter { $0.hasPrefix(station.macAddress) && $0 != cacheKey }
+        keysToRemove.forEach { sunTimesCache.removeValue(forKey: $0) }
+        return result
+    }
+
     private func isNightTimeFallback(_ weatherData: WeatherStationData) -> Bool {
         let solarString = weatherData.solarAndUvi.solar.value
         
@@ -1223,32 +1212,6 @@ class MenuBarManager: ObservableObject {
         
         let minutes = Int(backgroundRefreshInterval / 60)
         logRefresh("MenuBar background refresh started: every \(minutes) minute\(minutes == 1 ? "" : "s") using DispatchSourceTimer")
-        
-        // Run an initial refresh after a short delay if data is stale
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            let staleStations = self.weatherService.weatherStations.filter { station in
-                guard station.isActive else { return false }
-                
-                if self.weatherService.weatherData[station.macAddress] == nil {
-                    return true
-                }
-                
-                guard let lastUpdated = station.lastUpdated else {
-                    return true
-                }
-                
-                return Date().timeIntervalSince(lastUpdated) > 300 // 5 minutes
-            }
-            
-            if !staleStations.isEmpty {
-                logRefresh("Running initial menubar background refresh for \(staleStations.count) stations with stale data")
-                Task {
-                    await self.weatherService.fetchAllWeatherData(forceRefresh: false)
-                }
-            } else {
-                logRefresh("All menubar data is fresh on startup")
-            }
-        }
     }
     
     private func stopBackgroundRefresh() {

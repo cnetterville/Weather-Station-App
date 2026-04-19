@@ -93,13 +93,6 @@ class AppStateManager: ObservableObject {
             object: nil
         )
         
-        // Start monitoring window visibility periodically
-        Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
-            DispatchQueue.main.async {
-                self?.checkMainWindowVisibility()
-            }
-        }
-        
         logDebug("AppStateManager: Monitoring app state changes")
     }
     
@@ -222,20 +215,6 @@ class AppStateManager: ObservableObject {
         
         let minutes = Int(mainAppRefreshInterval / 60)
         logRefresh("Main app refresh started: every \(minutes) minute\(minutes == 1 ? "" : "s") (always active when visible)")
-        
-        // Do an immediate refresh if data is stale
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            let hasStaleData = self.weatherService.weatherStations.contains { station in
-                !self.weatherService.isDataFresh(for: station) && station.isActive
-            }
-            
-            if hasStaleData {
-                logRefresh("Running immediate main app refresh for stale data")
-                Task {
-                    await self.weatherService.fetchAllWeatherData(forceRefresh: false)
-                }
-            }
-        }
     }
     
     /// Stop the main app refresh timer

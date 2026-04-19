@@ -256,11 +256,7 @@ class WeatherStationService: ObservableObject {
     
     func fetchWeatherData(for station: WeatherStation) async {
         await fetchWeatherDataOptimized(for: station)
-        
-        // After successful data fetch, post notification
-        await MainActor.run {
-            NotificationCenter.default.post(name: .weatherDataUpdated, object: nil)
-        }
+        // Notification is already posted inside fetchWeatherDataOptimized on success
     }
     
     // MARK: - Enhanced Request Deduplication
