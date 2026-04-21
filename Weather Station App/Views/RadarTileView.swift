@@ -24,11 +24,10 @@ struct RadarTileView: View {
     @State private var isRefreshing = false
     @State private var notificationObserver: NSObjectProtocol?
     
-    @StateObject private var radarRefreshManager = RadarRefreshManager.shared
-    @State private var refreshTrigger = 0
-    
-    // Access to all stations for marking on map
-    @ObservedObject private var weatherService = WeatherStationService.shared
+    private let radarRefreshManager = RadarRefreshManager.shared
+    @State private var nextRefreshDate: Date = Date()
+    @State private var countdownText: String = ""
+    @State private var countdownTimer: Timer? = nil
     
     // Calculate a unique delay for this station's radar based on MAC address
     private var initialLoadDelay: TimeInterval {
@@ -50,7 +49,7 @@ struct RadarTileView: View {
         let timestamp = Int(Date().timeIntervalSince1970)
         
         // Collect all stations with coordinates for creating markers
-        let stationsWithCoords = weatherService.weatherStations.compactMap { station -> (name: String, lat: Double, lon: Double, isCurrent: Bool)? in
+        let stationsWithCoords = WeatherStationService.shared.weatherStations.compactMap { station -> (name: String, lat: Double, lon: Double, isCurrent: Bool)? in
             guard let stationLat = station.latitude,
                   let stationLon = station.longitude else {
                 return nil
@@ -392,7 +391,7 @@ struct RadarTileView: View {
                                 Circle()
                                     .fill(Color.green)
                                     .frame(width: 5, height: 5)
-                                Text("Auto \(timeUntilNextRefresh())")
+                                Text("Auto \(countdownText)")
                                     .font(.caption2)
                                     .fontWeight(.medium)
                                     .foregroundColor(.secondary)
@@ -436,6 +435,8 @@ struct RadarTileView: View {
                             loadRadar()
                             hasInitiallyLoaded = true
                             radarRefreshManager.startTracking(stationId: station.macAddress)
+                            nextRefreshDate = Date().addingTimeInterval(radarRefreshManager.defaultRefreshInterval)
+                            startCountdownDisplay()
                         }
                     } catch {
                         return
@@ -443,6 +444,8 @@ struct RadarTileView: View {
                 }
             } else {
                 radarRefreshManager.startTracking(stationId: station.macAddress)
+                nextRefreshDate = Date().addingTimeInterval(radarRefreshManager.defaultRefreshInterval)
+                startCountdownDisplay()
             }
             
             if let observer = notificationObserver {
@@ -458,6 +461,8 @@ struct RadarTileView: View {
                 if let triggeredStationId = notification.object as? String,
                    triggeredStationId == station.macAddress {
                     autoRefreshRadar()
+                    nextRefreshDate = Date().addingTimeInterval(radarRefreshManager.defaultRefreshInterval)
+                    updateCountdownText()
                 }
             }
         }
@@ -468,14 +473,15 @@ struct RadarTileView: View {
             stopLoadingTimeout()
             radarRefreshManager.stopTracking(stationId: station.macAddress)
             
+            countdownTimer?.invalidate()
+            countdownTimer = nil
+            
             if let observer = notificationObserver {
                 NotificationCenter.default.removeObserver(observer)
                 notificationObserver = nil
             }
         }
-        .onChange(of: radarRefreshManager.getRefreshState(for: station.macAddress)?.timeRemaining) { 
-            refreshTrigger += 1
-        }
+
     }
     
     private func loadRadar() {
@@ -512,6 +518,8 @@ struct RadarTileView: View {
         webView?.loadHTMLString(newHTML, baseURL: URL(string: "https://embed.windy.com"))
         
         radarRefreshManager.triggerRefresh(for: station.macAddress)
+        nextRefreshDate = Date().addingTimeInterval(radarRefreshManager.defaultRefreshInterval)
+        updateCountdownText()
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
             isRefreshing = false
@@ -555,15 +563,26 @@ struct RadarTileView: View {
         loadingTimeoutTimer = nil
     }
     
-    private func timeUntilNextRefresh() -> String {
-        let _ = refreshTrigger
-        return radarRefreshManager.getTimeRemainingString(for: station.macAddress)
+    private func startCountdownDisplay() {
+        countdownTimer?.invalidate()
+        updateCountdownText()
+        // Update countdown every 30 seconds — plenty for a minute-granularity display
+        countdownTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { _ in
+            updateCountdownText()
+        }
     }
     
-    private func formatTime(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
+    private func updateCountdownText() {
+        let remaining = max(0, nextRefreshDate.timeIntervalSinceNow)
+        let minutes = Int(remaining) / 60
+        let seconds = Int(remaining) % 60
+        if minutes > 0 {
+            countdownText = "\(minutes)m"
+        } else if remaining > 0 {
+            countdownText = "\(seconds)s"
+        } else {
+            countdownText = "now"
+        }
     }
     
     private func openFullRadar() {

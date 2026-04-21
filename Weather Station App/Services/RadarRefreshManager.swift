@@ -18,8 +18,7 @@ class RadarRefreshManager: ObservableObject {
     
     // Internal timer management
     private var timers: [String: DispatchSourceTimer] = [:]
-    private var countdownTimers: [String: DispatchSourceTimer] = [:]
-    private let timerQueue = DispatchQueue(label: "radar.refresh.timers", qos: .userInitiated)
+    private let timerQueue = DispatchQueue(label: "radar.refresh.timers", qos: .background)
     private let stateQueue = DispatchQueue(label: "radar.refresh.state", attributes: .concurrent)
     
     // Settings
@@ -63,7 +62,6 @@ class RadarRefreshManager: ObservableObject {
                     stationId: stationId,
                     refreshInterval: interval,
                     nextRefreshTime: Date().addingTimeInterval(interval),
-                    timeRemaining: interval,
                     isRefreshing: false
                 )
                 
@@ -72,9 +70,8 @@ class RadarRefreshManager: ObservableObject {
                 }
             }
             
-            // Start persistent timers
+            // Start persistent timer
             self.startPersistentTimer(for: stationId, interval: interval)
-            self.startCountdownTimer(for: stationId)
         }
         
         logRefresh("Started radar tracking for station: \(stationId) (interval: \(Int(interval))s)")
@@ -84,7 +81,6 @@ class RadarRefreshManager: ObservableObject {
     func stopTracking(stationId: String) {
         stateQueue.async(flags: .barrier) {
             self.stopTimer(for: stationId)
-            self.stopCountdownTimer(for: stationId)
             
             DispatchQueue.main.async {
                 self.refreshStates.removeValue(forKey: stationId)
@@ -104,7 +100,6 @@ class RadarRefreshManager: ObservableObject {
                 if var state = self.refreshStates[stationId] {
                     state.isRefreshing = true
                     state.nextRefreshTime = nextRefreshTime
-                    state.timeRemaining = interval
                     self.refreshStates[stationId] = state
                     
                     // Post notification for UI to refresh
@@ -169,34 +164,11 @@ class RadarRefreshManager: ObservableObject {
         logTimer("Started persistent timer for \(stationId): \(Int(interval))s interval")
     }
     
-    private func startCountdownTimer(for stationId: String) {
-        // Create countdown timer that updates every second
-        let countdownTimer = DispatchSource.makeTimerSource(queue: timerQueue)
-        countdownTimer.schedule(deadline: .now() + 1.0, repeating: 1.0)
-        
-        countdownTimer.setEventHandler { [weak self] in
-            self?.updateTimeRemaining(for: stationId)
-        }
-        
-        countdownTimer.resume()
-        countdownTimers[stationId] = countdownTimer
-        
-        logTimer("Started countdown timer for \(stationId)")
-    }
-    
     private func stopTimer(for stationId: String) {
         if let timer = timers[stationId] {
             timer.cancel()
             timers.removeValue(forKey: stationId)
             logTimer("Stopped timer for \(stationId)")
-        }
-    }
-    
-    private func stopCountdownTimer(for stationId: String) {
-        if let timer = countdownTimers[stationId] {
-            timer.cancel()
-            countdownTimers.removeValue(forKey: stationId)
-            logTimer("Stopped countdown timer for \(stationId)")
         }
     }
     
@@ -207,11 +179,6 @@ class RadarRefreshManager: ObservableObject {
         }
         timers.removeAll()
         
-        for (stationId, timer) in countdownTimers {
-            timer.cancel()
-            logTimer("Cancelled countdown timer for \(stationId)")
-        }
-        countdownTimers.removeAll()
     }
     
     private func handleTimerFire(stationId: String) {
@@ -221,7 +188,6 @@ class RadarRefreshManager: ObservableObject {
             if var state = self.refreshStates[stationId] {
                 state.isRefreshing = true
                 state.nextRefreshTime = nextRefreshTime
-                state.timeRemaining = self.defaultRefreshInterval
                 self.refreshStates[stationId] = state
                 
                 // Post notification for UI to refresh
@@ -240,24 +206,6 @@ class RadarRefreshManager: ObservableObject {
         logRefresh("Auto-refresh fired for station: \(stationId)")
     }
     
-    private func updateTimeRemaining(for stationId: String) {
-        DispatchQueue.main.async {
-            if var state = self.refreshStates[stationId] {
-                let newTimeRemaining = state.nextRefreshTime.timeIntervalSince(Date())
-                
-                // If time has passed, reset to full interval (safety check)
-                if newTimeRemaining <= 0 && !state.isRefreshing {
-                    state.nextRefreshTime = Date().addingTimeInterval(state.refreshInterval)
-                    state.timeRemaining = state.refreshInterval
-                } else {
-                    state.timeRemaining = max(0, newTimeRemaining)
-                }
-                
-                self.refreshStates[stationId] = state
-            }
-        }
-    }
-    
     private func updateAllTimerIntervals() {
         stateQueue.async(flags: .barrier) {
             for stationId in self.timers.keys {
@@ -272,7 +220,6 @@ class RadarRefreshManager: ObservableObject {
                     if var state = self.refreshStates[stationId] {
                         state.refreshInterval = self.defaultRefreshInterval
                         state.nextRefreshTime = Date().addingTimeInterval(self.defaultRefreshInterval)
-                        state.timeRemaining = self.defaultRefreshInterval
                         self.refreshStates[stationId] = state
                     }
                 }
@@ -295,8 +242,12 @@ struct RadarRefreshState {
     let stationId: String
     var refreshInterval: TimeInterval
     var nextRefreshTime: Date
-    var timeRemaining: TimeInterval
     var isRefreshing: Bool
+    
+    // Computed on demand — no need to update every second
+    var timeRemaining: TimeInterval {
+        max(0, nextRefreshTime.timeIntervalSinceNow)
+    }
     
     var statusText: String {
         if isRefreshing {

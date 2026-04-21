@@ -1984,7 +1984,7 @@ class WeatherStationService: ObservableObject {
         
         // Start periodic memory monitoring
         memoryMonitorTimer?.cancel()
-        memoryMonitorTimer = Timer.publish(every: 30.0, on: .main, in: .common)
+        memoryMonitorTimer = Timer.publish(every: 300.0, on: .main, in: .common) // 5 min — memory pressure changes slowly
             .autoconnect()
             .sink { [weak self] _ in
                 self?.monitorMemoryUsage()

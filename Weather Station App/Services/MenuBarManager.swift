@@ -15,6 +15,7 @@ class MenuBarManager: ObservableObject {
     private let forecastService = WeatherForecastService.shared
     private var cycleThroughTimer: Timer?
     private var backgroundRefreshTimer: DispatchSourceTimer? // Changed to DispatchSourceTimer for better background reliability
+    private let refreshTimerQueue = DispatchQueue(label: "com.weatherstation.menubar.refresh", qos: .utility)
     private var menuBarUpdateWorkItem: DispatchWorkItem? // Debounce work item for batching rapid updates
     // Sun-time cache: keyed by "macAddress_yyyy-MM-dd" so values refresh each calendar day
     private var sunTimesCache: [String: SunTimes?] = [:]
@@ -1145,15 +1146,16 @@ class MenuBarManager: ObservableObject {
         }
         
         // Use DispatchSourceTimer for more reliable background operation
-        let queue = DispatchQueue(label: "com.weatherstation.menubar.refresh", qos: .utility)
-        let timer = DispatchSource.makeTimerSource(queue: queue)
+        let timer = DispatchSource.makeTimerSource(queue: refreshTimerQueue)
         
         // Convert interval to UInt64 nanoseconds
         let intervalNanoseconds = UInt64(backgroundRefreshInterval * 1_000_000_000)
+        // Leeway = 10% of interval, min 30s — lets the OS coalesce wakeups efficiently
+        let leewaySeconds = max(30, Int(backgroundRefreshInterval * 0.10))
         
         timer.schedule(deadline: .now() + .nanoseconds(Int(intervalNanoseconds)), 
                        repeating: .nanoseconds(Int(intervalNanoseconds)),
-                       leeway: .seconds(5)) // Allow 5 second leeway for system optimization
+                       leeway: .seconds(leewaySeconds))
         
         timer.setEventHandler { [weak self] in
             guard let self = self else {
@@ -1163,47 +1165,26 @@ class MenuBarManager: ObservableObject {
             
             logRefresh("MenuBar background refresh timer fired at \(Date())")
             
-            // Check if any data is stale before fetching - be more aggressive about refreshing
-            let staleStations = self.weatherService.weatherStations.filter { station in
-                guard station.isActive else { return false }
+            // All weatherService property access must happen on the main actor
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
                 
-                // Consider data stale if:
-                // 1. We have no data at all for this station
-                // 2. The data is older than our freshness duration (2 minutes)
-                // 3. The last update was more than 5 minutes ago (safety margin)
+                let staleCount = self.weatherService.weatherStations.filter { station in
+                    guard station.isActive else { return false }
+                    
+                    if self.weatherService.weatherData[station.macAddress] == nil { return true }
+                    
+                    guard let lastUpdated = station.lastUpdated else { return true }
+                    return Date().timeIntervalSince(lastUpdated) > 300 // 5 minutes
+                }.count
                 
-                if self.weatherService.weatherData[station.macAddress] == nil {
-                    logRefresh("  Station \(station.name) has no data - needs refresh")
-                    return true
-                }
-                
-                guard let lastUpdated = station.lastUpdated else {
-                    logRefresh("  Station \(station.name) has no lastUpdated timestamp - needs refresh")
-                    return true
-                }
-                
-                let dataAge = Date().timeIntervalSince(lastUpdated)
-                let isStale = dataAge > 300 // 5 minutes - more aggressive than the 2 minute default
-                
-                if isStale {
-                    logRefresh("  Station \(station.name) data is stale (age: \(Int(dataAge))s) - needs refresh")
-                } else {
-                    logRefresh("  Station \(station.name) data is fresh (age: \(Int(dataAge))s)")
-                }
-                
-                return isStale
-            }
-            
-            if !staleStations.isEmpty {
-                logRefresh("Found \(staleStations.count) stations with stale data")
-                
-                Task { @MainActor in
-                    logRefresh("Starting background refresh for stale menu bar data")
-                    await self.weatherService.fetchAllWeatherData(forceRefresh: false) // Smart refresh
+                if staleCount > 0 {
+                    logRefresh("Found \(staleCount) stations with stale data — refreshing")
+                    await self.weatherService.fetchAllWeatherData(forceRefresh: false)
                     logRefresh("MenuBar background refresh completed at \(Date())")
+                } else {
+                    logRefresh("All menu bar data is fresh, skipping background refresh")
                 }
-            } else {
-                logRefresh("All menu bar data is fresh, skipping background refresh")
             }
         }
         
