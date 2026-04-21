@@ -639,17 +639,74 @@ class MenuBarManager: ObservableObject {
         
         let title = getMenuBarTitle()
         
-        // Check if title contains warning signs for alerts
-        if title.contains("⚠") {
-            // Use regular title - warning sign will display naturally
-            statusItem.button?.attributedTitle = NSAttributedString(string: title)
-        } else {
-            // No alerts, use regular title
-            statusItem.button?.attributedTitle = NSAttributedString(string: title)
-        }
+        // Color the title orange when there is an active weather alert
+        let color: NSColor = title.contains("⚠") ? .systemOrange : .labelColor
+        statusItem.button?.attributedTitle = NSAttributedString(string: title, attributes: [.foregroundColor: color])
+        statusItem.button?.image = nil
         
         // Update tooltip with detailed information
         statusItem.button?.toolTip = getMenuBarTooltip()
+    }
+    
+    /// Sets a crisp SF Symbol image on the status button for single/cycle display modes.
+    /// All-stations mode embeds emoji directly in the title string instead.
+    private func updateMenuBarIcon() {
+        guard let statusItem = statusItem else { return }
+        
+        let symbolName: String?
+        switch displayMode {
+        case .singleStation:
+            if let station = getSelectedStation(),
+               let weatherData = weatherService.weatherData[station.macAddress] {
+                symbolName = getSFSymbolForStation(weatherData, station: station)
+            } else {
+                symbolName = nil
+            }
+        case .cycleThrough:
+            let stations = availableStations
+            if !stations.isEmpty {
+                let station = stations[min(currentCycleIndex, stations.count - 1)]
+                symbolName = weatherService.weatherData[station.macAddress].map {
+                    getSFSymbolForStation($0, station: station)
+                }
+            } else {
+                symbolName = nil
+            }
+        case .allStations:
+            symbolName = nil // emoji are embedded in the title string for this mode
+        }
+        
+        if let name = symbolName {
+            let config = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
+            statusItem.button?.image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+                .withSymbolConfiguration(config)
+            statusItem.button?.imagePosition = .imageLeft
+        } else {
+            statusItem.button?.image = nil
+        }
+    }
+    
+    /// Returns the most appropriate SF Symbol name for current weather conditions.
+    private func getSFSymbolForStation(_ weatherData: WeatherStationData, station: WeatherStation) -> String {
+        // Priority 1: Forecast-based icon (already an SF Symbol name from WeatherIconHelper)
+        if let forecast = forecastService.getForecast(for: station),
+           let today = forecast.dailyForecasts.first(where: { $0.isToday }) {
+            return WeatherIconHelper.adaptIconForTimeOfDay(today.weatherIcon, station: station)
+        }
+        
+        // Priority 2: Rain
+        if showRainIcon && isRaining(weatherData) { return "cloud.rain.fill" }
+        
+        // Priority 3: Sunny (high solar radiation)
+        if showUVIcon && hasSignificantUV(weatherData) { return "sun.max.fill" }
+        
+        // Priority 4: Cloudy daytime
+        if showCloudyIcon && isCloudyDaytime(weatherData) { return "cloud.sun.fill" }
+        
+        // Priority 5: Night
+        if showNightIcon && isNightTime(weatherData, for: station) { return "moon.stars.fill" }
+        
+        return "thermometer.medium"
     }
     
     private func getMenuBarTitle() -> String {
@@ -678,13 +735,14 @@ class MenuBarManager: ObservableObject {
         let tempString = formatTemperature(temp)
         let weatherIcon = getWeatherIconForStation(weatherData, station: station)
         let alertIndicator = getAlertIndicator(for: station)
+        let rainSuffix = formatRainRateSuffix(weatherData.rainfallPiezo)
         
         let baseTitle: String
         if showStationName && weatherService.weatherStations.count > 1 {
             let displayLabel = station.displayLabelForMenuBar
-            baseTitle = "\(alertIndicator)\(displayLabel): \(weatherIcon)\(tempString)"
+            baseTitle = "\(alertIndicator)\(displayLabel): \(weatherIcon)\(tempString)\(rainSuffix)"
         } else {
-            baseTitle = "\(alertIndicator)\(weatherIcon)\(tempString)"
+            baseTitle = "\(alertIndicator)\(weatherIcon)\(tempString)\(rainSuffix)"
         }
         
         return baseTitle
@@ -745,13 +803,14 @@ class MenuBarManager: ObservableObject {
         let tempString = formatTemperature(temp)
         let weatherIcon = getWeatherIconForStation(weatherData, station: station)
         let alertIndicator = getAlertIndicator(for: station)
+        let rainSuffix = formatRainRateSuffix(weatherData.rainfallPiezo)
         
         let baseTitle: String
         if showStationName {
             let displayLabel = station.displayLabelForMenuBar
-            baseTitle = "\(alertIndicator)\(displayLabel): \(weatherIcon)\(tempString)"
+            baseTitle = "\(alertIndicator)\(displayLabel): \(weatherIcon)\(tempString)\(rainSuffix)"
         } else {
-            baseTitle = "\(alertIndicator)\(weatherIcon)\(tempString)"
+            baseTitle = "\(alertIndicator)\(weatherIcon)\(tempString)\(rainSuffix)"
         }
         
         return baseTitle
@@ -855,6 +914,17 @@ class MenuBarManager: ObservableObject {
             return "⛈️"
         default:
             return nil
+        }
+    }
+    
+    /// Returns today's total rainfall like " 💧0.15\"" or " 💧3.8mm" when rain has fallen today,
+    /// or an empty string when the daily total is zero.
+    private func formatRainRateSuffix(_ rain: RainfallPiezoData) -> String {
+        guard let total = Double(rain.daily.value), total > 0 else { return "" }
+        if rain.daily.unit.contains("mm") {
+            return String(format: " 💧%.1fmm", total)
+        } else {
+            return String(format: " 💧%.2f\"", total)
         }
     }
     
